@@ -11,7 +11,7 @@ const dir = path.join(root, 'demo')
 const file = path.join(dir, 'sample.txt')
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
 
-const hook = (kind, id, tool, input) =>
+const hook = (kind, id, tool, input, extra = {}) =>
   fetch(`http://127.0.0.1:${PORT}/event`, {
     method: 'POST',
     headers: { 'x-liveview-token': TOKEN, 'content-type': 'application/json' },
@@ -22,11 +22,15 @@ const hook = (kind, id, tool, input) =>
       tool_name: tool,
       tool_use_id: id,
       tool_input: input,
+      ...extra,
     }),
   })
 
 fs.mkdirSync(dir, { recursive: true })
 fs.rmSync(file, { force: true })
+
+// the first message of a chat names it in the sidebar
+await hook('UserPromptSubmit', undefined, undefined, undefined, { prompt: 'Fix the login bug in the demo app' })
 
 for (const [id, tool, input] of [
   ['demo-r', 'Read', { file_path: path.join(root, 'src', 'server.js') }],
@@ -88,12 +92,18 @@ const jsEdit = {
 await hook('PreToolUse', 'demo-4', 'Edit', jsEdit)
 fs.writeFileSync(js, code.replace(jsEdit.old_string, jsEdit.new_string))
 await hook('PostToolUse', 'demo-4', 'Edit', jsEdit)
+// one word changed inside a line: only that word is brightened
+await sleep(5000)
+const limitEdit = { file_path: js, old_string: 'const LIMIT = 50', new_string: 'const LIMIT = 75' }
+await hook('PreToolUse', 'demo-5', 'Edit', limitEdit)
+fs.writeFileSync(js, fs.readFileSync(js, 'utf8').replace(limitEdit.old_string, limitEdit.new_string))
+await hook('PostToolUse', 'demo-5', 'Edit', limitEdit)
 console.log('wrote and edited a JavaScript file')
 
 // a second chat, in another project folder
 const other = path.join(root, 'demo', 'other.txt')
 const otherCwd = path.join(root, 'demo', 'other-project')
-const otherHook = (kind, id, tool, input) =>
+const otherHook = (kind, id, tool, input, extra = {}) =>
   fetch(`http://127.0.0.1:${PORT}/event`, {
     method: 'POST',
     headers: { 'x-liveview-token': TOKEN, 'content-type': 'application/json' },
@@ -104,8 +114,10 @@ const otherHook = (kind, id, tool, input) =>
       tool_name: tool,
       tool_use_id: id,
       tool_input: input,
+      ...extra,
     }),
   })
+await otherHook('UserPromptSubmit', undefined, undefined, undefined, { prompt: 'Write notes: alpha, beta and gamma' })
 const text = 'alpha\nbeta\ngamma\n'
 await otherHook('PreToolUse', 'other-1', 'Write', { file_path: other, content: text })
 fs.writeFileSync(other, text)

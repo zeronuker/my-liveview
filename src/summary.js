@@ -3,6 +3,20 @@ const MAX = 200
 const cut = text => (text.length > MAX ? `${text.slice(0, MAX - 1)}…` : text)
 const firstLine = text => String(text ?? '').split('\n')[0]
 
+const TITLE_MAX = 50
+
+// A chat's name, from its first message: the first line with any words on it,
+// 50 characters at most. A slash command is not a name, so it gives none.
+// The rest of the message is dropped here and never kept.
+export const titleOf = prompt => {
+  const line = String(prompt ?? '')
+    .split('\n')
+    .map(text => text.replace(/\s+/g, ' ').trim())
+    .find(Boolean)
+  if (!line || line.startsWith('/')) return null
+  return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1)}…` : line
+}
+
 // One short line for the activity feed. Nothing here is kept on disk.
 export const summarize = (tool, input = {}) => {
   switch (tool) {

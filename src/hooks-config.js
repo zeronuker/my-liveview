@@ -1,7 +1,7 @@
 // What goes into Claude Code's settings.json: one http hook per event, which
 // only ever reports (the server answers fast and empty; a down server never
 // holds Claude up). Both functions return a new settings object.
-const EVENTS = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure']
+const TOOL_EVENTS = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure']
 
 const isOurs = (url, handler) => handler.type === 'http' && handler.url === url
 
@@ -23,13 +23,13 @@ export const uninstall = (settings, url) => {
 export const install = (settings, url, token) => {
   const base = uninstall(settings, url)
   const hooks = { ...base.hooks }
-  for (const event of EVENTS)
+  const handler = { type: 'http', url, timeout: 5, headers: { 'x-liveview-token': token } }
+  for (const event of TOOL_EVENTS)
     hooks[event] = [
       ...(hooks[event] ?? []),
-      {
-        matcher: '*', // every tool: the activity feed shows reads and commands too
-        hooks: [{ type: 'http', url, timeout: 5, headers: { 'x-liveview-token': token } }],
-      },
+      { matcher: '*', hooks: [handler] }, // every tool: the activity feed shows reads and commands too
     ]
+  // a chat's first message names it in the sidebar; this event has no tool to match
+  hooks.UserPromptSubmit = [...(hooks.UserPromptSubmit ?? []), { hooks: [handler] }]
   return { ...base, hooks }
 }

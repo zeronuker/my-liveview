@@ -1,4 +1,5 @@
 import { highlight, langOf } from './highlight.js'
+import { withInlineDiff } from './inline.js'
 import { fileLabels } from './tree.js'
 
 const $ = id => document.getElementById(id)
@@ -50,6 +51,7 @@ const prefs = {
 }
 
 const collapsed = new Set(store.get('collapsed', [])) // folders the person closed
+const customNames = store.get('names', {}) // chat id -> a name the person gave it
 const results = new Map() // tool id -> did it land
 const feed = [] // newest first
 const files = new Map() // sessionId|path -> { sessionId, path, adds, dels, isNew, last }; newest last
@@ -65,6 +67,11 @@ let isStopped = false
 let isReplaying = true // the server's history comes first, then live events
 
 const baseName = p => p.split(/[\\/]/).filter(Boolean).pop() ?? p
+
+// a chat is called what the person named it, else its first message, else its
+// project and the start of its id
+const labelOf = chat => customNames[chat.id] ?? chat.title ?? `${baseName(chat.cwd)} · ${chat.id.slice(0, 6)}`
+const nameOfChat = id => (chats.has(id) ? labelOf(chats.get(id)) : '')
 
 const span = (className, text) => {
   const el = document.createElement('span')
@@ -89,6 +96,7 @@ const setState = (state, note = '') => {
 
 // what the status says: paused wins, then a failed edit, then where the edit is
 const refreshState = () => {
+  $('b-skip').disabled = current?.phase !== 'writing'
   if (isPaused) setState('paused', queued ? ' · a new edit is waiting' : '')
   else if (!current) setState('idle')
   else if (results.get(current.id) === false) setState('failed')
@@ -109,6 +117,9 @@ const buildRow = (row, { isNew, lang }) => {
   if (row.kind === 'ctx')
     for (const part of highlight(row.text, lang))
       text.append(part.cls ? span(`t-${part.cls}`, part.text) : part.text)
+  else if (row.parts)
+    // a line that replaced another: only the words that changed are brightened
+    for (const part of row.parts) text.append(part.isChanged ? span('chg', part.text) : part.text)
   else text.textContent = row.text ?? ''
   el.append(span('n', row.n ?? ''), span('m', MARKS[row.kind] ?? ''), text)
   return el
@@ -131,7 +142,7 @@ const buildSide = (event, opts) => {
     shift += block.d.length - block.a.length
     block = { d: [], a: [] }
   }
-  for (const row of event.rows) {
+  for (const row of withInlineDiff(event.rows)) {
     if (row.kind === 'del') block.d.push(row)
     else if (row.kind === 'add') block.a.push(row)
     else {
@@ -149,7 +160,7 @@ const buildSide = (event, opts) => {
 const build = event => {
   const opts = { isNew: event.isNew, lang: langOf(event.path) }
   if (prefs.side) return buildSide(event, opts)
-  const all = event.rows.map(row => buildRow(row, opts))
+  const all = withInlineDiff(event.rows).map(row => buildRow(row, opts))
   rowsEl.replaceChildren(...all)
   return { all, adds: all.filter(el => el.dataset.kind === 'add') }
 }
@@ -173,6 +184,7 @@ const markNewest = el => {
 const stopAnimation = () => {
   if (!current) return
   clearInterval(current.timer)
+  clearTimeout(current.delay)
   clearTimeout(current.settle)
 }
 
@@ -182,7 +194,7 @@ const show = (event, animate) => {
   nameEl.title = event.path
 
   const { all, adds } = build(event)
-  current = { id: event.id, path: event.path, event, phase: 'writing', newest: null, timer: 0, settle: 0 }
+  current = { id: event.id, path: event.path, event, phase: 'writing', newest: null, timer: 0, delay: 0, settle: 0, finish: null }
   const firstChanged = all.find(el => el.dataset.kind === 'add' || el.dataset.kind === 'del')
   renderMini()
   scheduleLists()
@@ -210,7 +222,7 @@ const show = (event, animate) => {
   refreshState()
   if (prefs.follow) firstChanged?.scrollIntoView({ block: 'center' })
   let shown = 0
-  current.timer = setInterval(() => {
+  const step = () => {
     if (isPaused) return
     if (mult === 0) {
       adds.forEach(el => reveal(el, true))
@@ -226,7 +238,17 @@ const show = (event, animate) => {
       clearInterval(current.timer)
       current.settle = setTimeout(settle, Math.max(1200, 24 * tick))
     }
-  }, mult === 0 ? 30 : tick)
+  }
+  // lines taken out show alone for a moment first, so what is about to go can be read
+  const pause = event.dels > 0 ? 1200 * mult : 0
+  if (pause > 0) current.delay = setTimeout(() => (current.timer = setInterval(step, tick)), pause)
+  else current.timer = setInterval(step, mult === 0 ? 30 : tick)
+  // the skip button: all of it now
+  current.finish = () => {
+    stopAnimation()
+    adds.forEach(el => reveal(el, true))
+    settle()
+  }
 }
 
 const clearView = () => {
@@ -354,7 +376,7 @@ const toggleFolder = key => {
 // One row of a tree: an arrow when it holds others, an icon, a name and
 // whatever sits at the right. A folder with `opensOnPress` opens and closes
 // when pressed; any other row runs `onPress`.
-const node = ({ key, iconName, label, title, badge, right, kids = [], isSelected, opensOnPress, onPress }) => {
+const node = ({ key, iconName, label, title, badge, right, kids = [], isSelected, opensOnPress, onPress, onRename }) => {
   const isOpen = !collapsed.has(key)
   const row = item('div', `nrow${isSelected ? ' sel' : ''}`)
   if (kids.length > 0) {
@@ -371,6 +393,7 @@ const node = ({ key, iconName, label, title, badge, right, kids = [], isSelected
   if (right) main.append(right)
   main.type = 'button'
   if (title) main.title = title
+  if (onRename) main.ondblclick = onRename
   if (isSelected) main.setAttribute('aria-current', 'true')
   main.onclick = () => (opensOnPress && kids.length > 0 ? toggleFolder(key) : onPress?.())
   row.append(main)
@@ -382,6 +405,16 @@ const node = ({ key, iconName, label, title, badge, right, kids = [], isSelected
 
 const plainCount = n => span('counts', String(n))
 const changeCount = file => item('span', 'counts', span('pos', `+${file.adds}`), ' ', span('neg', `−${file.dels}`))
+
+const renameChat = chat => {
+  const name = window.prompt('Name this chat (leave it empty to go back to the automatic name)', labelOf(chat))
+  if (name === null) return
+  const trimmed = name.trim()
+  if (trimmed) customNames[chat.id] = trimmed
+  else delete customNames[chat.id]
+  store.set('names', customNames)
+  scheduleLists()
+}
 
 // All chats > each chat > the files it touched, the latest edit on top
 const chatTree = () => {
@@ -399,11 +432,12 @@ const chatTree = () => {
       return node({
         key: `c:${chat.id}`,
         iconName: 'chat',
-        label: chat.label,
-        title: chat.cwd,
+        label: labelOf(chat),
+        title: `${baseName(chat.cwd)} · ${chat.id.slice(0, 6)}\n${chat.cwd}\nDouble-click to rename`,
         right: plainCount(chat.count),
         isSelected: selected === chat.id,
         onPress: () => select(chat.id),
+        onRename: () => renameChat(chat),
         kids: own.map(file =>
           node({
             key: `f:${file.sessionId}|${file.path}`,
@@ -439,7 +473,7 @@ const renderStats = () => {
   $('s-files').textContent = `${scoped.length} ${scoped.length === 1 ? 'file' : 'files'}`
   $('s-add').textContent = `+${sum('adds')}`
   $('s-del').textContent = `−${sum('dels')}`
-  $('s-chat').textContent = selected ? (chats.get(selected)?.label ?? '') : 'All chats'
+  $('s-chat').textContent = selected ? nameOfChat(selected) : 'All chats'
   renderElapsed()
 }
 setInterval(renderElapsed, 1000)
@@ -453,7 +487,7 @@ const renderLists = () => {
       .filter(entry => isShown(entry.sessionId))
       .map(entry => {
         const text = span('', entry.summary)
-        text.title = `${chats.get(entry.sessionId)?.label ?? ''}: ${entry.summary}`
+        text.title = `${nameOfChat(entry.sessionId)}: ${entry.summary}`
         return item('li', entry.status, span('tool', STATUS_MARK[entry.status]), text)
       }),
   )
@@ -473,7 +507,6 @@ const noteChat = event => {
   chats.set(event.sessionId, {
     ...chat,
     cwd: event.cwd,
-    label: `${baseName(event.cwd)} · ${event.sessionId.slice(0, 6)}`,
     lastAt: event.at,
     count: chat.count + (event.type === 'tool' ? 1 : 0),
   })
@@ -522,6 +555,7 @@ const setPaused = on => {
 }
 
 $('b-pause').onclick = () => setPaused(!isPaused)
+$('b-skip').onclick = () => current?.finish?.()
 $('b-follow').onclick = () => save('follow', !prefs.follow)
 $('b-wrap').onclick = () => save('wrap', !prefs.wrap)
 $('b-focus').onclick = () => save('focus', !prefs.focus)
@@ -591,6 +625,14 @@ source.onmessage = message => {
     isReplaying = false
     const recent = [...chats.values()].sort((a, b) => b.lastAt - a.lastAt)[0]
     if (recent) select(recent.id)
+    return
+  }
+  if (event.type === 'title') {
+    // a chat's first message: it names the chat, and a chat that is new is followed
+    noteAndFollow(event)
+    const chat = chats.get(event.sessionId)
+    if (chat && !chat.title) chat.title = event.title
+    scheduleLists()
     return
   }
   if (event.type === 'tool') {

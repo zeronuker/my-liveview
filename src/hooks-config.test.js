@@ -7,14 +7,28 @@ const URL = 'http://127.0.0.1:4747/event'
 const rtk = { matcher: 'Bash', hooks: [{ type: 'command', command: 'rtk hook claude' }] }
 const existing = { hooks: { PreToolUse: [rtk] }, theme: 'dark' }
 
-test('install adds the three events and keeps every existing hook and setting', () => {
+test('install adds the four events and keeps every existing hook and setting', () => {
   const next = install(existing, URL, 't0ken')
 
-  assert.deepEqual(Object.keys(next.hooks).sort(), ['PostToolUse', 'PostToolUseFailure', 'PreToolUse'])
+  assert.deepEqual(Object.keys(next.hooks).sort(), [
+    'PostToolUse',
+    'PostToolUseFailure',
+    'PreToolUse',
+    'UserPromptSubmit',
+  ])
   assert.deepEqual(next.hooks.PreToolUse[0], rtk)
   assert.equal(next.hooks.PreToolUse[1].matcher, '*')
   assert.equal(next.hooks.PreToolUse[1].hooks[0].headers['x-liveview-token'], 't0ken')
   assert.equal(next.theme, 'dark')
+})
+
+test('the first-message hook has no matcher and keeps someone else\'s hook on that event', () => {
+  const theirs = { hooks: [{ type: 'command', command: 'notify' }] }
+  const next = install({ hooks: { UserPromptSubmit: [theirs] } }, URL, 't0ken')
+
+  assert.deepEqual(next.hooks.UserPromptSubmit[0], theirs)
+  assert.equal('matcher' in next.hooks.UserPromptSubmit[1], false)
+  assert.equal(next.hooks.UserPromptSubmit[1].hooks[0].url, URL)
 })
 
 test('install twice is the same as once', () => {

@@ -6,10 +6,10 @@
   --fg: #e0e4ff;
   --dim: #8087b8;
   --line: #2a3060;
-  --abg: #0f3a4a;
-  --afg: #5eead4;
-  --dbg: #45204a;
-  --dfg: #f0abfc;
+  --abg: #0f3a26;
+  --afg: #4ade80;
+  --dbg: #4a1a24;
+  --dfg: #f87171;
   --nbg: #4a3a12;
   --nfg: #fcd34d;
   --acc: #818cf8;
@@ -199,6 +199,11 @@ body {
 
 #toolbar button:not(.swatch):hover {
   border-color: var(--dim);
+}
+
+#toolbar button:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 #toolbar button[aria-pressed='true']:not(.swatch) {
@@ -639,6 +644,17 @@ body.wrap .row .t {
 .row.add.new {
   background: var(--nbg);
   color: var(--nfg);
+}
+
+/* the words that changed inside a changed line */
+.row.add .chg {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--afg) 38%, transparent);
+}
+
+.row.del .chg {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--dfg) 38%, transparent);
 }
 
 /* the newest line: an accent bar, a soft glow and a caret */

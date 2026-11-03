@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { applyEdit, makeRows } from './diff.js'
-import { summarize } from './summary.js'
+import { summarize, titleOf } from './summary.js'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.PORT) || 4747
@@ -49,9 +49,20 @@ const publishEdit = ({ tool, input, id, sessionId, cwd }) => {
   publish({ type: 'edit', id, sessionId, cwd, path: input.file_path, rows, adds, dels, isNew: !existed, at: Date.now() })
 }
 
+const titled = new Set() // chats that already have a title
+
 const onHook = p => {
   const { hook_event_name: kind, session_id: sessionId, cwd } = p
   const { tool_name: tool, tool_input: input, tool_use_id: id } = p
+
+  if (kind === 'UserPromptSubmit') {
+    // a chat is named by its first message; only that short title is kept
+    const title = titled.has(sessionId) ? null : titleOf(p.prompt)
+    if (!title) return
+    titled.add(sessionId)
+    publish({ type: 'title', sessionId, cwd, title, at: Date.now() })
+    return
+  }
   if (!tool) return
 
   if (kind === 'PreToolUse') {
@@ -67,6 +78,7 @@ const files = {
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/highlight.js': ['highlight.js', 'text/javascript; charset=utf-8'],
   '/tree.js': ['tree.js', 'text/javascript; charset=utf-8'],
+  '/inline.js': ['inline.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 }
 
