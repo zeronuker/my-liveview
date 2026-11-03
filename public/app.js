@@ -1,4 +1,5 @@
 import { highlight, langOf } from './highlight.js'
+import { fileTree, groupChats } from './tree.js'
 
 const $ = id => document.getElementById(id)
 const rowsEl = $('rows')
@@ -48,13 +49,13 @@ const prefs = {
   focus: store.get('focus', false) === true,
 }
 
+const collapsed = new Set(store.get('collapsed', [])) // folders the person closed
 const results = new Map() // tool id -> did it land
 const feed = [] // newest first
 const files = new Map() // sessionId|path -> { sessionId, path, adds, dels, isNew, last }; newest last
 const chats = new Map() // sessionId -> { id, label, firstAt, lastAt, count }
 const latest = new Map() // sessionId -> that chat's last edit
-let lastEdit = null // the last edit of any chat
-let selected = '' // a sessionId, or '' for every chat
+let selected = '' // '' for every chat, 'dir:<folder>' for a project, else a sessionId
 let current = null // { id, path, event, phase, newest, timer, settle }
 let pending = null // an edit waiting for the next frame
 let queued = null // an edit that came in while paused
@@ -253,17 +254,23 @@ const flush = () => {
   } else show(event, Date.now() - event.at < 5000)
 }
 
-const select = sessionId => {
-  selected = sessionId
+const DIR = 'dir:'
+
+// is this chat in what is selected: everything, one project, or one chat
+const isShown = sessionId =>
+  !selected ||
+  selected === sessionId ||
+  (selected.startsWith(DIR) && chats.get(sessionId)?.cwd === selected.slice(DIR.length))
+
+const select = scope => {
+  selected = scope
   pending = null
   queued = null
-  const event = sessionId ? latest.get(sessionId) : lastEdit
+  const event = [...latest.values()].filter(edit => isShown(edit.sessionId)).sort((a, b) => b.at - a.at)[0]
   if (event) show(event, false)
   else clearView()
   scheduleLists()
 }
-
-const isShown = sessionId => !selected || selected === sessionId
 
 /* the map of changes beside the scrollbar */
 
@@ -313,13 +320,134 @@ miniEl.onpointermove = event => {
 
 /* the lists, and the stats bar */
 
-const chatButton = (sessionId, label, count) => {
-  const button = item('button', '', span('', label), span('counts', String(count)))
-  button.type = 'button'
-  if (selected === sessionId) button.setAttribute('aria-current', 'true')
-  button.onclick = () => select(sessionId)
-  return item('li', '', button)
+// small outline icons, drawn here so no library is needed
+const ICONS = {
+  folder: 'M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7z',
+  file: 'M14 3v4a1 1 0 0 0 1 1h4M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z',
+  chat: 'M21 11.5a8.4 8.4 0 0 1-9 8.4 9 9 0 0 1-3.9-.9L3 20l1.1-4.7A8.4 8.4 0 0 1 3 11.5 8.5 8.5 0 0 1 12 3a8.5 8.5 0 0 1 9 8.5z',
+  layers: 'M12 3l9 5-9 5-9-5 9-5zM3 13l9 5 9-5M3 17.5l9 5 9-5',
+  chevron: 'M9 6l6 6-6 6',
 }
+const icon = (name, className) => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
+  svg.setAttribute('viewBox', '0 0 24 24')
+  svg.setAttribute('class', `icon ${className}`)
+  svg.setAttribute('aria-hidden', 'true')
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path')
+  path.setAttribute('d', ICONS[name])
+  svg.append(path)
+  return svg
+}
+
+const toggleFolder = key => {
+  if (!collapsed.delete(key)) collapsed.add(key)
+  store.set('collapsed', [...collapsed])
+  scheduleLists()
+}
+
+// One row of a tree: an arrow when it holds others, an icon, a name and
+// whatever sits at the right. A folder with `opensOnPress` opens and closes
+// when pressed; any other row runs `onPress`.
+const node = ({ key, iconName, label, title, badge, right, kids = [], isSelected, opensOnPress, onPress }) => {
+  const isOpen = !collapsed.has(key)
+  const row = item('div', `nrow${isSelected ? ' sel' : ''}`)
+  if (kids.length > 0) {
+    const twisty = item('button', 'twisty', icon('chevron', 'chev'))
+    twisty.type = 'button'
+    twisty.setAttribute('aria-expanded', String(isOpen))
+    twisty.setAttribute('aria-label', `${isOpen ? 'Collapse' : 'Expand'} ${label}`)
+    twisty.onclick = () => toggleFolder(key)
+    row.append(twisty)
+  } else row.append(item('span', 'twisty gap'))
+
+  const main = item('button', 'nlabel', icon(iconName, `ico-${iconName}`), span('ntext', label))
+  if (badge) main.append(badge)
+  if (right) main.append(right)
+  main.type = 'button'
+  if (title) main.title = title
+  if (isSelected) main.setAttribute('aria-current', 'true')
+  main.onclick = () => (opensOnPress && kids.length > 0 ? toggleFolder(key) : onPress?.())
+  row.append(main)
+
+  const li = item('li', 'node', row)
+  if (kids.length > 0 && isOpen) li.append(item('ul', 'kids', ...kids))
+  return li
+}
+
+const plainCount = n => span('counts', String(n))
+const changeCount = file => item('span', 'counts', span('pos', `+${file.adds}`), ' ', span('neg', `−${file.dels}`))
+
+// All chats > a folder for each project > the chats working in it
+const chatTree = () => {
+  const groups = groupChats([...chats.values()])
+  const total = groups.reduce((sum, group) => sum + group.chats.reduce((n, chat) => n + chat.count, 0), 0)
+  return node({
+    key: 'c:all',
+    iconName: 'layers',
+    label: 'All chats',
+    right: plainCount(total),
+    isSelected: selected === '',
+    onPress: () => select(''),
+    kids: groups.map(group =>
+      node({
+        key: `c:${group.cwd}`,
+        iconName: 'folder',
+        label: group.name,
+        title: group.cwd,
+        right: plainCount(group.chats.reduce((n, chat) => n + chat.count, 0)),
+        isSelected: selected === `${DIR}${group.cwd}`,
+        onPress: () => select(`${DIR}${group.cwd}`),
+        kids: group.chats.map(chat =>
+          node({
+            key: `c:${chat.id}`,
+            iconName: 'chat',
+            label: chat.id.slice(0, 6),
+            title: chat.label,
+            right: plainCount(chat.count),
+            isSelected: selected === chat.id,
+            onPress: () => select(chat.id),
+          }),
+        ),
+      }),
+    ),
+  })
+}
+
+// Each project's folder > the folders and files touched inside it
+const fileNodes = (dir, base) => [
+  ...dir.dirs.map(sub => {
+    const key = `${base}/${sub.name}`
+    return node({ key, iconName: 'folder', label: sub.name, opensOnPress: true, kids: fileNodes(sub, key) })
+  }),
+  ...dir.files.map(file =>
+    node({
+      key: `${base}|${file.name}`,
+      iconName: 'file',
+      label: file.name,
+      title: file.path,
+      badge: file.isNew ? span('pill', 'new') : null,
+      right: changeCount(file),
+      isSelected: current?.path === file.path,
+      onPress: () => show(file.last, false),
+    }),
+  ),
+]
+
+const fileTreeNodes = () =>
+  fileTree(
+    [...files.values()]
+      .filter(file => isShown(file.sessionId))
+      .map(file => ({ ...file, cwd: chats.get(file.sessionId)?.cwd ?? '' })),
+  ).map(project =>
+    node({
+      key: `f:${project.cwd}`,
+      iconName: 'folder',
+      label: project.name,
+      title: project.cwd,
+      opensOnPress: true,
+      kids: fileNodes(project, `f:${project.cwd}`),
+    }),
+  )
 
 const clock = ms => {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -339,7 +467,8 @@ const renderStats = () => {
   $('s-files').textContent = `${scoped.length} ${scoped.length === 1 ? 'file' : 'files'}`
   $('s-add').textContent = `+${sum('adds')}`
   $('s-del').textContent = `−${sum('dels')}`
-  $('s-chat').textContent = selected ? (chats.get(selected)?.label ?? '') : 'All chats'
+  const scopeLabel = selected.startsWith(DIR) ? baseName(selected.slice(DIR.length)) : chats.get(selected)?.label
+  $('s-chat').textContent = selected ? (scopeLabel ?? '') : 'All chats'
   renderElapsed()
 }
 setInterval(renderElapsed, 1000)
@@ -347,11 +476,7 @@ setInterval(renderElapsed, 1000)
 const renderLists = () => {
   isListsDue = false
   // first-seen order, so a button never moves under the pointer
-  const all = [...chats.values()]
-  $('chat-list').replaceChildren(
-    chatButton('', 'All chats', all.reduce((sum, chat) => sum + chat.count, 0)),
-    ...all.map(chat => chatButton(chat.id, chat.label, chat.count)),
-  )
+  $('chat-list').replaceChildren(chatTree())
 
   $('feed-list').replaceChildren(
     ...feed
@@ -363,22 +488,8 @@ const renderLists = () => {
       }),
   )
 
-  $('file-list').replaceChildren(
-    ...[...files.values()]
-      .filter(file => isShown(file.sessionId))
-      .reverse()
-      .map(file => {
-        const name = item('span', '', baseName(file.path))
-        if (file.isNew) name.append(span('pill', 'new'))
-        const counts = item('span', 'counts', span('pos', `+${file.adds}`), ' ', span('neg', `−${file.dels}`))
-        const button = item('button', '', name, counts)
-        button.type = 'button'
-        button.title = file.path
-        if (current?.path === file.path) button.setAttribute('aria-current', 'true')
-        button.onclick = () => show(file.last, false)
-        return item('li', '', button)
-      }),
-  )
+  const fileRows = fileTreeNodes()
+  $('file-list').replaceChildren(...(fileRows.length > 0 ? fileRows : [item('li', 'hint', 'No edits yet')]))
   renderStats()
 }
 
@@ -392,6 +503,7 @@ const noteChat = event => {
   const chat = chats.get(event.sessionId) ?? { id: event.sessionId, count: 0, firstAt: event.at }
   chats.set(event.sessionId, {
     ...chat,
+    cwd: event.cwd,
     label: `${baseName(event.cwd)} · ${event.sessionId.slice(0, 6)}`,
     lastAt: event.at,
     count: chat.count + (event.type === 'tool' ? 1 : 0),
@@ -474,7 +586,6 @@ source.onopen = () => {
   // the server replays its backlog on every connect: start from nothing
   for (const map of [files, chats, latest, results]) map.clear()
   feed.length = 0
-  lastEdit = null
   selected = ''
   pending = null
   queued = null
@@ -516,7 +627,6 @@ source.onmessage = message => {
       last: event,
     })
     latest.set(event.sessionId, event)
-    lastEdit = event
     if (isShown(event.sessionId)) {
       pending = event
       requestAnimationFrame(flush)
