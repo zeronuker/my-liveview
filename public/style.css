@@ -351,6 +351,7 @@ nav > ul {
 
 .node {
   position: relative;
+  padding-bottom: 3px; /* a gap under each row, so a selected row never touches its neighbor */
 }
 
 .nrow {
@@ -366,7 +367,7 @@ nav > ul {
 }
 
 .nrow.sel {
-  border-color: color-mix(in srgb, var(--acc) 55%, transparent);
+  border-color: var(--acc);
   background: color-mix(in srgb, var(--acc) 18%, transparent);
 }
 
@@ -450,7 +451,12 @@ nav > ul {
 
 .kids {
   margin: 0 0 0 9px;
-  padding: 0 0 0 12px;
+  padding: 3px 0 0 12px;
+}
+
+/* the first branch starts at the parent's row, across the gap */
+.kids > .node:first-child::before {
+  top: -3px;
 }
 
 /* a line down the folder, and a short branch to each row (the last row ends it) */
@@ -475,12 +481,6 @@ nav > ul {
   top: 15px;
   width: 10px;
   border-top: 1px solid color-mix(in srgb, var(--dim) 55%, transparent);
-}
-
-.hint {
-  padding: 4px 14px;
-  color: var(--dim);
-  font-size: 12px;
 }
 
 .counts {

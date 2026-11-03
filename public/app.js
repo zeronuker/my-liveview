@@ -1,5 +1,5 @@
 import { highlight, langOf } from './highlight.js'
-import { fileTree, groupChats } from './tree.js'
+import { fileLabels } from './tree.js'
 
 const $ = id => document.getElementById(id)
 const rowsEl = $('rows')
@@ -62,6 +62,7 @@ let queued = null // an edit that came in while paused
 let isListsDue = false
 let isPaused = false
 let isStopped = false
+let isReplaying = true // the server's history comes first, then live events
 
 const baseName = p => p.split(/[\\/]/).filter(Boolean).pop() ?? p
 
@@ -254,21 +255,26 @@ const flush = () => {
   } else show(event, Date.now() - event.at < 5000)
 }
 
-const DIR = 'dir:'
+// is this chat the one selected, or is every chat
+const isShown = sessionId => !selected || selected === sessionId
 
-// is this chat in what is selected: everything, one project, or one chat
-const isShown = sessionId =>
-  !selected ||
-  selected === sessionId ||
-  (selected.startsWith(DIR) && chats.get(sessionId)?.cwd === selected.slice(DIR.length))
-
-const select = scope => {
-  selected = scope
+// '' for every chat, else one chat; the view shows its latest edit
+const select = sessionId => {
+  selected = sessionId
   pending = null
   queued = null
   const event = [...latest.values()].filter(edit => isShown(edit.sessionId)).sort((a, b) => b.at - a.at)[0]
   if (event) show(event, false)
   else clearView()
+  scheduleLists()
+}
+
+// a file under a chat: that chat becomes the selected one, showing that file
+const openFile = file => {
+  selected = file.sessionId
+  pending = null
+  queued = null
+  show(file.last, false)
   scheduleLists()
 }
 
@@ -377,77 +383,43 @@ const node = ({ key, iconName, label, title, badge, right, kids = [], isSelected
 const plainCount = n => span('counts', String(n))
 const changeCount = file => item('span', 'counts', span('pos', `+${file.adds}`), ' ', span('neg', `−${file.dels}`))
 
-// All chats > a folder for each project > the chats working in it
+// All chats > each chat > the files it touched, the latest edit on top
 const chatTree = () => {
-  const groups = groupChats([...chats.values()])
-  const total = groups.reduce((sum, group) => sum + group.chats.reduce((n, chat) => n + chat.count, 0), 0)
+  const list = [...chats.values()]
   return node({
     key: 'c:all',
     iconName: 'layers',
     label: 'All chats',
-    right: plainCount(total),
+    right: plainCount(list.reduce((sum, chat) => sum + chat.count, 0)),
     isSelected: selected === '',
     onPress: () => select(''),
-    kids: groups.map(group =>
-      node({
-        key: `c:${group.cwd}`,
-        iconName: 'folder',
-        label: group.name,
-        title: group.cwd,
-        right: plainCount(group.chats.reduce((n, chat) => n + chat.count, 0)),
-        isSelected: selected === `${DIR}${group.cwd}`,
-        onPress: () => select(`${DIR}${group.cwd}`),
-        kids: group.chats.map(chat =>
+    kids: list.map(chat => {
+      const own = [...files.values()].filter(file => file.sessionId === chat.id).sort((a, b) => b.last.at - a.last.at)
+      const labels = fileLabels(own.map(file => file.path), chat.cwd)
+      return node({
+        key: `c:${chat.id}`,
+        iconName: 'chat',
+        label: chat.label,
+        title: chat.cwd,
+        right: plainCount(chat.count),
+        isSelected: selected === chat.id,
+        onPress: () => select(chat.id),
+        kids: own.map(file =>
           node({
-            key: `c:${chat.id}`,
-            iconName: 'chat',
-            label: chat.id.slice(0, 6),
-            title: chat.label,
-            right: plainCount(chat.count),
-            isSelected: selected === chat.id,
-            onPress: () => select(chat.id),
+            key: `f:${file.sessionId}|${file.path}`,
+            iconName: 'file',
+            label: labels.get(file.path),
+            title: file.path,
+            badge: file.isNew ? span('pill', 'new') : null,
+            right: changeCount(file),
+            isSelected: current?.event.sessionId === file.sessionId && current.path === file.path,
+            onPress: () => openFile(file),
           }),
         ),
-      }),
-    ),
+      })
+    }),
   })
 }
-
-// Each project's folder > the folders and files touched inside it
-const fileNodes = (dir, base) => [
-  ...dir.dirs.map(sub => {
-    const key = `${base}/${sub.name}`
-    return node({ key, iconName: 'folder', label: sub.name, opensOnPress: true, kids: fileNodes(sub, key) })
-  }),
-  ...dir.files.map(file =>
-    node({
-      key: `${base}|${file.name}`,
-      iconName: 'file',
-      label: file.name,
-      title: file.path,
-      badge: file.isNew ? span('pill', 'new') : null,
-      right: changeCount(file),
-      isSelected: current?.path === file.path,
-      onPress: () => show(file.last, false),
-    }),
-  ),
-]
-
-const fileTreeNodes = () =>
-  fileTree(
-    [...files.values()]
-      .filter(file => isShown(file.sessionId))
-      .map(file => ({ ...file, cwd: chats.get(file.sessionId)?.cwd ?? '' })),
-  ).map(project =>
-    node({
-      key: `f:${project.cwd}`,
-      iconName: 'folder',
-      label: project.name,
-      title: project.cwd,
-      opensOnPress: true,
-      kids: fileNodes(project, `f:${project.cwd}`),
-    }),
-  )
 
 const clock = ms => {
   const s = Math.max(0, Math.floor(ms / 1000))
@@ -467,15 +439,13 @@ const renderStats = () => {
   $('s-files').textContent = `${scoped.length} ${scoped.length === 1 ? 'file' : 'files'}`
   $('s-add').textContent = `+${sum('adds')}`
   $('s-del').textContent = `−${sum('dels')}`
-  const scopeLabel = selected.startsWith(DIR) ? baseName(selected.slice(DIR.length)) : chats.get(selected)?.label
-  $('s-chat').textContent = selected ? (scopeLabel ?? '') : 'All chats'
+  $('s-chat').textContent = selected ? (chats.get(selected)?.label ?? '') : 'All chats'
   renderElapsed()
 }
 setInterval(renderElapsed, 1000)
 
 const renderLists = () => {
   isListsDue = false
-  // first-seen order, so a button never moves under the pointer
   $('chat-list').replaceChildren(chatTree())
 
   $('feed-list').replaceChildren(
@@ -488,8 +458,6 @@ const renderLists = () => {
       }),
   )
 
-  const fileRows = fileTreeNodes()
-  $('file-list').replaceChildren(...(fileRows.length > 0 ? fileRows : [item('li', 'hint', 'No edits yet')]))
   renderStats()
 }
 
@@ -500,6 +468,7 @@ function scheduleLists() {
 }
 
 const noteChat = event => {
+  const isNew = !chats.has(event.sessionId)
   const chat = chats.get(event.sessionId) ?? { id: event.sessionId, count: 0, firstAt: event.at }
   chats.set(event.sessionId, {
     ...chat,
@@ -508,6 +477,13 @@ const noteChat = event => {
     lastAt: event.at,
     count: chat.count + (event.type === 'tool' ? 1 : 0),
   })
+  return isNew
+}
+
+// a chat that starts while the page is open becomes the selected one, so what
+// it does shows at once; the history being replayed does not move the selection
+const noteAndFollow = event => {
+  if (noteChat(event) && !isReplaying) select(event.sessionId)
 }
 
 /* the controls */
@@ -589,6 +565,7 @@ source.onopen = () => {
   selected = ''
   pending = null
   queued = null
+  isReplaying = true
   clearView()
   scheduleLists()
   $('conn').textContent = 'connected'
@@ -609,15 +586,21 @@ source.onmessage = message => {
     window.close()
     return
   }
+  if (event.type === 'ready') {
+    // the history is over: open on the chat that was active most recently
+    isReplaying = false
+    const recent = [...chats.values()].sort((a, b) => b.lastAt - a.lastAt)[0]
+    if (recent) select(recent.id)
+    return
+  }
   if (event.type === 'tool') {
-    noteChat(event)
+    noteAndFollow(event)
     feed.unshift({ ...event, status: results.get(event.id) === false ? 'failed' : 'running' })
     if (feed.length > FEED_MAX) feed.pop()
   } else if (event.type === 'edit') {
-    noteChat(event)
+    noteAndFollow(event)
     const key = `${event.sessionId}|${event.path}`
     const before = files.get(key)
-    files.delete(key) // re-added last: the list is newest first
     files.set(key, {
       sessionId: event.sessionId,
       path: event.path,

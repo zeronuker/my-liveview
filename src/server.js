@@ -116,6 +116,7 @@ const server = http.createServer((req, res) => {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
     res.write(': connected\n\n') // headers only go out with a first write
     for (const event of events) res.write(`data: ${JSON.stringify(event)}\n\n`)
+    res.write('data: {"type":"ready"}\n\n') // the history is over: what follows is live
     clients.add(res)
     req.on('close', () => clients.delete(res))
     return

@@ -42,6 +42,29 @@ test('stopping the server tells open windows to close, then it exits', async () 
   }
 })
 
+test('a new window is told when the history ends and what follows is live', async () => {
+  const server = spawn(process.execPath, [path.join(root, 'src', 'server.js')], {
+    env: { ...process.env, PORT: String(PORT) },
+    stdio: 'ignore',
+  })
+  try {
+    for (let i = 0; i < 25; i++) {
+      if (await fetch(`http://127.0.0.1:${PORT}/`).then(() => true, () => false)) break
+      await sleep(100)
+    }
+    const stream = await fetch(`http://127.0.0.1:${PORT}/stream`)
+    let text = ''
+    for await (const chunk of stream.body) {
+      text += new TextDecoder().decode(chunk)
+      if (text.includes('"type":"ready"')) break
+    }
+
+    assert.match(text, /"type":"ready"/)
+  } finally {
+    server.kill()
+  }
+})
+
 test('stopping needs the token', async () => {
   const server = spawn(process.execPath, [path.join(root, 'src', 'server.js')], {
     env: { ...process.env, PORT: String(PORT) },
