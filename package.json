@@ -10,6 +10,7 @@
     "stop": "node scripts/stop.js",
     "status": "node scripts/status.js",
     "test": "node --test",
-    "demo": "node scripts/demo.js"
+    "demo": "node scripts/demo.js",
+    "burst": "node scripts/burst.js"
   }
 }

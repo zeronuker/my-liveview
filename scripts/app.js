@@ -51,7 +51,7 @@ spawn(
   [
     `--app=${url}`,
     `--user-data-dir=${profile}`,
-    '--window-size=1200,800',
+    '--window-size=1910,1063',
     '--window-position=160,90',
     '--no-first-run',
     '--no-default-browser-check',

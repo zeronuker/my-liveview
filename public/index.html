@@ -34,6 +34,7 @@
         <button id="b-larger" type="button" aria-label="Larger text">A+</button>
       </span>
       <button id="b-wrap" type="button" aria-pressed="false">Wrap</button>
+      <button id="b-whole" type="button" aria-pressed="true">Whole file</button>
       <button id="b-side" type="button" aria-pressed="false">Side by side</button>
       <button id="b-focus" type="button" aria-pressed="false">Focus</button>
       <select id="win-size" aria-label="Window size">
@@ -56,16 +57,11 @@
         <h2>Chats</h2>
         <ul id="chat-list"></ul>
       </nav>
-      <section id="view">
-        <div id="filebar">
-          <strong id="name">Waiting for an edit...</strong>
-          <span id="status" role="status" aria-live="polite"></span>
-        </div>
-        <div id="code">
-          <div id="rows"></div>
-          <div id="mini" aria-hidden="true"><div id="mini-box" hidden></div></div>
-        </div>
+      <div class="resizer" id="rz-nav"></div>
+      <section id="panes" aria-label="Files being written">
+        <div class="resizer split" id="rz-split"></div>
       </section>
+      <div class="resizer" id="rz-aside"></div>
       <aside id="feed" aria-label="Activity">
         <h2>Activity</h2>
         <ul id="feed-list"></ul>
