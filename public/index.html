@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live View</title>
+    <link rel="stylesheet" href="/style.css" />
+  </head>
+  <body>
+    <header>
+      <strong id="name">Waiting for an edit...</strong>
+      <span id="status" role="status" aria-live="polite"></span>
+      <span id="conn"></span>
+    </header>
+    <div class="layout">
+      <nav id="files" aria-label="Files touched">
+        <h2>Files touched</h2>
+        <ul id="file-list"></ul>
+      </nav>
+      <main id="rows"></main>
+      <aside id="feed" aria-label="Activity">
+        <h2>Activity</h2>
+        <ul id="feed-list"></ul>
+      </aside>
+    </div>
+    <script src="/app.js"></script>
+  </body>
+</html>

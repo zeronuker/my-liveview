@@ -1,0 +1,240 @@
+:root {
+  --bg: #1a1a1a;
+  --panel: #232323;
+  --fg: #e6e6e6;
+  --dim: #8a8a8a;
+  --add-bg: #12361a;
+  --add-fg: #4ade80;
+  --del-bg: #401414;
+  --del-fg: #f87171;
+  --new-bg: #4d4300;
+  --new-fg: #facc15;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.5 system-ui, sans-serif;
+}
+
+header {
+  display: flex;
+  gap: 16px;
+  align-items: baseline;
+  padding: 10px 16px;
+  background: var(--panel);
+  border-bottom: 1px solid #333;
+}
+
+#status {
+  color: var(--dim);
+}
+
+#status.failed {
+  color: var(--del-fg);
+  font-weight: 600;
+}
+
+#conn {
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 12px;
+}
+
+.layout {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+nav,
+aside {
+  flex: 0 0 250px;
+  overflow: auto;
+  padding: 8px 0;
+  background: var(--panel);
+}
+
+nav {
+  border-right: 1px solid #333;
+}
+
+aside {
+  flex-basis: 300px;
+  border-left: 1px solid #333;
+}
+
+h2 {
+  margin: 0;
+  padding: 4px 12px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+nav button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 12px;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+nav button:hover,
+nav button[aria-current] {
+  background: #333;
+}
+
+nav button:focus-visible {
+  outline: 2px solid var(--add-fg);
+  outline-offset: -2px;
+}
+
+.counts {
+  flex: none;
+  color: var(--dim);
+  font: 12px ui-monospace, Consolas, monospace;
+}
+
+aside li {
+  display: flex;
+  gap: 8px;
+  padding: 3px 12px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+aside .tool {
+  flex: none;
+  width: 3.2em;
+  color: var(--dim);
+  font: 12px ui-monospace, Consolas, monospace;
+}
+
+aside .done .tool {
+  color: var(--add-fg);
+}
+
+aside .failed .tool {
+  color: var(--del-fg);
+}
+
+@media (max-width: 900px) {
+  body {
+    height: auto;
+    min-height: 100%;
+  }
+
+  .layout {
+    flex-direction: column;
+  }
+
+  nav,
+  aside {
+    flex: none;
+    max-height: 180px;
+    border: 0;
+  }
+
+  main {
+    min-height: 60vh;
+  }
+}
+
+main {
+  min-width: 0;
+  flex: 1;
+  overflow: auto;
+  padding: 8px 0;
+  font: 13px/1.6 ui-monospace, Consolas, monospace;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 4.5em 2em 1fr;
+  white-space: pre;
+  scroll-margin: 64px 0;
+}
+
+.row[hidden] {
+  display: none;
+}
+
+.row .n {
+  padding-right: 1em;
+  text-align: right;
+  color: var(--dim);
+}
+
+.row .m {
+  text-align: center;
+}
+
+.row.ctx,
+.row.gap {
+  color: var(--dim);
+}
+
+.row.gap {
+  padding-left: 4.5em;
+}
+
+.row.add {
+  background: var(--add-bg);
+  color: var(--add-fg);
+}
+
+.row.del {
+  background: var(--del-bg);
+  color: var(--del-fg);
+}
+
+.row.add.new {
+  background: var(--new-bg);
+  color: var(--new-fg);
+}
+
+/* the dim background blinks while the edit is live, then stays steady */
+.live .row.add,
+.live .row.del {
+  animation: blink 0.5s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    background: transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live .row.add,
+  .live .row.del {
+    animation: none;
+  }
+}

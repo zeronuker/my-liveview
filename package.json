@@ -1,0 +1,12 @@
+{
+  "name": "my-liveview",
+  "version": "0.1.0",
+  "description": "A second window that shows, live, the file edits Claude Code makes.",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node src/server.js",
+    "test": "node --test",
+    "demo": "node scripts/demo.js"
+  }
+}
