@@ -298,9 +298,17 @@ const renderMini = () => {
 
 rowsEl.addEventListener('scroll', updateBox)
 new ResizeObserver(updateBox).observe(rowsEl)
-miniEl.onclick = event => {
+// the map is the scrollbar: click or drag on it to scroll
+const scrollToPointer = event => {
   const y = event.clientY - miniEl.getBoundingClientRect().top
   rowsEl.scrollTop = (y / miniEl.clientHeight) * rowsEl.scrollHeight - rowsEl.clientHeight / 2
+}
+miniEl.onpointerdown = event => {
+  miniEl.setPointerCapture(event.pointerId)
+  scrollToPointer(event)
+}
+miniEl.onpointermove = event => {
+  if (miniEl.hasPointerCapture(event.pointerId)) scrollToPointer(event)
 }
 
 /* the lists, and the stats bar */
@@ -438,6 +446,25 @@ $('b-larger').onclick = () => save('size', Math.min(20, prefs.size + 1))
 $('speed').oninput = event => save('speed', Number(event.target.value))
 for (const swatch of document.querySelectorAll('.swatch'))
   swatch.onclick = () => save('theme', swatch.dataset.theme)
+
+// the window's own size, from the app window itself
+const SIZES = { small: [1000, 700], medium: [1200, 800], large: [1600, 1000] }
+const resizeWindow = key => {
+  const { availLeft = 0, availTop = 0, availWidth, availHeight } = screen
+  const [width, height] = key === 'half' ? [Math.floor(availWidth / 2), availHeight] : SIZES[key]
+  const left = key === 'half' ? availLeft + width : availLeft + Math.floor((availWidth - width) / 2)
+  const top = key === 'half' ? availTop : availTop + Math.floor((availHeight - height) / 2)
+  window.resizeTo(width, height)
+  window.moveTo(left, top)
+  // a window that refuses (a tab, say) keeps its size: say so
+  setTimeout(() => {
+    if (Math.abs(window.outerWidth - width) > 24) $('conn').textContent = "this window can't be resized from the page"
+  }, 300)
+}
+$('win-size').onchange = event => {
+  if (event.target.value) resizeWindow(event.target.value)
+  event.target.value = '' // back to the label, so the same size can be picked again
+}
 apply()
 
 /* the live stream */
