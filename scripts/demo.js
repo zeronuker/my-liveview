@@ -56,6 +56,40 @@ fs.writeFileSync(file, content.replace(edit.old_string, edit.new_string))
 await hook('PostToolUse', 'demo-2', 'Edit', edit)
 console.log('edited the middle of it')
 
+// a JavaScript file, for the syntax colors and the change map
+const js = path.join(dir, 'sample.js')
+const code = [
+  "import { read } from './store.js'",
+  '',
+  '// how many entries to keep',
+  'const LIMIT = 50',
+  '',
+  ...Array.from({ length: 28 }, (_, i) => `const item${i + 1} = read('key-${i + 1}', ${i + 1})`),
+  '',
+  'export function total(list) {',
+  '  let sum = 0',
+  '  for (const entry of list) {',
+  '    if (entry.ok) sum += entry.value',
+  '  }',
+  '  return sum',
+  '}',
+  '',
+].join('\n')
+await hook('PreToolUse', 'demo-3', 'Write', { file_path: js, content: code })
+fs.writeFileSync(js, code)
+await hook('PostToolUse', 'demo-3', 'Write', { file_path: js, content: code })
+await sleep(7000)
+
+const jsEdit = {
+  file_path: js,
+  old_string: '    if (entry.ok) sum += entry.value',
+  new_string: "    if (!entry.ok) continue // skip failed entries\n    if (entry.value > LIMIT) throw new Error('too big')\n    sum += entry.value",
+}
+await hook('PreToolUse', 'demo-4', 'Edit', jsEdit)
+fs.writeFileSync(js, code.replace(jsEdit.old_string, jsEdit.new_string))
+await hook('PostToolUse', 'demo-4', 'Edit', jsEdit)
+console.log('wrote and edited a JavaScript file')
+
 // a second chat, in another project folder
 const other = path.join(root, 'demo', 'other.txt')
 const otherCwd = path.join(root, 'demo', 'other-project')

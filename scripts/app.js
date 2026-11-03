@@ -43,8 +43,19 @@ if (!browser) {
   console.log(`no Chrome or Edge found; open ${url} yourself`)
   process.exit(0)
 }
-spawn(browser, [`--app=${url}`, '--window-size=1200,800'], {
-  detached: true,
-  stdio: 'ignore',
-}).unref()
+// Its own profile, so the window opens at this size and not wherever the
+// everyday Chrome last left a window; Chrome then remembers any resize.
+const profile = path.join(process.env.LOCALAPPDATA ?? root, 'my-liveview', 'chrome-profile')
+spawn(
+  browser,
+  [
+    `--app=${url}`,
+    `--user-data-dir=${profile}`,
+    '--window-size=1200,800',
+    '--window-position=160,90',
+    '--no-first-run',
+    '--no-default-browser-check',
+  ],
+  { detached: true, stdio: 'ignore' },
+).unref()
 console.log(`opened ${url}`)
