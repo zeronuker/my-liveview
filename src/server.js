@@ -103,12 +103,16 @@ const server = http.createServer((req, res) => {
       res.writeHead(401).end()
       return
     }
-    res.writeHead(200).end('{}', () => process.exit(0))
+    // tell open windows to close themselves, then exit once it has gone out
+    for (const client of clients) client.write('data: {"type":"close"}\n\n')
+    res.writeHead(200).end('{}')
+    setTimeout(() => process.exit(0), 300)
     return
   }
 
   if (req.method === 'GET' && pathname === '/stream') {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
+    res.write(': connected\n\n') // headers only go out with a first write
     for (const event of events) res.write(`data: ${JSON.stringify(event)}\n\n`)
     clients.add(res)
     req.on('close', () => clients.delete(res))

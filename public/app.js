@@ -201,9 +201,22 @@ source.onopen = () => {
   clearView()
   $('conn').textContent = 'connected'
 }
-source.onerror = () => ($('conn').textContent = 'reconnecting...')
+let isStopped = false
+source.onerror = () => {
+  if (!isStopped) $('conn').textContent = 'reconnecting...'
+}
 source.onmessage = message => {
   const event = JSON.parse(message.data)
+  if (event.type === 'close') {
+    // the server is stopping: close this window, or say so where a tab may not close
+    isStopped = true
+    source.close()
+    clearView()
+    nameEl.textContent = 'Live view stopped. You can close this window.'
+    $('conn').textContent = 'stopped'
+    window.close()
+    return
+  }
   if (event.type === 'tool') {
     noteChat(event)
     feed.unshift({ ...event, status: results.get(event.id) === false ? 'failed' : 'running' })

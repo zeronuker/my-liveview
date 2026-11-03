@@ -8,6 +8,7 @@
     "start": "node src/server.js",
     "app": "node scripts/app.js",
     "stop": "node scripts/stop.js",
+    "status": "node scripts/status.js",
     "test": "node --test",
     "demo": "node scripts/demo.js"
   }
