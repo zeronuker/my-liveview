@@ -55,3 +55,25 @@ await hook('PreToolUse', 'demo-2', 'Edit', edit)
 fs.writeFileSync(file, content.replace(edit.old_string, edit.new_string))
 await hook('PostToolUse', 'demo-2', 'Edit', edit)
 console.log('edited the middle of it')
+
+// a second chat, in another project folder
+const other = path.join(root, 'demo', 'other.txt')
+const otherCwd = path.join(root, 'demo', 'other-project')
+const otherHook = (kind, id, tool, input) =>
+  fetch(`http://127.0.0.1:${PORT}/event`, {
+    method: 'POST',
+    headers: { 'x-liveview-token': TOKEN, 'content-type': 'application/json' },
+    body: JSON.stringify({
+      hook_event_name: kind,
+      session_id: 'second-chat-0001',
+      cwd: otherCwd,
+      tool_name: tool,
+      tool_use_id: id,
+      tool_input: input,
+    }),
+  })
+const text = 'alpha\nbeta\ngamma\n'
+await otherHook('PreToolUse', 'other-1', 'Write', { file_path: other, content: text })
+fs.writeFileSync(other, text)
+await otherHook('PostToolUse', 'other-1', 'Write', { file_path: other, content: text })
+console.log('a second chat wrote a file')

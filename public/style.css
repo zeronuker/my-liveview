@@ -116,6 +116,10 @@ nav button:focus-visible {
   outline-offset: -2px;
 }
 
+nav ul + h2 {
+  margin-top: 12px;
+}
+
 .counts {
   flex: none;
   color: var(--dim);

@@ -6,6 +6,8 @@
   "private": true,
   "scripts": {
     "start": "node src/server.js",
+    "app": "node scripts/app.js",
+    "stop": "node scripts/stop.js",
     "test": "node --test",
     "demo": "node scripts/demo.js"
   }

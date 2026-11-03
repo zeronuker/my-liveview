@@ -98,6 +98,15 @@ const server = http.createServer((req, res) => {
     return
   }
 
+  if (req.method === 'POST' && pathname === '/stop') {
+    if (req.headers['x-liveview-token'] !== TOKEN) {
+      res.writeHead(401).end()
+      return
+    }
+    res.writeHead(200).end('{}', () => process.exit(0))
+    return
+  }
+
   if (req.method === 'GET' && pathname === '/stream') {
     res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' })
     for (const event of events) res.write(`data: ${JSON.stringify(event)}\n\n`)

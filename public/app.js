@@ -7,8 +7,12 @@ const MARKS = { add: '+', del: '-', ctx: ' ' }
 const FEED_MAX = 100
 const results = new Map() // tool id -> did it land
 const feed = [] // newest first
-const files = new Map() // path -> { path, cwd, adds, dels, last }; newest last
-let current = null // { id, timer, settle }
+const files = new Map() // sessionId|path -> { sessionId, path, adds, dels, last }; newest last
+const chats = new Map() // sessionId -> { id, label, lastAt, count }
+const latest = new Map() // sessionId -> that chat's last edit
+let lastEdit = null // the last edit of any chat
+let selected = '' // a sessionId, or '' for every chat
+let current = null // { id, path, timer, settle }
 let pending = null
 let isListsDue = false
 
@@ -35,11 +39,14 @@ const buildRow = (row, isNew) => {
   return el
 }
 
+const stopAnimation = () => {
+  if (!current) return
+  clearInterval(current.timer)
+  clearTimeout(current.settle)
+}
+
 const show = (event, animate) => {
-  if (current) {
-    clearInterval(current.timer)
-    clearTimeout(current.settle)
-  }
+  stopAnimation()
   nameEl.textContent = baseName(event.path)
   nameEl.title = event.path
 
@@ -81,6 +88,16 @@ const show = (event, animate) => {
   }, tick)
 }
 
+const clearView = () => {
+  stopAnimation()
+  current = null
+  rowsEl.replaceChildren()
+  rowsEl.classList.remove('live')
+  nameEl.textContent = 'Waiting for an edit...'
+  nameEl.removeAttribute('title')
+  setStatus('')
+}
+
 // a page opened late is sent the backlog at once: draw only the last edit
 const flush = () => {
   if (!pending) return
@@ -89,41 +106,72 @@ const flush = () => {
   show(event, Date.now() - event.at < 5000)
 }
 
+const select = sessionId => {
+  selected = sessionId
+  pending = null
+  const event = sessionId ? latest.get(sessionId) : lastEdit
+  if (event) show(event, false)
+  else clearView()
+  scheduleLists()
+}
+
+const isShown = sessionId => !selected || selected === sessionId
+
+const item = (tag, className, ...children) => {
+  const el = document.createElement(tag)
+  if (className) el.className = className
+  el.append(...children)
+  return el
+}
+
+const span = (className, text) => {
+  const el = document.createElement('span')
+  el.className = className
+  el.textContent = text
+  return el
+}
+
+const chatButton = (sessionId, label, count) => {
+  const button = item('button', '', span('', label), span('counts', String(count)))
+  button.type = 'button'
+  if (selected === sessionId) button.setAttribute('aria-current', 'true')
+  button.onclick = () => select(sessionId)
+  return item('li', '', button)
+}
+
 const STATUS_MARK = { running: '...', done: 'ok', failed: 'failed' }
 
 const renderLists = () => {
   isListsDue = false
-  $('feed-list').replaceChildren(
-    ...feed.map(item => {
-      const li = document.createElement('li')
-      li.className = item.status
-      const tool = document.createElement('span')
-      tool.className = 'tool'
-      tool.textContent = STATUS_MARK[item.status]
-      const text = document.createElement('span')
-      text.textContent = item.summary
-      text.title = `${baseName(item.cwd)}: ${item.summary}`
-      li.append(tool, text)
-      return li
-    }),
+  // first-seen order, so a button never moves under the pointer
+  const all = [...chats.values()]
+  $('chat-list').replaceChildren(
+    chatButton('', 'All chats', all.reduce((sum, chat) => sum + chat.count, 0)),
+    ...all.map(chat => chatButton(chat.id, chat.label, chat.count)),
   )
+
+  $('feed-list').replaceChildren(
+    ...feed
+      .filter(entry => isShown(entry.sessionId))
+      .map(entry => {
+        const text = span('', entry.summary)
+        text.title = `${chats.get(entry.sessionId)?.label ?? ''}: ${entry.summary}`
+        return item('li', entry.status, span('tool', STATUS_MARK[entry.status]), text)
+      }),
+  )
+
   $('file-list').replaceChildren(
-    ...[...files.values()].reverse().map(file => {
-      const li = document.createElement('li')
-      const button = document.createElement('button')
-      button.type = 'button'
-      button.title = file.path
-      if (current?.path === file.path) button.setAttribute('aria-current', 'true')
-      const name = document.createElement('span')
-      name.textContent = baseName(file.path)
-      const counts = document.createElement('span')
-      counts.className = 'counts'
-      counts.textContent = `+${file.adds} -${file.dels}`
-      button.append(name, counts)
-      button.onclick = () => show(file.last, false)
-      li.append(button)
-      return li
-    }),
+    ...[...files.values()]
+      .filter(file => isShown(file.sessionId))
+      .reverse()
+      .map(file => {
+        const button = item('button', '', span('', baseName(file.path)), span('counts', `+${file.adds} -${file.dels}`))
+        button.type = 'button'
+        button.title = file.path
+        if (current?.path === file.path) button.setAttribute('aria-current', 'true')
+        button.onclick = () => show(file.last, false)
+        return item('li', '', button)
+      }),
   )
 }
 
@@ -133,35 +181,55 @@ function scheduleLists() {
   requestAnimationFrame(renderLists)
 }
 
+const noteChat = event => {
+  const chat = chats.get(event.sessionId) ?? { id: event.sessionId, count: 0 }
+  chats.set(event.sessionId, {
+    ...chat,
+    label: `${baseName(event.cwd)} · ${event.sessionId.slice(0, 6)}`,
+    lastAt: event.at,
+    count: chat.count + (event.type === 'tool' ? 1 : 0),
+  })
+}
+
 const source = new EventSource('/stream')
 source.onopen = () => {
   // the server replays its backlog on every connect: start from nothing
+  for (const map of [files, chats, latest, results]) map.clear()
   feed.length = 0
-  files.clear()
-  results.clear()
+  lastEdit = null
+  selected = ''
+  clearView()
   $('conn').textContent = 'connected'
 }
 source.onerror = () => ($('conn').textContent = 'reconnecting...')
 source.onmessage = message => {
   const event = JSON.parse(message.data)
   if (event.type === 'tool') {
+    noteChat(event)
     feed.unshift({ ...event, status: results.get(event.id) === false ? 'failed' : 'running' })
     if (feed.length > FEED_MAX) feed.pop()
   } else if (event.type === 'edit') {
-    const before = files.get(event.path)
-    files.delete(event.path) // re-added last: the list is newest first
-    files.set(event.path, {
+    noteChat(event)
+    const key = `${event.sessionId}|${event.path}`
+    const before = files.get(key)
+    files.delete(key) // re-added last: the list is newest first
+    files.set(key, {
+      sessionId: event.sessionId,
       path: event.path,
       adds: (before?.adds ?? 0) + event.adds,
       dels: (before?.dels ?? 0) + event.dels,
       last: event,
     })
-    pending = event
-    requestAnimationFrame(flush)
+    latest.set(event.sessionId, event)
+    lastEdit = event
+    if (isShown(event.sessionId)) {
+      pending = event
+      requestAnimationFrame(flush)
+    }
   } else if (event.type === 'done') {
     results.set(event.id, event.ok)
-    const item = feed.find(entry => entry.id === event.id)
-    if (item) item.status = event.ok ? 'done' : 'failed'
+    const entry = feed.find(one => one.id === event.id)
+    if (entry) entry.status = event.ok ? 'done' : 'failed'
     if (current?.id === event.id && !event.ok) setStatus('NOT APPLIED', true)
   }
   scheduleLists()
