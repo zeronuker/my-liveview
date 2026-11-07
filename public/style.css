@@ -716,6 +716,12 @@ body.wrap .row .t {
   background: color-mix(in srgb, var(--dfg) 38%, transparent);
 }
 
+/* a removed line while the typing selects it */
+.row.del.sel .t {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--acc) 38%, transparent);
+}
+
 /* the newest line: an accent bar, a soft glow and a caret */
 .row.nw {
   box-shadow: inset 3px 0 0 var(--acc), 0 0 14px -2px color-mix(in srgb, var(--acc) 70%, transparent);

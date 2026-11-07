@@ -131,6 +131,7 @@ const files = {
   '/highlight.js': ['highlight.js', 'text/javascript; charset=utf-8'],
   '/tree.js': ['tree.js', 'text/javascript; charset=utf-8'],
   '/inline.js': ['inline.js', 'text/javascript; charset=utf-8'],
+  '/typing.js': ['typing.js', 'text/javascript; charset=utf-8'],
   '/whole.js': ['whole.js', 'text/javascript; charset=utf-8'],
   '/pane.js': ['pane.js', 'text/javascript; charset=utf-8'],
   '/place.js': ['place.js', 'text/javascript; charset=utf-8'],

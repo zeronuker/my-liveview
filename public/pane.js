@@ -1,5 +1,6 @@
 import { highlight, langOf } from './highlight.js'
 import { withInlineDiff } from './inline.js'
+import { typingPlan } from './typing.js'
 
 const MARKS = { add: '+', del: '-', ctx: ' ' }
 const CARET = 'caret'
@@ -49,7 +50,8 @@ const buildSide = (rows, opts) => {
     shift += block.d.length - block.a.length
     block = { d: [], a: [] }
   }
-  for (const row of withInlineDiff(rows)) {
+  const shown = withInlineDiff(rows)
+  for (const row of shown) {
     if (row.kind === 'del') block.d.push(row)
     else if (row.kind === 'add') block.a.push(row)
     else {
@@ -60,14 +62,45 @@ const buildSide = (rows, opts) => {
   }
   flush()
   const split = make('div', 'split', make('div', 'col', ...left), make('div', 'col', ...right))
-  return { node: split, all: [...left, ...right], adds: right.filter(el => el.dataset.kind === 'add') }
+  return { node: split, all: [...left, ...right], adds: right.filter(el => el.dataset.kind === 'add'), shown }
 }
 
 const build = (rows, event, isSide) => {
   const opts = { isNew: event.isNew, lang: langOf(event.path) }
   if (isSide) return buildSide(rows, opts)
-  const all = withInlineDiff(rows).map(row => buildRow(row, opts))
-  return { all, adds: all.filter(el => el.dataset.kind === 'add') }
+  const shown = withInlineDiff(rows)
+  const all = shown.map(row => buildRow(row, opts))
+  return { all, adds: all.filter(el => el.dataset.kind === 'add'), shown }
+}
+
+// What typing needs from the rows: each change's count of removed lines and
+// the texts of the lines that replace them (the same grouping as buildSide).
+const blocksOf = rows => {
+  const blocks = []
+  let open = null
+  for (const row of rows) {
+    if (row.kind !== 'add' && row.kind !== 'del') open = null
+    else {
+      if (!open || (row.kind === 'del' && open.adds.length > 0)) blocks.push((open = { dels: 0, adds: [] }))
+      if (row.kind === 'del') open.dels++
+      else open.adds.push(row.text ?? '')
+    }
+  }
+  return blocks
+}
+
+// An added line showing the first part of its text; a line that replaced
+// another keeps its changed words brightened as far as they have been typed.
+const paintLine = (el, row, text) => {
+  const t = el.querySelector('.t')
+  t.replaceChildren()
+  if (!row.parts || !row.text.startsWith(text)) return t.append(text)
+  let left = text.length
+  for (const part of row.parts) {
+    const piece = part.text.slice(0, left)
+    left -= piece.length
+    if (piece) t.append(part.isChanged ? make('span', 'chg', piece) : piece)
+  }
 }
 
 let uses = 0 // a counter, so "used longest ago" is never a tie
@@ -213,40 +246,54 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
       return
     }
 
-    // new lines appear one per tick; the real edit is already decided, only the pace is staged
-    const tick = Math.max(15, Math.min(120, 4000 / Math.max(1, adds.length))) * mult
+    // the new lines are typed, the removed ones selected first; the real edit is
+    // already decided, only the way it is written is staged
+    const { steps } = typingPlan(blocksOf(built.shown))
+    const dels = all.filter(el => el.dataset.kind === 'del')
+    const addRows = built.shown.filter(row => row.kind === 'add')
     adds.forEach(el => reveal(el, false))
     rowsEl.classList.add('live')
     refresh()
     if (prefs.follow) firstChanged?.scrollIntoView({ block: 'center' })
-    let shown = 0
+    let at = 0 // ms of the plan played so far, at the normal pace
+    let next = 0
+    let before = performance.now()
     const step = () => {
+      const now = performance.now()
+      const elapsed = now - before
+      before = now
       if (isPaused()) return
-      if (mult === 0) {
-        adds.forEach(el => reveal(el, true))
-        shown = adds.length
-      } else if (shown < adds.length) {
-        const el = adds[shown++]
-        reveal(el, true)
-        markNewest(el)
-        if (getPrefs().follow) el.scrollIntoView({ block: 'nearest' })
+      at += mult === 0 ? Infinity : elapsed / mult
+      let lastTyped = -1
+      while (next < steps.length && steps[next].at <= at) {
+        const s = steps[next++]
+        if ('add' in s) {
+          reveal(adds[s.add], true)
+          paintLine(adds[s.add], addRows[s.add], s.text)
+          lastTyped = s.add
+        } else dels.forEach((el, i) => el.classList.toggle('sel', s.select !== null && i >= s.select[0] && i < s.select[1]))
+      }
+      if (lastTyped !== -1) {
+        markNewest(adds[lastTyped])
+        if (getPrefs().follow) adds[lastTyped].scrollIntoView({ block: 'nearest' })
       }
       updateBox()
-      if (shown >= adds.length) {
+      if (next >= steps.length) {
         clearInterval(current.timer)
-        current.settle = setTimeout(settle, settleMs === 1200 ? Math.max(1200, 24 * tick) : settleMs)
+        current.settle = setTimeout(settle, settleMs === 1200 ? 1200 * Math.max(1, mult) : settleMs)
       }
     }
-    // lines taken out show alone for a moment first, so what is about to go can be read
-    const pause = event.dels > 0 ? 1200 * mult : 0
-    if (pause > 0) current.delay = setTimeout(() => (current.timer = setInterval(step, tick)), pause)
-    else current.timer = setInterval(step, mult === 0 ? 30 : tick)
+    current.timer = setInterval(step, 20)
     // the reveal, all of it now (`silent` leaves the next waiting edit for the caller)
     current.finish = silent => {
       stop()
-      adds.forEach(el => reveal(el, true))
-      rowsEl.classList.remove('live')
       markNewest(null)
+      adds.forEach((el, i) => {
+        reveal(el, true)
+        paintLine(el, addRows[i], addRows[i].text ?? '')
+      })
+      dels.forEach(el => el.classList.remove('sel'))
+      rowsEl.classList.remove('live')
       current.phase = 'edited'
       refresh()
       if (!silent) onSettle(pane)
