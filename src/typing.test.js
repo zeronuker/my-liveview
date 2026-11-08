@@ -20,8 +20,8 @@ const finalTexts = (steps, count) => {
 }
 
 const blocks = [
-  { dels: 2, adds: ['const limit = 25', 'const rows = 500'] },
-  { dels: 0, adds: ['', 'export const total = limit + rows'] },
+  { dels: ['const limit = 75', 'const rows = []'], adds: ['const limit = 25', 'const rows = 500'] },
+  { dels: [], adds: ['', 'export const total = limit + rows'] },
 ]
 
 test('every added line ends as its whole text, slips and all', () => {
@@ -38,34 +38,57 @@ test('steps never go back in time', () => {
 })
 
 test('a slip shows a wrong letter, then the line is fixed', () => {
-  const { steps } = typingPlan([{ dels: 0, adds: ['abc'] }], { rand: () => 0 })
+  const { steps } = typingPlan([{ dels: [], adds: ['abc'] }], { rand: () => 0 })
   const shown = steps.map(step => step.text)
 
   assert.ok(shown.some(text => !'abc'.startsWith(text)))
   assert.equal(shown.at(-1), 'abc')
 })
 
-test('removed lines are selected, then the selection is cleared before typing', () => {
+test('removed lines are selected, the selection is cleared, then they are erased before any typing', () => {
   const { steps } = typingPlan(blocks, { rand: seeded() })
   const selects = steps.filter(step => 'select' in step)
 
   assert.deepEqual(selects.map(step => step.select), [[0, 2], null])
-  assert.ok(steps.indexOf(selects[1]) < steps.findIndex(step => 'add' in step))
+  const firstAdd = steps.findIndex(step => 'add' in step)
+  assert.ok(steps.indexOf(selects[1]) < steps.findIndex(step => 'del' in step))
+  // by the time typing starts, both removed lines are gone
+  const gone = new Set(steps.slice(0, firstAdd).filter(step => step.gone).map(step => step.del))
+  assert.deepEqual([...gone].sort(), [0, 1])
 })
 
-test('a change that only removes lines only selects', () => {
-  const { steps } = typingPlan([{ dels: 3, adds: [] }])
+test('the last removed line is backspaced first, one character at a time', () => {
+  const { steps } = typingPlan([{ dels: ['ab', 'xyz'], adds: [] }], { rand: () => 0 })
+  const erase = steps.filter(step => 'del' in step && !step.gone).map(step => `${step.del}:${step.text}`)
 
-  assert.ok(steps.every(step => 'select' in step))
+  assert.deepEqual(erase.slice(0, 5), ['1:xy', '1:x', '1:', '0:a', '0:'])
+})
+
+test('every removed line comes back whole after the typing', () => {
+  const { steps } = typingPlan(blocks, { rand: seeded() })
+  const lastAdd = steps.findLastIndex(step => 'add' in step && blocks[0].adds.includes(step.text))
+  const back = steps.slice(lastAdd).filter(step => 'del' in step)
+
+  assert.deepEqual(back.map(step => [step.del, step.text, step.gone]), [
+    [0, 'const limit = 75', false],
+    [1, 'const rows = []', false],
+  ])
+})
+
+test('a change that only removes lines selects, erases and brings them back, nothing typed', () => {
+  const { steps } = typingPlan([{ dels: ['old'], adds: [] }])
+
+  assert.ok(steps.every(step => 'select' in step || 'del' in step))
+  assert.deepEqual(steps.at(-1), { at: steps.at(-1).at, del: 0, text: 'old', gone: false })
 })
 
 test('a long edit is squeezed to the cap, a short one is not', () => {
-  const long = [{ dels: 0, adds: Array(60).fill('x'.repeat(80)) }]
-  const squeezed = typingPlan(long, { rand: seeded(), capMs: 15000 })
-  assert.ok(squeezed.total <= 15000)
-  assert.deepEqual(finalTexts(squeezed.steps, 60), long[0].adds)
+  const long = [{ dels: [], adds: Array(400).fill('x'.repeat(80)) }]
+  const squeezed = typingPlan(long, { rand: seeded() })
+  assert.equal(squeezed.total, 5 * 60 * 1000)
+  assert.deepEqual(finalTexts(squeezed.steps, 400), long[0].adds)
 
-  const short = typingPlan([{ dels: 0, adds: ['hi'] }], { rand: seeded(), capMs: 15000 })
+  const short = typingPlan([{ dels: [], adds: ['hi'] }], { rand: seeded() })
   assert.ok(short.total < 1000)
 })
 

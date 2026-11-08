@@ -49,8 +49,8 @@ test('a file that no longer matches the edit gives null, so the changed part sta
 })
 
 test('an edit that was cut short is not rebuilt', () => {
-  const before = Array.from({ length: 400 }, (_, i) => `old ${i}`).join('\n')
-  const after = Array.from({ length: 400 }, (_, i) => `new ${i}`).join('\n')
+  const before = Array.from({ length: 3000 }, (_, i) => `old ${i}`).join('\n')
+  const after = Array.from({ length: 3000 }, (_, i) => `new ${i}`).join('\n')
 
   assert.equal(wholeRows(makeRows(before, after), after), null)
 })

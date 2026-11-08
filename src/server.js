@@ -71,7 +71,12 @@ const publishEdit = ({ tool, input, id, sessionId, cwd }) => {
   let before = ''
   let existed = true
   try {
-    if (fs.statSync(input.file_path).size > MAX_FILE) return
+    if (fs.statSync(input.file_path).size > MAX_FILE) {
+      // too big to read and compare: the page still lists the edit, with a line saying why
+      const rows = [{ kind: 'gap', text: '... this file is over 2 MB, so its edit is not shown' }]
+      publish({ type: 'edit', id, sessionId, cwd, path: input.file_path, rows, adds: 0, dels: 0, isNew: false, hasWhole: false, tooBig: true, at: Date.now() })
+      return
+    }
     before = fs.readFileSync(input.file_path, 'utf8')
   } catch {
     existed = false // a Write may create the file: nothing to compare with

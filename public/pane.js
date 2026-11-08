@@ -73,24 +73,23 @@ const build = (rows, event, isSide) => {
   return { all, adds: all.filter(el => el.dataset.kind === 'add'), shown }
 }
 
-// What typing needs from the rows: each change's count of removed lines and
-// the texts of the lines that replace them (the same grouping as buildSide).
+// What typing needs from the rows: each change's removed lines and the lines
+// that replace them, as text (the same grouping as buildSide).
 const blocksOf = rows => {
   const blocks = []
   let open = null
   for (const row of rows) {
     if (row.kind !== 'add' && row.kind !== 'del') open = null
     else {
-      if (!open || (row.kind === 'del' && open.adds.length > 0)) blocks.push((open = { dels: 0, adds: [] }))
-      if (row.kind === 'del') open.dels++
-      else open.adds.push(row.text ?? '')
+      if (!open || (row.kind === 'del' && open.adds.length > 0)) blocks.push((open = { dels: [], adds: [] }))
+      open[row.kind === 'del' ? 'dels' : 'adds'].push(row.text ?? '')
     }
   }
   return blocks
 }
 
-// An added line showing the first part of its text; a line that replaced
-// another keeps its changed words brightened as far as they have been typed.
+// A line showing the first part of its text; a line that replaced another
+// keeps its changed words brightened as far as they have been typed.
 const paintLine = (el, row, text) => {
   const t = el.querySelector('.t')
   t.replaceChildren()
@@ -186,6 +185,18 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
     else el.hidden = !isShown
   }
 
+  // Keeps the line being written in the middle of the pane: once it drifts out
+  // of the middle band the pane scrolls it back to the centre (smoothly, or at
+  // once for the first line of an edit), so what comes next is already in view.
+  const keepCentered = (el, smooth) => {
+    if (el.getClientRects().length === 0) return // a line out of the way has no place to go to
+    const box = rowsEl.getBoundingClientRect()
+    const line = el.getBoundingClientRect()
+    const off = line.top + line.height / 2 - (box.top + box.height / 2)
+    if (smooth && Math.abs(off) < box.height * 0.2) return
+    rowsEl.scrollTo({ top: rowsEl.scrollTop + off, behavior: smooth ? 'smooth' : 'instant' })
+  }
+
   const markNewest = el => {
     current.newest?.classList.remove('nw')
     current.newest?.querySelector(`.${CARET}`)?.remove()
@@ -215,9 +226,9 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
     onStatus()
   }
 
-  // Draws one edit. `animate` reveals the new lines one by one at `mult` times
-  // the usual pace (0 is all at once), and holds the last line `settleMs` more.
-  const render = (event, rows, { animate, mult = 1, settleMs = 1200 } = {}) => {
+  // Draws one edit. `animate` types it out at `mult` times the usual pace (0 is
+  // all at once) and holds the end a moment before the next edit may start.
+  const render = (event, rows, { animate, mult = 1 } = {}) => {
     stop()
     const prefs = getPrefs()
     nameEl.textContent = baseName(event.path)
@@ -250,37 +261,46 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
     // already decided, only the way it is written is staged
     const { steps } = typingPlan(blocksOf(built.shown))
     const dels = all.filter(el => el.dataset.kind === 'del')
+    const delRows = built.shown.filter(row => row.kind === 'del')
     const addRows = built.shown.filter(row => row.kind === 'add')
     adds.forEach(el => reveal(el, false))
     rowsEl.classList.add('live')
     refresh()
-    if (prefs.follow) firstChanged?.scrollIntoView({ block: 'center' })
+    if (prefs.follow && firstChanged) keepCentered(firstChanged, false)
     let at = 0 // ms of the plan played so far, at the normal pace
     let next = 0
     let before = performance.now()
+    let isStarted = false
     const step = () => {
       const now = performance.now()
       const elapsed = now - before
       before = now
       if (isPaused()) return
       at += mult === 0 ? Infinity : elapsed / mult
-      let lastTyped = -1
+      let moved = null // the line the last step wrote on; `false` when it took none
       while (next < steps.length && steps[next].at <= at) {
         const s = steps[next++]
         if ('add' in s) {
           reveal(adds[s.add], true)
           paintLine(adds[s.add], addRows[s.add], s.text)
-          lastTyped = s.add
+          moved = adds[s.add]
+        } else if ('del' in s) {
+          reveal(dels[s.del], !s.gone)
+          paintLine(dels[s.del], delRows[s.del], s.text)
+          moved = s.gone ? false : dels[s.del]
         } else dels.forEach((el, i) => el.classList.toggle('sel', s.select !== null && i >= s.select[0] && i < s.select[1]))
       }
-      if (lastTyped !== -1) {
-        markNewest(adds[lastTyped])
-        if (getPrefs().follow) adds[lastTyped].scrollIntoView({ block: 'nearest' })
+      if (moved !== null) {
+        markNewest(moved || null)
+        if (moved && getPrefs().follow) {
+          keepCentered(moved, isStarted)
+          isStarted = true
+        }
       }
       updateBox()
       if (next >= steps.length) {
         clearInterval(current.timer)
-        current.settle = setTimeout(settle, settleMs === 1200 ? 1200 * Math.max(1, mult) : settleMs)
+        current.settle = setTimeout(settle, 1200 * Math.max(1, mult))
       }
     }
     current.timer = setInterval(step, 20)
@@ -292,7 +312,11 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
         reveal(el, true)
         paintLine(el, addRows[i], addRows[i].text ?? '')
       })
-      dels.forEach(el => el.classList.remove('sel'))
+      dels.forEach((el, i) => {
+        reveal(el, true)
+        paintLine(el, delRows[i], delRows[i].text ?? '')
+        el.classList.remove('sel')
+      })
       rowsEl.classList.remove('live')
       current.phase = 'edited'
       refresh()

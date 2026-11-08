@@ -240,7 +240,7 @@ const refreshState = () => {
 // The rows to draw: the whole file when it is wanted and still kept, else the
 // changed part, with a line saying why when the whole file was wanted.
 const rowsFor = event => {
-  if (!prefs.whole) return event.rows
+  if (!prefs.whole || event.tooBig) return event.rows
   const text = wholeCache.get(event.id)
   const whole = typeof text === 'string' ? wholeRows(event.rows, text) : null
   if (whole) return whole
@@ -271,29 +271,21 @@ const keyOf = event => `${event.sessionId}|${event.path}`
 const snapshot = () =>
   panes.map(pane => ({ key: pane.key(), isBusy: pane.isBusy, isVisible: pane.isVisible, usedAt: pane.usedAt }))
 
-// How the reveal goes: at the person's speed, or faster while edits wait in
-// line so the view keeps up with the real work.
-const pace = () => {
-  const mult = SPEEDS[prefs.speed - 1].mult
-  if (queue.length >= 3) return { mult: 0, settleMs: 300 }
-  if (queue.length > 0) return { mult: Math.min(mult, 0.4), settleMs: 600 }
-  return { mult }
-}
-
 // A live edit goes to a pane: the one already showing that file, a finished
-// one, or a second one that opens; if both are being written it waits in line.
+// one, or a second one that opens. If its file is still being written, or both
+// panes are, it waits in line: an edit is never cut short, only skipped by the
+// person (Skip, or the instant speed).
 const place = event => {
-  const { pane: at, interrupt } = placeEdit(snapshot(), keyOf(event))
+  const { pane: at } = placeEdit(snapshot(), keyOf(event), { allowInterrupt: false })
   if (at === -1) {
     queue.push(event)
     refreshState()
     return
   }
   const pane = panes[at]
-  if (interrupt) pane.finish(true) // the same file again: what it was writing is finished first
   pane.open()
   layoutPanes()
-  pane.render(event, rowsFor(event), { animate: true, ...pace() })
+  pane.render(event, rowsFor(event), { animate: true, mult: SPEEDS[prefs.speed - 1].mult })
 }
 
 // A pane has finished: edits that waited take the panes that are free, in order.
@@ -562,7 +554,10 @@ const renderLists = () => {
   )
 
   // each pane says which chat its file is from when every chat is in view
-  for (const pane of panes) if (pane.current) pane.setChat(selected ? '' : nameOfChat(pane.current.event.sessionId))
+  for (const pane of panes) {
+    const chat = pane.current?.event.sessionId
+    if (chat) pane.setChat(chat === selected ? '' : nameOfChat(chat))
+  }
   renderStats()
 }
 
@@ -594,10 +589,14 @@ const noteChat = event => {
   return isNew
 }
 
-// a chat that starts while the page is open becomes the selected one, so what
-// it does shows at once; the history being replayed does not move the selection
+// a chat that starts while the page is open becomes the selected one in the
+// lists; the panes are left alone, so an edit being typed is not cut off. The
+// history being replayed does not move the selection.
 const noteAndFollow = event => {
-  if (noteChat(event) && !isReplaying) select(event.sessionId)
+  if (noteChat(event) && !isReplaying) {
+    selected = event.sessionId
+    scheduleLists()
+  }
 }
 
 /* the controls */
@@ -737,7 +736,7 @@ source.onmessage = message => {
       last: event,
     })
     latest.set(event.sessionId, event)
-    if (!isReplaying && isShown(event.sessionId)) ingest(event)
+    if (!isReplaying) ingest(event) // every chat's edits are shown, whichever chat is selected
   } else if (event.type === 'done') {
     results.set(event.id, event.ok)
     const entry = feed.find(one => one.id === event.id)

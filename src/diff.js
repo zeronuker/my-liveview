@@ -1,7 +1,7 @@
 import { linesOf, showText } from '../public/whole.js'
 
 const CONTEXT = 40 // unchanged lines kept above and below a change
-const MAX_ROWS = 300
+const MAX_ROWS = 5000 // far above a normal file; only a guard so the page can never freeze
 
 // The file as it will be once the tool has run; null when the tool will refuse.
 export const applyEdit = (before, tool, input) => {
