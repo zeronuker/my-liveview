@@ -211,6 +211,8 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
     clearInterval(current.timer)
     clearTimeout(current.delay)
     clearTimeout(current.settle)
+    clearTimeout(current.fade)
+    rowsEl.classList.remove('faded')
   }
 
   // the header's status: paused wins, then a refused edit, then where the reveal is
@@ -237,7 +239,11 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
     if (built.node) rowsEl.replaceChildren(built.node)
     else rowsEl.replaceChildren(...built.all)
     const { all, adds } = built
-    current = { id: event.id, path: event.path, event, rows, side: prefs.side, phase: 'writing', newest: null, timer: 0, delay: 0, settle: 0, finish: null }
+    current = { id: event.id, path: event.path, event, rows, side: prefs.side, phase: 'writing', newest: null, timer: 0, delay: 0, settle: 0, fade: 0, finish: null }
+    // the add/del colour fades 10s after the edit is done (counts on while paused)
+    const fadeLater = () => {
+      current.fade = setTimeout(() => rowsEl.classList.add('faded'), 10000)
+    }
     pane.usedAt = ++uses
     const firstChanged = all.find(el => el.dataset.kind === 'add' || el.dataset.kind === 'del')
     renderMini()
@@ -246,12 +252,14 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
       rowsEl.classList.remove('live')
       markNewest(null)
       current.phase = 'edited'
+      fadeLater()
       refresh()
       onSettle(pane)
     }
     if (!animate) {
       rowsEl.classList.remove('live')
       current.phase = 'edited'
+      fadeLater()
       refresh()
       firstChanged?.scrollIntoView({ block: 'center' })
       return
@@ -319,6 +327,7 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
       })
       rowsEl.classList.remove('live')
       current.phase = 'edited'
+      fadeLater()
       refresh()
       if (!silent) onSettle(pane)
     }

@@ -759,6 +759,17 @@ body.wrap .row .t {
   animation: blink 1s steps(1) infinite;
 }
 
+/* 10s after an edit is done the add/del row colour fades away (pane.js adds .faded) */
+.row.add,
+.row.del {
+  transition: background 1.2s;
+}
+
+.rows.faded .row.add,
+.rows.faded .row.del {
+  background: transparent;
+}
+
 body.paused .row,
 body.paused .caret,
 body.paused .dot {
