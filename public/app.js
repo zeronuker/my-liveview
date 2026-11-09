@@ -89,9 +89,9 @@ const item = (tag, className, ...children) => {
 // is this chat the one selected, or is every chat
 const isShown = sessionId => !selected || selected === sessionId
 
-/* the panes: up to two files watched at once */
+/* the panes: up to four files watched at once */
 
-const panes = [0, 1].map(index =>
+const panes = [0, 1, 2, 3].map(index =>
   createPane({
     index,
     getPrefs: () => prefs,
@@ -139,8 +139,13 @@ const applySizes = () => {
   for (const pane of panes) pane.updateBox()
 }
 
+// one pane, two side by side (draggable split), or three/four in a 2x2 grid
+// (with three, the last one takes the whole bottom row)
 const layoutPanes = () => {
-  panesEl.classList.toggle('two', panes[1].isVisible)
+  const shown = panes.filter(pane => pane.isVisible)
+  panesEl.classList.toggle('two', shown.length === 2)
+  panesEl.classList.toggle('quad', shown.length > 2)
+  shown.forEach((pane, i) => (pane.root.style.gridColumn = shown.length === 3 && i === 2 ? '1 / -1' : ''))
   applySplit()
 }
 
@@ -355,7 +360,7 @@ const rerenderAll = () => {
 }
 
 // Skip: what is being written ends now, and whatever waited is shown as it
-// ends up, the latest two staying on screen.
+// ends up, the latest four staying on screen.
 const skipAll = () => {
   for (const pane of panes) if (pane.isBusy) pane.finish(true)
   while (queue.length > 0) {

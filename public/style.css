@@ -526,7 +526,7 @@ aside .failed .tool {
   color: var(--dfg);
 }
 
-/* the panes: one file, or two watched at once (stacked when there is little width) */
+/* the panes: up to four files watched at once (two stack when there is little width) */
 #panes {
   position: relative;
   flex: 1;
@@ -564,6 +564,24 @@ aside .failed .tool {
 
 .pane + .pane {
   border-left: 1px solid var(--line);
+}
+
+/* three or four panes: a 2x2 grid (one column when there is little width) */
+#panes.quad {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-auto-rows: minmax(0, 1fr);
+}
+
+#panes.quad .pane:nth-child(n + 3) {
+  border-top: 1px solid var(--line);
+}
+
+#panes.quad .pane:nth-child(odd) {
+  border-left: 0;
+}
+
+#panes.quad.stacked {
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .chat-name {

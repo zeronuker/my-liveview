@@ -21,6 +21,13 @@ test('a third file waits in line while both panes are being written', () => {
   assert.deepEqual(placeEdit(both, 'c'), { pane: -1 })
 })
 
+test('with four panes, busy files open the next pane and a fifth waits in line', () => {
+  const hidden = { key: null, isBusy: false, isVisible: false, usedAt: 0 }
+
+  assert.deepEqual(placeEdit([shows('a', 1, true), shows('b', 2, true), shows('c', 3, true), hidden], 'd'), { pane: 3 })
+  assert.deepEqual(placeEdit([shows('a', 1, true), shows('b', 2, true), shows('c', 3, true), shows('d', 4, true)], 'e'), { pane: -1 })
+})
+
 test('a file that is already showing is given the pane it is in, even while that is busy', () => {
   const panes = [shows('a', 1, true), shows('b', 2, true)]
 

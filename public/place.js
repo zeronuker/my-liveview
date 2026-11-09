@@ -1,4 +1,4 @@
-// Where an edit goes when there are two panes to watch files in. Plain data in,
+// Where an edit goes when there are up to four panes to watch files in. Plain data in,
 // plain data out, so the rule can be tested; app.js does the drawing.
 //
 // `panes` is [{ key, isBusy, isVisible, usedAt }]: the file a pane shows
@@ -19,7 +19,7 @@ export const placeEdit = (panes, key, { allowInterrupt = true } = {}) => {
     .sort((a, b) => a.usedAt - b.usedAt)[0]
   if (free) return { pane: free.index }
 
-  // both on screen are busy: open the second pane, if it is not open yet
+  // every pane on screen is busy: open the next one, if any is left
   const hidden = panes.findIndex(pane => !pane.isVisible)
   return { pane: hidden }
 }
