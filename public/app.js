@@ -46,6 +46,7 @@ const prefs = {
   side: store.get('side', false) === true,
   follow: store.get('follow', true) !== false,
   focus: store.get('focus', false) === true,
+  awake: store.get('awake', false) === true,
 }
 
 const collapsed = new Set(store.get('collapsed', [])) // folders the person closed
@@ -612,18 +613,39 @@ const save = (key, value) => {
   apply()
 }
 
+// Stay awake: a screen wake lock keeps the display on (no screensaver) while the
+// window is visible; the browser drops it when hidden, so it is asked for again.
+let wakeLock = null
+const syncAwake = () => {
+  if (prefs.awake) {
+    if (!wakeLock && document.visibilityState === 'visible')
+      wakeLock = navigator.wakeLock
+        ?.request('screen')
+        .then(lock => {
+          lock.onrelease = () => (wakeLock = null)
+          return lock
+        })
+        .catch(() => (wakeLock = null))
+  } else {
+    wakeLock?.then(lock => lock?.release())
+    wakeLock = null
+  }
+}
+document.addEventListener('visibilitychange', syncAwake)
+
 const apply = () => {
   document.documentElement.dataset.theme = prefs.theme
   document.documentElement.style.setProperty('--code-size', `${prefs.size}px`)
   document.body.classList.toggle('wrap', prefs.wrap)
   document.body.classList.toggle('focus', prefs.focus)
-  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus']])
+  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake']])
     $(id).setAttribute('aria-pressed', String(prefs[key]))
   for (const swatch of document.querySelectorAll('.swatch'))
     swatch.setAttribute('aria-pressed', String(swatch.dataset.theme === prefs.theme))
   $('speed').value = String(prefs.speed)
   $('speed-out').textContent = SPEEDS[prefs.speed - 1].name
   for (const pane of panes) pane.updateBox()
+  syncAwake()
 }
 
 const setPaused = on => {
@@ -644,6 +666,7 @@ $('b-whole').onclick = () => {
   rerenderAll()
 }
 $('b-focus').onclick = () => save('focus', !prefs.focus)
+$('b-awake').onclick = () => save('awake', !prefs.awake)
 $('b-side').onclick = () => {
   save('side', !prefs.side)
   rerenderAll()
