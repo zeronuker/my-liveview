@@ -1,0 +1,198 @@
+// The Office's pixel art: the people, drawn in code as small grids of letters.
+// Each letter is a colour (see INK). A person is a head, a torso and legs put
+// together; a worker's own colours (shirt, hair, skin, trousers) are put in
+// when the grid is turned into cells. Plain data in, plain data out, so it can
+// be tested; office.js draws the cells on the canvas.
+//
+// The grids face the front and are flipped to face left or right. They are 12
+// pixels wide and 16 tall. Walking has 4 frames, resting poses 2 (a small
+// squash, like breathing), as small sprites need no more.
+
+export const WIDTH = 12
+export const HEIGHT = 16
+
+const BLANK = '............'
+
+// two heads: short hair and long hair
+const HEADS = {
+  short: [
+    '...oooooo...',
+    '..ohhhhhho..',
+    '.ohhhhhhhho.',
+    '.ohssssssho.',
+    '.ohsessesho.',
+    '.osssssssso.',
+    '..oSSSSSSo..',
+  ],
+  long: [
+    '...oooooo...',
+    '..ohhhhhho..',
+    '.ohhhhhhhho.',
+    '.ohhsssshho.',
+    '.ohsessesho.',
+    '.ohssssssho.',
+    '..ohSSSSho..',
+  ],
+}
+
+// five rows each, the last being the hips
+const HIPS = '..oppppppo..'
+const TORSOS = {
+  down: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.osbbbbbbso.', HIPS],
+  type1: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.obbsssbbbo.', HIPS],
+  type2: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.obbbsssbbo.', HIPS],
+  read1: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBmwwwwmBo.', '.osmwwwwmso.', HIPS],
+  read2: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBmwlwwmBo.', '.osmwlwwmso.', HIPS],
+  give: ['.obbbbbbbbo.', '.oBbbbbbbbbs', '.oBbbbbbbBo.', '.osbbbbbbso.', HIPS],
+  up: ['sobbbbbbbbos', 'BoBbbbbbbBoB', '.oBbbbbbbBo.', '.obbbbbbbbo.', HIPS],
+}
+
+// four rows each
+const LEGS = {
+  stand: ['..oppooppo..', '..oppooppo..', '..okkookko..', '..oooooooo..'],
+  walkA: ['..oppooppo..', '.oppo.oppo..', '.okko.okko..', '.oooo.oooo..'],
+  walkB: ['..oppooppo..', '..oppo.oppo.', '..okko.okko.', '..oooo.oooo.'],
+  sit: ['..oppppppo..', '..okkppkko..', BLANK, BLANK],
+}
+
+// A frame is a head, a torso and legs. `squash` takes a row off the hair (the
+// person is a little shorter: a breath, or the middle of a step); `overlay` is
+// a list of [x, y, letter] drawn on top.
+const compose = (look, torso, legs, { squash = false, overlay = [] } = {}) => {
+  let rows = [...HEADS[look], ...TORSOS[torso], ...LEGS[legs]]
+  if (squash) rows = [BLANK, rows[0], ...rows.slice(2)]
+  const grid = rows.map(row => [...row])
+  for (const [x, y, letter] of overlay) grid[y][x] = letter
+  return grid.map(row => row.join(''))
+}
+
+const HAND_UP = [[0, 3, 's'], [0, 4, 's'], [1, 5, 'B'], [1, 6, 'B']]
+
+// What each pose looks like over time: its frames (for the short and the long
+// hair, which only differ in the head) and how long each is shown, in seconds.
+const POSES = {
+  idle: { every: 0.7, frames: look => [compose(look, 'down', 'stand'), compose(look, 'down', 'stand', { squash: true })] },
+  walk: {
+    every: 0.15,
+    frames: look => [
+      compose(look, 'down', 'walkA'),
+      compose(look, 'down', 'stand', { squash: true }),
+      compose(look, 'down', 'walkB'),
+      compose(look, 'down', 'stand', { squash: true }),
+    ],
+  },
+  sit: { every: 0.9, frames: look => [compose(look, 'down', 'sit'), compose(look, 'down', 'sit', { squash: true })] },
+  type: { every: 0.18, frames: look => [compose(look, 'type1', 'sit'), compose(look, 'type2', 'sit')] },
+  read: { every: 0.8, frames: look => [compose(look, 'read1', 'sit'), compose(look, 'read2', 'sit')] },
+  grab: { every: 1, frames: look => [compose(look, 'give', 'stand')] },
+  give: { every: 1, frames: look => [compose(look, 'give', 'stand')] },
+  ask: { every: 0.35, frames: look => [compose(look, 'down', 'stand', { overlay: HAND_UP }), compose(look, 'down', 'stand')] },
+  machine: { every: 0.25, frames: look => [compose(look, 'type1', 'stand'), compose(look, 'type2', 'stand')] },
+  scan: { every: 0.5, frames: look => [compose(look, 'down', 'stand'), compose(look, 'down', 'stand', { squash: true })] },
+  review: { every: 0.8, frames: look => [compose(look, 'read1', 'sit'), compose(look, 'read2', 'sit')] },
+  cheer: { every: 0.16, frames: look => [compose(look, 'up', 'stand'), compose(look, 'up', 'stand', { squash: true })] },
+  shake: { every: 0.7, frames: look => [compose(look, 'down', 'stand'), compose(look, 'down', 'stand', { squash: true })] },
+}
+
+export const poses = () => Object.keys(POSES)
+export const framesOf = (pose, look = 'short') => POSES[pose]?.frames(look) ?? null
+
+// Colours, as ramps: each shade is a little darker and a little cooler, never
+// just black added.
+const SKINS = [['#f3cfa8', '#d9a47f'], ['#e0ac81', '#b97f5b'], ['#c68c62', '#9c6443'], ['#8d5a3b', '#6a3f29']]
+const HAIRS = [['#2f2233', '#1d1424'], ['#5a3a2a', '#3b2419'], ['#b5651d', '#8a4a12'], ['#d9b35c', '#b38e3d'], ['#8c8c9a', '#6b6b79'], ['#a03a3a', '#7a2626']]
+const PANTS = ['#3b4a6b', '#4a4a55', '#5b4636']
+const INK = {
+  o: '#2b2233', e: '#20182a', k: '#1f1a24', w: '#f3efe6', l: '#b9b4a8', m: '#a8652f',
+  y: '#e9c46a', g: '#20182a', t: '#c0392b',
+}
+
+const hashOf = text => {
+  let h = 2166136261
+  for (const ch of String(text)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619)
+  return h >>> 0
+}
+
+// Who someone is, from their id: always the same for one id.
+export const lookOf = (id, kind = 'worker') => {
+  const h = hashOf(id)
+  if (kind === 'manager') return { head: 'short', skin: SKINS[1], hair: HAIRS[0], pants: PANTS[0], h }
+  return { head: h % 2 ? 'long' : 'short', skin: SKINS[(h >>> 1) % SKINS.length], hair: HAIRS[(h >>> 4) % HAIRS.length], pants: PANTS[(h >>> 9) % PANTS.length], h }
+}
+
+// '#rrggbb' to a darker, cooler '#rrggbb'
+export const shadeOf = hex => {
+  const [r, g, b] = [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) / 255)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const l = (max + min) / 2
+  const d = max - min
+  let h = 0
+  if (d > 0) {
+    if (max === r) h = ((g - b) / d) % 6
+    else if (max === g) h = (b - r) / d + 2
+    else h = (r - g) / d + 4
+  }
+  h = (h * 60 + 360 + 12) % 360 // a little towards blue
+  const s = d === 0 ? 0 : Math.min(1, d / (1 - Math.abs(2 * l - 1)) * 1.05)
+  const l2 = l * 0.7
+  const c = (1 - Math.abs(2 * l2 - 1)) * s
+  const x = c * (1 - Math.abs(((h / 60) % 2) - 1))
+  const m = l2 - c / 2
+  const [r2, g2, b2] = [[c, x, 0], [x, c, 0], [0, c, x], [0, x, c], [x, 0, c], [c, 0, x]][Math.floor(h / 60) % 6]
+  return `#${[r2, g2, b2].map(v => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('')}`
+}
+
+// what a kind of person wears: the manager a tie and glasses, a helper a hard hat
+const dressed = (rows, kind) => {
+  const grid = rows.map(row => [...row])
+  if (kind === 'manager') {
+    for (const [x, y] of [[5, 8], [6, 8], [5, 9], [6, 9], [5, 10], [6, 10]]) if (grid[y][x] === 'b') grid[y][x] = 't'
+    for (const x of [3, 8]) if (grid[4][x] === 's') grid[4][x] = 'g'
+  }
+  if (kind === 'subagent')
+    for (const y of [1, 2]) grid[y] = grid[y].map(cell => (cell === 'h' ? 'y' : cell))
+  return grid
+}
+
+// the cells of one frame in someone's colours: a grid of '#rrggbb' or null
+export const tint = (rows, { look, shirt, kind = 'worker' }) => {
+  const ink = {
+    ...INK,
+    s: look.skin[0], S: look.skin[1], h: look.hair[0], H: look.hair[1], p: look.pants,
+    b: shirt, B: shadeOf(shirt),
+  }
+  return dressed(rows, kind).map(row => row.map(letter => ink[letter] ?? null))
+}
+
+// Which frame someone is in: `t` is the time in seconds, and the id puts
+// neighbours out of step. Null for a pose with no sprite (the Office then draws a shape).
+export const spriteFor = ({ pose, t, id, kind = 'worker', color }) => {
+  const def = POSES[pose]
+  if (!def) return null
+  const look = lookOf(id, kind)
+  const frames = def.frames(look.head)
+  const index = Math.floor(t / def.every + (look.h % 7)) % frames.length
+  return {
+    width: WIDTH,
+    height: HEIGHT,
+    cells: tint(frames[index], { look, shirt: color, kind }),
+    key: `${pose}${index}|${look.head}|${look.skin[0]}|${look.hair[0]}|${look.pants}|${color}|${kind}`,
+  }
+}
+
+// small things carried
+const CARRY = {
+  book: { rows: ['ooooo', 'ommmo', 'omwwo', 'omwwo', 'ommmo', 'ooooo'] },
+  papers: { rows: ['oooooo', 'owwwwo', 'owllwo', 'owwwwo', 'owllwo', 'owwwwo', 'oooooo'] },
+}
+export const carrySprite = what => {
+  const item = CARRY[what]
+  if (!item) return null
+  return {
+    width: item.rows[0].length,
+    height: item.rows.length,
+    cells: item.rows.map(row => [...row].map(letter => INK[letter] ?? null)),
+    key: `carry-${what}`,
+  }
+}

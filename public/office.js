@@ -1,10 +1,11 @@
 // The Office view: a canvas that draws the stage. Events from the server go in
 // (feed); the director turns them into commands; the stage plays them over
 // time; this file only paints what the stage says. Everything is plain shapes
-// for now: pixel art comes later.
+// for the pixel art, which is in sprites.js; a pose with no sprite is drawn as plain shapes.
 import { createDirector } from './director.js'
 import { buildLayout, fit } from './layout.js'
 import { createStage } from './stage.js'
+import { carrySprite, spriteFor } from './sprites.js'
 
 const TONES = { gray: '#8a8f98', teal: '#2a9d8f', purple: '#9b5de5', amber: '#e9c46a', coral: '#e76f51', blue: '#457b9d' }
 const BUBBLES = { ok: '--afg', bad: '--dfg', ask: '--nfg', info: '--acc' }
@@ -108,6 +109,46 @@ export const createOffice = ({ canvas, getMult }) => {
     text(value, x, y - h / 2, size, ink[kind] ?? ink.acc)
   }
 
+  // Sprites are drawn a whole number of screen pixels per sprite pixel, with no
+  // smoothing, so the pixels stay crisp. One small image is kept for each look.
+  const images = new Map()
+  const imageOf = sprite => {
+    let image = images.get(sprite.key)
+    if (!image) {
+      if (images.size > 3000) images.clear()
+      image = document.createElement('canvas')
+      image.width = sprite.width
+      image.height = sprite.height
+      const pen = image.getContext('2d')
+      sprite.cells.forEach((row, y) =>
+        row.forEach((cell, x) => {
+          if (!cell) return
+          pen.fillStyle = cell
+          pen.fillRect(x, y, 1, 1)
+        }),
+      )
+      images.set(sprite.key, image)
+    }
+    return image
+  }
+
+  // draws the person standing at (cx, cy) and says where the top of their head is
+  const drawSprite = (sprite, p, cx, cy, tile) => {
+    const unit = Math.max(1, Math.round((tile * ratio * 0.95) / sprite.height)) / ratio
+    const h = sprite.height * unit
+    const feet = Math.round((cy + tile * 0.42) * ratio) / ratio
+    ctx.save()
+    ctx.imageSmoothingEnabled = false
+    ctx.translate(Math.round(cx * ratio) / ratio, feet - h)
+    ctx.scale(p.facing < 0 ? -1 : 1, 1)
+    ctx.drawImage(imageOf(sprite), (-sprite.width * unit) / 2, 0, sprite.width * unit, h)
+    // what is carried is held at the side, unless the hands are busy
+    const carried = ['read', 'type', 'review', 'sit'].includes(p.pose) ? null : carrySprite(p.carry)
+    if (carried) ctx.drawImage(imageOf(carried), (sprite.width * unit) / 2 - carried.width * unit * 0.6, h * 0.5, carried.width * unit, carried.height * unit)
+    ctx.restore()
+    return feet - h - 2
+  }
+
   const drawPerson = (p, { tile, left, top }, t, ink) => {
     const phase = t * 10 + hash(p.id)
     const walking = p.pose === 'walk'
@@ -124,51 +165,57 @@ export const createOffice = ({ canvas, getMult }) => {
     ctx.ellipse(cx, cy + tile * 0.4, tile * 0.28, tile * 0.1, 0, 0, Math.PI * 2)
     ctx.fill()
 
-    roundRect(ctx, cx - tile * 0.25, cy - tile * 0.1, tile * 0.5, tile * 0.5, tile * 0.15)
-    ctx.fillStyle = p.color
-    ctx.fill()
-    if (p.kind === 'subagent' || p.kind === 'manager') {
-      ctx.strokeStyle = p.kind === 'manager' ? '#e9c46a' : ink.fg
-      ctx.lineWidth = 2
-      ctx.stroke()
-      ctx.lineWidth = 1
-    }
-    ctx.beginPath()
-    ctx.arc(cx, cy - tile * 0.22, tile * 0.2, 0, Math.PI * 2)
-    ctx.fillStyle = SKIN
-    ctx.fill()
-    ctx.fillStyle = '#222'
-    for (const eye of [-0.07, 0.07]) {
-      ctx.beginPath()
-      ctx.arc(cx + eye * tile + p.facing * tile * 0.03, cy - tile * 0.23, tile * 0.025, 0, Math.PI * 2)
+    // the pixel-art person, and the plain shapes for a pose that has no sprite
+    const sprite = spriteFor({ pose: p.pose, t, id: p.id, kind: p.kind, color: p.color })
+    let headTop = cy - tile * 0.5 // where a bubble goes
+    if (sprite) headTop = drawSprite(sprite, p, cx, cy, tile)
+    else {
+      roundRect(ctx, cx - tile * 0.25, cy - tile * 0.1, tile * 0.5, tile * 0.5, tile * 0.15)
+      ctx.fillStyle = p.color
       ctx.fill()
-    }
-
-    // what is in hand, or being done
-    if (p.carry === 'book') {
-      ctx.fillStyle = '#c0763e'
-      ctx.fillRect(cx + p.facing * tile * 0.3 - tile * 0.09, cy + tile * 0.08, tile * 0.18, tile * 0.24)
-    } else if (p.carry === 'papers') {
-      ctx.fillStyle = '#f5f5f0'
-      ctx.fillRect(cx + p.facing * tile * 0.3 - tile * 0.12, cy + tile * 0.04, tile * 0.24, tile * 0.3)
-    }
-    if (p.pose === 'read') {
-      ctx.fillStyle = '#f5f5f0'
-      ctx.fillRect(cx - tile * 0.2, cy + tile * 0.12, tile * 0.4, tile * 0.22)
-      ctx.fillStyle = '#9a9a90'
-      ctx.fillRect(cx - tile * 0.01, cy + tile * 0.12, tile * 0.02, tile * 0.22)
-    }
-    if (p.pose === 'type') {
+      if (p.kind === 'subagent' || p.kind === 'manager') {
+        ctx.strokeStyle = p.kind === 'manager' ? '#e9c46a' : ink.fg
+        ctx.lineWidth = 2
+        ctx.stroke()
+        ctx.lineWidth = 1
+      }
+      ctx.beginPath()
+      ctx.arc(cx, cy - tile * 0.22, tile * 0.2, 0, Math.PI * 2)
       ctx.fillStyle = SKIN
-      const hop = Math.sin(phase * 4) * tile * 0.04
-      ctx.fillRect(cx - tile * 0.18, cy + tile * 0.3 + hop, tile * 0.1, tile * 0.08)
-      ctx.fillRect(cx + tile * 0.08, cy + tile * 0.3 - hop, tile * 0.1, tile * 0.08)
+      ctx.fill()
+      ctx.fillStyle = '#222'
+      for (const eye of [-0.07, 0.07]) {
+        ctx.beginPath()
+        ctx.arc(cx + eye * tile + p.facing * tile * 0.03, cy - tile * 0.23, tile * 0.025, 0, Math.PI * 2)
+        ctx.fill()
+      }
+
+      // what is in hand, or being done
+      if (p.carry === 'book') {
+        ctx.fillStyle = '#c0763e'
+        ctx.fillRect(cx + p.facing * tile * 0.3 - tile * 0.09, cy + tile * 0.08, tile * 0.18, tile * 0.24)
+      } else if (p.carry === 'papers') {
+        ctx.fillStyle = '#f5f5f0'
+        ctx.fillRect(cx + p.facing * tile * 0.3 - tile * 0.12, cy + tile * 0.04, tile * 0.24, tile * 0.3)
+      }
+      if (p.pose === 'read') {
+        ctx.fillStyle = '#f5f5f0'
+        ctx.fillRect(cx - tile * 0.2, cy + tile * 0.12, tile * 0.4, tile * 0.22)
+        ctx.fillStyle = '#9a9a90'
+        ctx.fillRect(cx - tile * 0.01, cy + tile * 0.12, tile * 0.02, tile * 0.22)
+      }
+      if (p.pose === 'type') {
+        ctx.fillStyle = SKIN
+        const hop = Math.sin(phase * 4) * tile * 0.04
+        ctx.fillRect(cx - tile * 0.18, cy + tile * 0.3 + hop, tile * 0.1, tile * 0.08)
+        ctx.fillRect(cx + tile * 0.08, cy + tile * 0.3 - hop, tile * 0.1, tile * 0.08)
+      }
     }
 
     const fontSize = Math.max(8, tile * 0.42)
     text(p.name, cx, cy + tile * 0.62, fontSize, ink.fg)
     if (p.label && tile >= 14) text(p.label, cx, cy + tile * 0.62 + fontSize * 1.1, fontSize * 0.9, ink.dim)
-    if (p.bubble) bubble(p.bubble.text, p.bubble.kind, cx, cy - tile * 0.5, tile, ink)
+    if (p.bubble) bubble(p.bubble.text, p.bubble.kind, cx, headTop, tile, ink)
   }
 
   const draw = () => {

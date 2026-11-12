@@ -114,6 +114,8 @@ Suggested ideas for these are in the conversation history; assign them when each
 
 ### Phase 6: Pixel art
 - Own sprites, tiles, furniture, walk cycles replacing the shapes. Shapes stay as the fallback.
+- **Decisions (2026-11-12):** the art is drawn by Claude in code (grids of letters, no image files, no licence worries); staged: workers first, then floors, walls and furniture, then details and polish.
+- **Stage 1 built (workers):** `public/sprites.js` (12 by 16 pixels, front-facing, flipped for left and right; head, torso and legs put together; 4-frame walk, 2-frame rests; 2 hair styles, 4 skin tones, 6 hair colours, 3 trouser colours; shirt in the worker's colour with a cooler shade; the manager has a tie and glasses, helpers a hard hat; a book and papers can be carried). `public/office.js` draws them a whole number of screen pixels per sprite pixel, with no smoothing; a pose with no sprite is still drawn as the old shapes. Tests: `src/sprites.test.js`. Seen in the browser pane at two window sizes; the user has not judged the art yet.
 - Done when: the Office looks like a finished game scene.
 
 ### Phase 7: Final product
