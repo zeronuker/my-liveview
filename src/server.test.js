@@ -227,10 +227,23 @@ test('a tool used inside a subagent says which subagent', () =>
       hook_event_name: 'PreToolUse',
       tool_name: 'Read',
       tool_use_id: 'r1',
-      tool_input: { file_path: 'C:\proj\a.js' },
+      tool_input: { file_path: 'C:/proj/a.js' },
       agent_id: 'a1',
       agent_type: 'Explore',
     })
 
     assert.ok(await page.until('"agentId":"a1","agentType":"Explore"'))
+  }))
+
+test('a tool event carries the file it works on, and a prompt is announced without its words', () =>
+  withServer(async ({ token }) => {
+    const page = await listen()
+    await hook(token, { hook_event_name: 'PreToolUse', tool_name: 'Read', tool_use_id: 'p1', tool_input: { file_path: 'C:/proj/a.js' } })
+    await hook(token, { hook_event_name: 'UserPromptSubmit', prompt: 'a secret plan' })
+
+    assert.ok(await page.until('"tool":"Read"'))
+    assert.ok(await page.until('"path":"C:/proj/a.js"'))
+    assert.ok(await page.until('"type":"prompt","sessionId":"chat1"'))
+    assert.equal(page.text.includes('secret plan'), true) // the first message still names the chat
+    assert.equal(page.text.split('secret plan').length - 1, 1) // but only that once: the prompt event carries no words
   }))

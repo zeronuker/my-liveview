@@ -114,6 +114,7 @@ const onHook = p => {
   if (kind === 'UserPromptSubmit') {
     // a chat with no app name yet is named by its first message; only that
     // short title is kept
+    publish({ type: 'prompt', sessionId, cwd, at: Date.now() }) // that one was sent, not what it said
     const title = titled.has(sessionId) ? null : titleOf(p.prompt)
     if (!title) return
     titled.add(sessionId)
@@ -133,7 +134,8 @@ const onHook = p => {
   if (kind === 'PreToolUse') {
     // inside a subagent the hook says which one, so the Office can tell its workers apart
     const agent = p.agent_id ? { agentId: p.agent_id, agentType: p.agent_type } : {}
-    publish({ type: 'tool', id, sessionId, cwd, tool, summary: summarize(tool, input), ...agent, at })
+    const path = typeof input?.file_path === 'string' ? { path: input.file_path } : {}
+    publish({ type: 'tool', id, sessionId, cwd, tool, summary: summarize(tool, input), ...path, ...agent, at })
     if (tool === 'Edit' || tool === 'Write') publishEdit({ tool, input, id, sessionId, cwd })
   } else if (kind === 'PostToolUse' || kind === 'PostToolUseFailure') {
     publish({ type: 'done', id, ok: kind === 'PostToolUse' })
