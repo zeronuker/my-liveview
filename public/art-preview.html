@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Office art preview</title>
+<style>
+  body { margin: 16px; background: #1e1e24; color: #ddd; font: 14px system-ui, sans-serif; }
+  h2 { margin: 24px 0 8px; font-size: 15px; }
+  canvas { image-rendering: pixelated; background: #2a2a32; margin: 0 12px 12px 0; vertical-align: top; }
+  .row { display: flex; flex-wrap: wrap; align-items: flex-start; }
+  figure { margin: 0 16px 12px 0; }
+  figcaption { font-size: 12px; opacity: 0.7; }
+  .ramp { display: flex; align-items: center; margin: 2px 0; }
+  .ramp span { width: 110px; font-size: 12px; }
+  .ramp i { display: block; width: 36px; height: 24px; }
+</style>
+</head>
+<body>
+<h1>Office art preview</h1>
+<p>Everything here is drawn from the same code as the Office. To look at a new piece, add it to <code>PIECES</code> below.</p>
+
+<h2>Palette: material ramps, darkest to lightest</h2>
+<div id="ramps"></div>
+
+<h2>Furniture: each kind at 1x and 8x</h2>
+<div id="pieces" class="row"></div>
+
+<h2>The floor and walls of the whole plan, at 2x</h2>
+<canvas id="ground"></canvas>
+
+<script type="module">
+import { buildLayout } from '/layout.js'
+import { RAMPS } from '/palette.js'
+import { groundOps, itemsOf, paint, TILE } from '/scenery.js'
+
+const layout = buildLayout()
+
+for (const [name, shades] of Object.entries(RAMPS)) {
+  const row = document.createElement('div')
+  row.className = 'ramp'
+  row.innerHTML = `<span>${name}</span>` + shades.map(c => `<i style="background:${c}" title="${c}"></i>`).join('')
+  document.getElementById('ramps').append(row)
+}
+
+// one piece of art on its own canvas, shown at the scales asked for
+const show = (host, label, ops, width, height, scales) => {
+  const figure = document.createElement('figure')
+  const row = document.createElement('div')
+  row.className = 'row'
+  for (const scale of scales) {
+    const canvas = document.createElement('canvas')
+    canvas.width = width
+    canvas.height = height
+    canvas.style.width = `${width * scale}px`
+    canvas.style.height = `${height * scale}px`
+    paint(canvas.getContext('2d'), ops)
+    row.append(canvas)
+  }
+  const caption = document.createElement('figcaption')
+  caption.textContent = label
+  figure.append(row, caption)
+  host.append(figure)
+}
+
+// PIECES: add new art here as { label, ops, w, h } (w and h in tiles)
+const PIECES = []
+const seen = new Set()
+for (const item of itemsOf(layout)) {
+  const key = `${item.kind} ${item.w}x${item.h}`
+  if (seen.has(key)) continue
+  seen.add(key)
+  PIECES.push({ label: key, ops: item.ops, w: item.w, h: item.h })
+}
+for (const piece of PIECES) show(document.getElementById('pieces'), piece.label, piece.ops, piece.w * TILE, piece.h * TILE, [1, 8])
+
+const ground = document.getElementById('ground')
+ground.width = layout.width * TILE
+ground.height = layout.height * TILE
+ground.style.width = `${ground.width * 2}px`
+ground.style.height = `${ground.height * 2}px`
+paint(ground.getContext('2d'), groundOps(layout))
+</script>
+</body>
+</html>

@@ -72,6 +72,17 @@ test('a new window is told when the history ends and what follows is live', () =
     assert.ok(await page.until('"type":"ready"'))
   }))
 
+test('the art preview page and the palette it uses are served', () =>
+  withServer(async () => {
+    const page = await fetch(`${base}/art-preview.html`)
+    const palette = await fetch(`${base}/palette.js`)
+
+    assert.equal(page.status, 200)
+    assert.match(page.headers.get('content-type'), /text\/html/)
+    assert.equal(palette.status, 200)
+    assert.match(palette.headers.get('content-type'), /text\/javascript/)
+  }))
+
 test('stopping needs the token', () =>
   withServer(async () => {
     const stop = await fetch(`${base}/stop`, { method: 'POST' })
