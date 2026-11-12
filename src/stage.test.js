@@ -2,7 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { buildLayout } from '../public/layout.js'
-import { createStage } from '../public/stage.js'
+import { createStage, personality } from '../public/stage.js'
 
 const layout = buildLayout()
 const at = (p, list) => list.some(s => s.x === Math.round(p.x) && s.y === Math.round(p.y))
@@ -144,7 +144,7 @@ test('a failed command shakes and shows a cross; a passing one shows a tick', ()
   const { hire, doStep, run, person } = setup()
   hire('w1')
   doStep('w1', 'test')
-  run(10)
+  run(20)
   assert.ok(at(person('w1'), layout.spots.lab)) // it waits at the machine until told how it went
   assert.equal(person('w1').pose, 'machine')
 
@@ -362,7 +362,7 @@ test('a refused tool: the last worker shakes their head, "Blocked"', () => {
   doStep('w1', 'arrive')
   run(20)
   stage.apply({ cmd: 'denied', sessionId: 's', tool: 'Bash' }, now())
-  run(0.5)
+  for (let i = 0; i < 20 && person('w1').label !== 'Blocked'; i++) run(0.1) // after a moment to take it in
 
   assert.equal(person('w1').label, 'Blocked')
   assert.equal(person('w1').bubble.kind, 'bad')
@@ -406,4 +406,119 @@ test('/clear waits for everyone who was in the office to go home, then sweeps th
 
   assert.equal(stage.snapshot().stack, 0)
   assert.equal(stage.isIdle(), true)
+})
+
+// a small floor of our own, so a test can say exactly who is where
+const corridor = (rows, spots) => {
+  const spot = { x: 0, y: 0 }
+  return {
+    grid: rows,
+    spots: { entrance: spot, managerSeat: spot, handIn: spot, ceoSeat: spot, ceoDelivery: spot, ceoDoor: spot, desks: [spot], seats: [spot], files: [spot], lab: [spot], ...spots },
+  }
+}
+
+test('everyone is a little different, and always the same', () => {
+  const a = personality('w1')
+
+  assert.deepEqual(personality('w1'), a)
+  assert.ok(a.speed >= 0.85 && a.speed <= 1.2)
+  assert.ok(a.react >= 0.15 && a.react <= 0.55)
+  assert.ok(a.settle >= 0.2 && a.settle <= 0.45)
+  assert.ok(new Set(Array.from({ length: 30 }, (_, i) => personality(`w${i}`).speed)).size > 10)
+})
+
+test('a new job after a quiet moment is taken in first: the worker does not set off at once', () => {
+  const { hire, doStep, run, person } = setup()
+  hire('w1')
+  run(1) // in, and standing at the door
+  doStep('w1', 'fetch', { path: 'a.js' })
+  run(personality('w1').react * 0.8)
+
+  assert.deepEqual([person('w1').x, person('w1').y], [layout.spots.entrance.x, layout.spots.entrance.y])
+  run(1)
+  assert.notDeepEqual([person('w1').x, person('w1').y], [layout.spots.entrance.x, layout.spots.entrance.y])
+})
+
+test('after walking over, a worker settles for a moment before the job begins', () => {
+  const { hire, doStep, run, person } = setup()
+  hire('w1')
+  doStep('w1', 'fetch', { path: 'a.js' })
+  const seen = []
+  for (let i = 0; i < 300; i++) {
+    run(0.1)
+    if (at(person('w1'), layout.spots.files) && seen.at(-1) !== person('w1').pose) seen.push(person('w1').pose)
+  }
+
+  assert.ok(seen.includes('grab'))
+  assert.ok(seen.indexOf('idle') < seen.indexOf('grab'), seen.join(' '))
+})
+
+test('walking starts slowly and never goes faster than that person\'s own top speed', () => {
+  const { hire, doStep, run, person } = setup()
+  hire('w1')
+  doStep('w1', 'fetch', { path: 'a.js' })
+  const steps = []
+  let last = [person('w1').x, person('w1').y]
+  for (let i = 0; i < 300; i++) {
+    run(0.1)
+    const now = [person('w1').x, person('w1').y]
+    const moved = Math.hypot(now[0] - last[0], now[1] - last[1])
+    if (moved > 0) steps.push(moved)
+    last = now
+  }
+
+  assert.ok(steps[0] < 0.25, `first step ${steps[0]}`)
+  assert.ok(Math.max(...steps) <= 4 * personality('w1').speed * 0.1 + 0.001)
+})
+
+test('someone standing in the way is gone round, not walked through', () => {
+  const floor = corridor(['.......', '.......', '.......'], { entrance: { x: 0, y: 1 }, files: [{ x: 3, y: 1 }], seats: [{ x: 6, y: 1 }] })
+  const { stage, run, now } = setup({ layout: floor })
+  const who = id => stage.snapshot().workers.find(w => w.id === id)
+  const hireAt = id => stage.apply({ cmd: 'hire', worker: { id, name: id, color: '#fff', kind: 'worker', sessionId: 's' } }, now())
+
+  hireAt('a')
+  stage.apply({ cmd: 'do', worker: 'a', step: 'search' }, now())
+  run(15) // a stands in the middle of the way, waiting
+  hireAt('b')
+  stage.apply({ cmd: 'do', worker: 'b', step: 'arrive' }, now())
+  let closest = Infinity
+  for (let i = 0; i < 300 && !(who('b') && who('b').x === 6 && who('b').y === 1); i++) {
+    run(0.1)
+    if (who('b')) closest = Math.min(closest, Math.hypot(who('b').x - who('a').x, who('b').y - who('a').y))
+  }
+
+  assert.deepEqual([who('b').x, who('b').y], [6, 1]) // got there
+  assert.ok(closest >= 0.9, `came within ${closest}`) // without going through a
+})
+
+test('with no way round, a worker waits, and after a few seconds walks through rather than stand there for good', () => {
+  const floor = corridor(['.......'], { entrance: { x: 0, y: 0 }, files: [{ x: 3, y: 0 }], seats: [{ x: 6, y: 0 }] })
+  const { stage, run, now } = setup({ layout: floor })
+  const who = id => stage.snapshot().workers.find(w => w.id === id)
+  const hireAt = id => stage.apply({ cmd: 'hire', worker: { id, name: id, color: '#fff', kind: 'worker', sessionId: 's' } }, now())
+
+  hireAt('a')
+  stage.apply({ cmd: 'do', worker: 'a', step: 'search' }, now())
+  run(15)
+  hireAt('b')
+  stage.apply({ cmd: 'do', worker: 'b', step: 'arrive' }, now())
+  run(3) // b has come up to a and is held up behind
+  assert.ok(who('b').x <= 2.01, `at ${who('b').x}`)
+
+  run(15)
+  assert.deepEqual([who('b').x, who('b').y], [6, 0])
+})
+
+test('a passed test or a found result is a little hop of joy', () => {
+  const { hire, doStep, run, person } = setup()
+  hire('w1')
+  doStep('w1', 'pass')
+  const poses = new Set()
+  for (let i = 0; i < 30; i++) {
+    run(0.1)
+    poses.add(person('w1').pose)
+  }
+
+  assert.ok(poses.has('cheer'))
 })

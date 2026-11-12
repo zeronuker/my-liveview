@@ -44,3 +44,14 @@ test('a big open floor is crossed corner to corner', () => {
 test('rows of different lengths do not break it', () => {
   assert.deepEqual(findPath(['...', '.'], [0, 1], [2, 0]), [[0, 0], [1, 0], [2, 0]])
 })
+
+test('cells to avoid are gone round; when there is no way round, there is no path; the goal is never avoided', () => {
+  const grid = ['...', '...', '...']
+
+  const round = findPath(grid, [0, 1], [2, 1], new Set(['1,1']))
+  assert.equal(round.some(([x, y]) => x === 1 && y === 1), false)
+  assert.deepEqual(round.at(-1), [2, 1])
+
+  assert.equal(findPath(['...'], [0, 0], [2, 0], new Set(['1,0'])), null)
+  assert.deepEqual(findPath(['...'], [0, 0], [2, 0], new Set(['2,0'])).at(-1), [2, 0])
+})

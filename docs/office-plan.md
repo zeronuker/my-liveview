@@ -199,3 +199,31 @@ Common fields on all events: `session_id`, `transcript_path`, `cwd`, `permission
 - **Hook install.** `TOOL_EVENTS` in `src/hooks-config.js` lists three events. The four new ones have no tool, so they need entries like the existing `UserPromptSubmit` one (no matcher). Re-running install must stay safe to run twice.
 - **Interrupts.** `Stop` does not fire on a user interrupt, so the story needs a fallback for "Claude stopped but the manager never went upstairs". Decide in Phase 3.
 - **Not checked:** whether `PermissionDenied`, `StopFailure` and the model-switch events exist in every build (Phase 5).
+
+## Behaviour pass (built 2026-11-12, before the pixel art)
+
+Workers now act more like people. All in `public/stage.js` (and `findPath` in `public/walk.js`), tested in `src/stage.test.js`:
+- **Personality** from the worker's id (always the same for one id): walking speed 0.85x to 1.2x, reaction time 0.15 to 0.55 s, settle time 0.2 to 0.45 s (`personality`).
+- **Hesitation:** a new job after a quiet moment starts only after the reaction time. Back-to-back jobs do not hesitate. At instant speed nothing waits.
+- **Settling:** on arriving at a spot, a short pause before the job begins.
+- **Smooth walking:** speeds up from a slow start and slows for the last stretch.
+- **Avoidance:** a worker does not step into a cell someone else stands in (the last cell of a trip, such as a shared desk, is exempt). After 0.5 s held up it goes round by a new path; after 4 s with no way round it walks through for 2 s. Idea from agents-in-the-office.
+- **Reaction:** a passed test or a found result is a small hop (`cheer` pose).
+- Checked with 150 workers at once: about 2.5 ms per 250 ms tick, all home in about 46 simulated seconds.
+- Not done yet: waiting in numbered queues at a shared spot, idle fidgets and blinking (they come with the art), conversations at the hand-in, a "planning huddle" for plan mode and `TodoWrite` (plan mode and the task tools are received but have no scene).
+
+## Research notes (2026-11-12)
+
+**How other projects behave** (read from their source; all code is MIT):
+- Avoiding each other: agents-in-the-office blocks other characters' cells, re-plans after 0.5 s, and lets a character walk through others for 2 s after 4 s stuck. claude-office lets characters pass through each other and uses numbered queue slots in front of the boss instead. pixtuoid offsets each walker's aim by up to 4 px, reserves single-use spots and gives shared spots a rank offset. pixel-agents and pixel-agent-desk do nothing.
+- Human timing: pixtuoid gives each agent a personality from an id hash (speed 0.85 to 1.2x, trip chance, settle pause 200 to 400 ms, smooth acceleration), phases typing so neighbours are out of step, and has chit-chat at shared spots. agents-in-the-office idles 2 to 8 s, interacts 3 to 6 s, walk frames 0.15 s, bubbles 3 s, "Waiting..." when no spot is free. pixel-agents wanders 2 to 20 s, rests 120 to 240 s, blinks at random (1.5 s plus an exponential wait). claude-office has a hand-in conversation ("Here's your task" / "Good work, I'll take that"), a boss lock, and a 90 s zombie-helper timeout.
+- Nobody has hesitation before starting work or a reaction to a failed tool (pixel-agent-desk has an alert jump and confetti).
+- PixelHQ (iOS app and `pixelhq` bridge): reads Claude's log files, no hooks; maps tools to categories (file_read, file_write, terminal, search, plan, communicate, spawn_agent, notebook). Planning is a huddle, exploring is the whiteboard. Only filenames, never full paths, are sent.
+- Art: claude-office's characters are procedural capsules, not sprites; its furniture PNGs have no stated licence. Pixel-agent-desk's art is under a restrictive licence. Pixel-agents and agents-in-the-office use the MetroCity pack (licence unchecked).
+
+**Pixel art guidelines for Phase 6** (from general tutorials):
+- A 4-frame walk is enough at 16x16 (more is overkill); idle and typing 2 to 3 frames; 8 to 12 frames per second.
+- Small palettes (4 to 5 colours per sprite), hue-shifted ramps, never darken by adding black, no pillow shading, clean clusters. Lospec palettes are the usual source.
+- Read: Slynyrd's Pixelblog (https://slynyrd.com/blog/2018/5/16/pixelblog-5-back-to-basics, https://www.slynyrd.com/blog/2019/10/21/pixelblog-22-top-down-character-sprites), Saint11's tutorials (https://saint11.org/blog/pixel-art-tutorials/), https://www.sprite-ai.art/guides/pixel-art-fundamentals.
+- Human feel: no action on exact frames (small random delays), a short "notice, then move" step before accelerating, ease in and out, hold anticipation frames longer.
+- Art packs: no clearly CC0 16x16 office set was found; Kenney's Roguelike Indoor Pack (https://opengameart.org/content/roguelike-indoor-pack) is CC0 but its size needs checking. Packs are references to study only: Phase 6 art is drawn in code.

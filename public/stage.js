@@ -12,12 +12,30 @@
 import { findPath } from './walk.js'
 
 const WALK = 4 // tiles a second
+const ACCEL = 14 // tiles a second, each second: people do not start at full speed
+const DECEL = 6 // and slow down for the last stretch
+const MIN_SPEED = 0.7
+const REROUTE = 0.5 // seconds waiting for someone in the way before going round
+const STUCK = 4 // seconds before someone who cannot get round is walked through
+const GHOST = 2 // seconds of walking through people, once stuck
 const ENTER_GAP = 0.4 // seconds between two arrivals
 const STEP = 0.1 // simulated seconds per step; longer gaps use fewer, bigger steps
 const MAX_CATCH_UP = 120 // simulated seconds a long gap is allowed to cover
 const INSTANT_STEPS = 200 // at instant speed: how many steps a tick may take
 
 const baseName = path => String(path ?? '').split(/[\\/]/).filter(Boolean).pop() ?? ''
+
+// Everyone is a little different, and always the same: how fast they walk, how
+// long they take to react to a new job, how long they settle after arriving.
+const hashOf = text => {
+  let h = 2166136261
+  for (const ch of String(text)) h = Math.imul(h ^ ch.charCodeAt(0), 16777619)
+  return h >>> 0
+}
+export const personality = id => {
+  const h = hashOf(id)
+  return { speed: 0.85 + (h % 36) / 100, react: 0.15 + ((h >>> 8) % 41) / 100, settle: 0.2 + ((h >>> 16) % 26) / 100 }
+}
 
 export const createStage = ({ layout, getMult = () => 1 }) => {
   const { grid, spots } = layout
@@ -44,7 +62,11 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
   const makeWorker = (info, x, y, present) => ({
     queue: [], cells: [], pending: null, act: null,
     pose: 'idle', facing: 1, bubble: null, label: '', carry: null,
-    desk: -1, seat: -1, deskSlot: 0, seatSlot: 0, enterAt: 0, present, x, y, ...info,
+    desk: -1, seat: -1, deskSlot: 0, seatSlot: 0, enterAt: 0, present, x, y,
+    wait: null, // { left, then }: a moment of hesitating or settling, then carry on
+    warm: false, // already busy, so the next job is started without hesitating
+    v: 0, stall: 0, ghost: 0, rerouted: false, // walking: speed, time held up, time walking through people
+    ...personality(info.id), ...info,
   })
 
   const manager = makeWorker({ id: 'manager', name: 'Manager', color: '#8d6e63', kind: 'manager', sessionId: null }, spots.managerSeat.x, spots.managerSeat.y, true)
@@ -95,7 +117,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       case 'handIn':
         return handIn
       case 'report': // a helper hands in its report; a worker says what the search found
-        return worker.kind === 'subagent' ? handIn : [{ spot: null, act: { pose: 'idle', dur: 1, label: 'Found it', bubble: ok('✓') } }]
+        return worker.kind === 'subagent' ? handIn : [{ spot: null, act: { pose: 'cheer', dur: 1, label: 'Found it', bubble: ok('✓') } }]
       case 'reject':
         return [{ spot: null, act: { pose: 'shake', dur: 1.4, label: 'Edit not applied', bubble: bad('✗'), carry: null } }]
       case 'test':
@@ -107,7 +129,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       case 'unavailable':
         return [{ spot: null, act: { pose: 'shake', dur: 1.5, label: 'Tool unavailable', bubble: bad('✗') } }]
       case 'pass':
-        return [{ spot: null, act: { pose: 'idle', dur: 1.2, label: 'Passed', bubble: ok('✓') } }]
+        return [{ spot: null, act: { pose: 'cheer', dur: 1.2, label: 'Passed', bubble: ok('✓') } }]
       case 'fail':
         return [{ spot: null, act: { pose: 'shake', dur: 1.5, label: 'Failed', bubble: bad('✗') } }]
       default:
@@ -117,6 +139,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
 
   const remove = worker => {
     worker.removed = true
+    worker.wait = null
     workers.delete(worker.id)
     for (const owners of [deskOwner, seatOwner]) owners.forEach((id, i) => id === worker.id && (owners[i] = null))
   }
@@ -144,11 +167,21 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
 
   const startNext = worker => {
     for (;;) {
-      const job = worker.queue.shift()
-      if (!job) {
+      if (worker.queue.length === 0) {
         worker.pose = 'idle'
+        worker.warm = false
         return
       }
+      // a new job after a quiet moment: a short pause to take it in, first
+      if (!worker.warm) {
+        worker.warm = true
+        if (!isInstant()) {
+          worker.pose = 'idle'
+          worker.wait = { left: worker.react, then: () => startNext(worker) }
+          return
+        }
+      }
+      const job = worker.queue.shift()
       if (job.skipIf?.()) continue
       job.onStart?.()
       if (job.carryNow !== undefined) worker.carry = job.carryNow
@@ -159,6 +192,9 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       if (path && path.length > 0) {
         worker.cells = path
         worker.pose = 'walk'
+        worker.v = 0
+        worker.stall = 0
+        worker.rerouted = false
       } else {
         worker.x = spot.x // already there, or (instant speed) straight there
         worker.y = spot.y
@@ -168,8 +204,57 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     }
   }
 
-  const walk = (worker, dt) => {
-    let distance = WALK * dt
+  // someone is in the way: go round them, by a new path that leaves their cells out
+  const reroute = (worker, occupied) => {
+    const goal = worker.cells.at(-1)
+    const here = [Math.round(worker.x), Math.round(worker.y)]
+    const avoid = new Set(occupied.keys())
+    avoid.delete(`${here[0]},${here[1]}`)
+    avoid.delete(`${goal[0]},${goal[1]}`)
+    const path = findPath(grid, here, goal, avoid)
+    if (path && path.length > 0) worker.cells = path
+  }
+
+  // Walking: up to speed and down again, and never into someone else's cell.
+  // In the way: wait a moment, go round, and if that cannot be done for a few
+  // seconds, walk through them for a while rather than stand there for good.
+  const walk = (worker, dt, occupied) => {
+    // is the next cell, which is not the last, taken by someone else?
+    const isBlocked = () => {
+      const [nx, ny] = worker.cells[0]
+      const others = (occupied.get(`${nx},${ny}`) ?? 0) - (Math.round(worker.x) === nx && Math.round(worker.y) === ny ? 1 : 0)
+      return worker.cells.length > 1 && others > 0
+    }
+    if (worker.ghost > 0) worker.ghost -= dt
+    else if (isBlocked()) {
+      worker.v = 0
+      worker.pose = 'idle'
+      worker.stall += dt
+      if (worker.stall >= REROUTE && !worker.rerouted) {
+        worker.rerouted = true
+        reroute(worker, occupied)
+      }
+      if (worker.stall >= STUCK) {
+        worker.ghost = GHOST
+        worker.stall = 0
+        worker.rerouted = false
+      }
+      return
+    }
+    worker.stall = 0
+    worker.rerouted = false
+    worker.pose = 'walk'
+
+    let left = 0
+    let [px, py] = [worker.x, worker.y]
+    for (const [cx, cy] of worker.cells) {
+      left += Math.abs(cx - px) + Math.abs(cy - py)
+      ;[px, py] = [cx, cy]
+    }
+    const target = Math.min(WALK * worker.speed, MIN_SPEED + Math.sqrt(2 * DECEL * left))
+    worker.v = Math.max(MIN_SPEED, worker.v < target ? Math.min(target, worker.v + ACCEL * dt) : Math.max(target, worker.v - DECEL * 2 * dt))
+
+    let distance = worker.v * dt
     while (distance > 0 && worker.cells.length > 0) {
       const [tx, ty] = worker.cells[0]
       const dx = tx - worker.x
@@ -180,22 +265,38 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
         worker.x = tx
         worker.y = ty
         worker.cells.shift()
-        distance -= gap
+        // at the edge of a cell someone else is standing in: stop here, not halfway into it
+        distance = worker.cells.length > 0 && worker.ghost <= 0 && isBlocked() ? 0 : distance - gap
       } else {
         worker.x += (dx / gap) * distance
         worker.y += (dy / gap) * distance
         distance = 0
       }
     }
-    if (worker.cells.length === 0) begin(worker)
+    if (worker.cells.length === 0) arrive(worker)
   }
 
-  const update = (worker, dt, instant) => {
+  // at the spot: a moment to settle before the job begins
+  const arrive = worker => {
+    worker.v = 0
+    if (isInstant()) return begin(worker)
+    worker.pose = 'idle'
+    worker.wait = { left: worker.settle, then: () => begin(worker) }
+  }
+
+  const update = (worker, dt, instant, occupied) => {
     if (!worker.present) {
       if (clock < worker.enterAt) return
       worker.present = true
     }
-    if (worker.cells.length > 0) return walk(worker, dt)
+    if (worker.wait) {
+      worker.wait.left -= instant ? Infinity : dt
+      if (worker.wait.left > 0) return
+      const { then } = worker.wait
+      worker.wait = null
+      return then()
+    }
+    if (worker.cells.length > 0) return walk(worker, dt, occupied)
     if (worker.act) {
       worker.act.t += dt
       if (worker.act.t >= (instant ? 0 : worker.act.dur) && (!worker.act.until || worker.act.until())) finish(worker)
@@ -206,7 +307,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
 
   const isInstant = () => skipping || getMult() === 0
 
-  const isIdle = () => [...workers.values()].every(w => w.queue.length === 0 && !w.act && w.cells.length === 0 && !w.pending && w.present)
+  const isIdle = () => [...workers.values()].every(w => w.queue.length === 0 && !w.act && w.cells.length === 0 && !w.pending && !w.wait && w.present)
 
   // a long line of work makes everyone hurry a little
   const rush = () => {
@@ -236,7 +337,14 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
 
   const step = (dt, instant) => {
     clock += dt
-    for (const worker of [...workers.values()]) update(worker, dt, instant)
+    // who stands in which cell, for walking round each other
+    const occupied = new Map()
+    for (const w of workers.values()) {
+      if (!w.present) continue
+      const key = `${Math.round(w.x)},${Math.round(w.y)}`
+      occupied.set(key, (occupied.get(key) ?? 0) + 1)
+    }
+    for (const worker of [...workers.values()]) update(worker, dt, instant, occupied)
     if (ceo.bubble && ceo.bubble.until <= clock) ceo.bubble = null
   }
 

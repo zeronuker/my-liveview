@@ -112,7 +112,10 @@ export const createOffice = ({ canvas, getMult }) => {
     const phase = t * 10 + hash(p.id)
     const walking = p.pose === 'walk'
     const dx = p.pose === 'shake' ? Math.sin(phase * 3) * tile * 0.1 : 0
-    const dy = walking ? -Math.abs(Math.sin(phase)) * tile * 0.12 : p.pose === 'type' ? Math.sin(phase * 2) * tile * 0.03 : 0
+    const dy = walking
+      ? -Math.abs(Math.sin(phase)) * tile * 0.12
+      : p.pose === 'cheer' ? -Math.abs(Math.sin(phase * 0.8)) * tile * 0.2 // a little hop
+        : p.pose === 'type' ? Math.sin(phase * 2) * tile * 0.03 : 0
     const cx = left + (p.x + 0.5) * tile + dx
     const cy = top + (p.y + 0.5) * tile + dy
 
