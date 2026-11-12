@@ -73,7 +73,7 @@ const stageIt = (name, events) => {
     for (const sessionId of sessions) for (const cmd of director.feed({ type: 'turn-end', sessionId })) stage.apply(cmd, 0)
   stage.skip()
   const left = stage.snapshot().workers.filter(w => w.kind !== 'manager')
-  return { commands, wasQuiet, left, idle: stage.isIdle(), papers: stage.snapshot().ceo.papers }
+  return { commands, wasQuiet, left, idle: stage.isIdle(), papers: stage.snapshot().ceo.papers, stack: stage.snapshot().stack }
 }
 
 before(async () => {
@@ -119,6 +119,11 @@ test('an API error ends the turn: the manager says why and nothing goes upstairs
   assert.equal(papers, 0)
 })
 
+test('/clear sweeps away what was on the tray: nothing is left and nothing went upstairs', () => {
+  assert.equal(results.clear.stack, 0)
+  assert.equal(results.clear.papers, 0)
+})
+
 test('a compaction is a trip to the file room, and it ends', () => {
   const cmds = results.compaction.commands.map(c => c.cmd)
 
@@ -137,7 +142,7 @@ const all = pick => new Set(Object.values(results).flatMap(r => pick(r)))
 
 test('coverage: every kind of event the server sends to the Office is in some scenario', () => {
   const seen = all(r => r.events.map(e => e.type))
-  for (const type of ['tool', 'edit', 'done', 'turn-end', 'agent-start', 'agent-stop', 'permission', 'prompt', 'turn-fail', 'compact', 'denied'])
+  for (const type of ['tool', 'edit', 'done', 'turn-end', 'agent-start', 'agent-stop', 'permission', 'prompt', 'turn-fail', 'compact', 'denied', 'life'])
     assert.ok(seen.has(type), type)
 })
 
@@ -154,9 +159,14 @@ test('coverage: a tool that fails, an edit that does not apply and a test that p
   for (const step of ['reject', 'fail', 'pass']) assert.ok(steps.has(step), step)
 })
 
+test('coverage: every kind of session life the Office knows is in some scenario', () => {
+  const seen = all(r => r.events.filter(e => e.type === 'life').map(e => e.what))
+  for (const what of ['start', 'end', 'model', 'cwd', 'folder', 'memo']) assert.ok(seen.has(what), what)
+})
+
 test('coverage: every command the director gives and every step the stage plays is in some scenario', () => {
   const commands = all(r => r.commands.map(c => c.cmd))
-  for (const cmd of ['hire', 'do', 'fire', 'review', 'submit', 'ask', 'answered', 'prompt', 'fail', 'compact', 'compacted', 'denied'])
+  for (const cmd of ['hire', 'do', 'fire', 'review', 'submit', 'ask', 'answered', 'prompt', 'fail', 'compact', 'compacted', 'denied', 'note', 'memo', 'clear'])
     assert.ok(commands.has(cmd), cmd)
   const steps = all(r => r.commands.filter(c => c.cmd === 'do').map(c => c.step))
   for (const step of ['arrive', 'fetch', 'study', 'write', 'handIn', 'report', 'reject', 'test', 'search', 'pass', 'fail', 'call', 'unavailable'])

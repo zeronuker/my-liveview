@@ -108,6 +108,7 @@ Suggested ideas for these are in the conversation history; assign them when each
 ### Phase 5: Remaining situations
 - Rounds: Problems, then Lifecycle, then Extras. Each with tests and a demo. The list of every situation, its trigger, what the Office does and whether it is built is in `docs/office-situations.md`: keep it up to date.
 - **Round 1 (Problems) built 2026-11-12:** API error (`StopFailure`), compaction (`PreCompact`/`PostCompact`), MCP tools and their failures (`mcp__server__tool`), a tool refused in auto mode (`PermissionDenied`). Mock scenarios: `api-error`, `compaction`, `mcp`, `denied`. Not possible: a hook blocking a tool (no event). The four new hook events need `node scripts/hooks.js install` to be run again. Seen only in tests and mock sessions so far.
+- **Round 2 (Lifecycle) built 2026-11-12:** session start, end and `/clear`, model switch, folder changed and added, memos for loaded instructions or config. Mock scenarios: `lifecycle`, `clear`. Dropped: worktrees (a `WorktreeCreate` hook would replace Claude Code's own). Seven more hook events, so `node scripts/hooks.js install` has to be run again. Seen only in tests and mock sessions so far.
 - Done when: every row of the later-situations table has an animation or is deliberately dropped.
 
 ### Phase 6: Pixel art

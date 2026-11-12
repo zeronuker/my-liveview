@@ -339,6 +339,25 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       case 'compacted':
         compacted.add(cmd.sessionId)
         return
+      case 'note': // a few words over the CEO or the manager
+        if (cmd.who === 'ceo') ceo.bubble = { text: cmd.text, kind: cmd.kind, until: clock + 2.5 }
+        else manager.queue.push({ spot: null, act: { pose: 'idle', dur: 1.6, label: cmd.text, bubble: { text: '•', kind: cmd.kind } } })
+        return
+      case 'memo':
+        manager.queue.push({ spot: null, act: { pose: 'read', dur: 1.2, label: 'Reading a memo' } })
+        return
+      case 'clear': {
+        // /clear: once everyone who was here has gone home, what is on the tray is swept away
+        const there = [...workers.keys()].filter(id => id !== manager.id)
+        manager.queue.push({
+          spot: null,
+          act: {
+            pose: 'idle', dur: 1, label: 'Fresh start', until: () => there.every(id => !workers.has(id)),
+            done: () => { stack = 0; handedIn.clear() },
+          },
+        })
+        return
+      }
       case 'denied': {
         const last = workers.get(lastOf.get(cmd.sessionId))
         const worker = last?.present && !last.queue.some(job => job.act?.leave) ? last : manager

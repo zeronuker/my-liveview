@@ -382,3 +382,28 @@ test('an MCP call goes out by the front door and waits; unavailable shakes the h
   assert.equal(person('w1').bubble.kind, 'bad')
   settle()
 })
+
+test('a note shows over the CEO for a moment, or over the manager', () => {
+  const { stage, run, person } = setup()
+  stage.apply({ cmd: 'note', who: 'ceo', text: 'Resumed', kind: 'info' }, 0)
+  run(0.5)
+  assert.equal(stage.snapshot().ceo.bubble.text, 'Resumed')
+
+  stage.apply({ cmd: 'note', who: 'manager', text: 'Model: opus', kind: 'info' }, 0)
+  for (let i = 0; i < 40 && person('manager').label !== 'Model: opus'; i++) run(0.1)
+  assert.equal(person('manager').label, 'Model: opus')
+})
+
+test('/clear waits for everyone who was in the office to go home, then sweeps the tray', () => {
+  const { stage, hire, doStep, run, settle, now } = setup()
+  hire('w1', { path: 'a.js' })
+  doStep('w1', 'write', { path: 'a.js', adds: 3, dels: 0 })
+  doStep('w1', 'handIn')
+  stage.apply({ cmd: 'clear', sessionId: 's' }, now())
+  stage.apply({ cmd: 'fire', worker: 'w1' }, now())
+  run(0.1)
+  settle()
+
+  assert.equal(stage.snapshot().stack, 0)
+  assert.equal(stage.isIdle(), true)
+})

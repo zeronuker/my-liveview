@@ -276,3 +276,25 @@ test('the Office view\'s files are served', () =>
       assert.match(res.headers.get('content-type'), /javascript/)
     }
   }))
+
+test('the life of a session reaches the page with only a short word, not paths or prompts', () =>
+  withServer(async ({ token }) => {
+    const page = await listen()
+    const start = await hook(token, { hook_event_name: 'SessionStart', source: 'resume' })
+    await hook(token, { hook_event_name: 'SessionEnd', reason: 'clear' })
+    await hook(token, { hook_event_name: 'PostModelSwitch', model: 'opus' })
+    await hook(token, { hook_event_name: 'CwdChanged', old_cwd: 'C:/secret/a', new_cwd: 'C:\\secret\\api' })
+    await hook(token, { hook_event_name: 'DirectoryAdded', directory: '/home/me/private/shared' })
+    await hook(token, { hook_event_name: 'InstructionsLoaded', file_path: 'C:/secret/CLAUDE.md', load_reason: 'session_start' })
+    await hook(token, { hook_event_name: 'ConfigChange', source: 'user_settings', file_path: 'C:/secret/settings.json' })
+
+    assert.equal(await start.text(), '{}')
+    assert.ok(await page.until('"what":"start","detail":"resume"'))
+    assert.ok(await page.until('"what":"end","detail":"clear"'))
+    assert.ok(await page.until('"what":"model","detail":"opus"'))
+    assert.ok(await page.until('"what":"cwd","detail":"api"'))
+    assert.ok(await page.until('"what":"folder","detail":"shared"'))
+    assert.ok(await page.until('"what":"memo","detail":""'))
+    assert.equal(page.text.includes('private'), false)
+    assert.equal(page.text.includes('user_settings'), false)
+  }))

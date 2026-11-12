@@ -99,6 +99,14 @@ const publishEdit = ({ tool, input, id, sessionId, cwd }) => {
   publish({ type: 'edit', id, sessionId, cwd, path: input.file_path, rows, adds, dels, isNew: !existed, hasWhole, at: Date.now() })
 }
 
+// the life of a session: what each hook is called in the Office, and what it carries
+const LIFE = {
+  SessionStart: 'start', SessionEnd: 'end', PostModelSwitch: 'model', CwdChanged: 'cwd',
+  DirectoryAdded: 'folder', InstructionsLoaded: 'memo', ConfigChange: 'memo',
+}
+const firstText = (...values) => values.find(value => typeof value === 'string' && value) ?? ''
+const lastPart = text => text.split(/[\\/]/).filter(Boolean).pop() ?? ''
+
 const titled = new Set() // chats that already have a title
 
 const onHook = p => {
@@ -133,6 +141,18 @@ const onHook = p => {
   if (kind === 'StopFailure') return publish({ type: 'turn-fail', sessionId, cwd, reason: typeof p.error === 'string' ? p.error : 'unknown', at })
   if (kind === 'PreCompact' || kind === 'PostCompact') return publish({ type: 'compact', sessionId, cwd, phase: kind === 'PreCompact' ? 'start' : 'end', at })
   if (kind === 'PermissionDenied') return publish({ type: 'denied', sessionId, cwd, tool, at })
+  if (LIFE[kind]) {
+    // only a short word comes along: how it started or ended, the model, the folder's name
+    const detail = {
+      start: firstText(p.source),
+      end: firstText(p.reason),
+      model: firstText(p.model, p.model_name),
+      cwd: lastPart(firstText(p.new_cwd)),
+      folder: lastPart(firstText(p.directory, p.path)),
+      memo: '',
+    }[LIFE[kind]]
+    return publish({ type: 'life', what: LIFE[kind], detail, sessionId, cwd, at })
+  }
   if (!tool) return
 
   if (kind === 'PreToolUse') {

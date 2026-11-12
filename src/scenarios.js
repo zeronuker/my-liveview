@@ -98,6 +98,19 @@ export const SCENARIOS = {
     ends: 'stop',
     steps: [['prompt', 'Tidy the build'], ['read', 'cart.js'], ['denied'], ['bash', 'ok', 'npm run lint'], ['stop']],
   },
+  lifecycle: {
+    about: 'a session is resumed, memos load, the model and folder change, a folder is added, then the session ends',
+    ends: 'stop',
+    steps: [
+      ['session', 'resume'], ['memo'], ['memo'], ['prompt', 'Carry on'], ['model', 'opus'], ['cd', 'api'], ['addDir', 'shared'],
+      ['read', 'cart.js'], ['stop'], ['end', 'other'],
+    ],
+  },
+  clear: {
+    about: '/clear: the session ends and starts again; what was on the manager\'s tray is swept away, and nothing goes upstairs',
+    ends: 'stop',
+    steps: [['prompt', 'Start a report'], ...files(['draft.js']), ['wait', 500], ['end', 'clear'], ['session', 'clear']],
+  },
   'two-chats': {
     about: 'two chats working at once, each finishing on its own',
     ends: 'stop',

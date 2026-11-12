@@ -224,3 +224,35 @@ test('a refused tool is said once, for the chat it happened in', () => {
 
   assert.deepEqual(commands, [{ cmd: 'denied', sessionId: S, tool: 'Bash' }])
 })
+
+const life = (what, detail = '') => ({ type: 'life', what, detail, sessionId: S })
+
+test('a session that starts or resumes is said over the CEO; a start after compaction is not', () => {
+  assert.equal(run([life('start', 'startup')])[0].text, 'New session')
+  assert.equal(run([life('start', 'resume')])[0].text, 'Resumed')
+  assert.deepEqual(run([life('start', 'compact')]), [])
+})
+
+test('a session that ends sends everyone home and is said; /clear is said once, as a fresh start', () => {
+  const ended = run([tool('t1', 'Read', 'a.js'), life('end', 'other')])
+  assert.ok(ended.some(c => c.cmd === 'note' && c.text === 'Session ended'))
+  assert.ok(ended.some(c => c.cmd === 'fire'))
+
+  const cleared = run([tool('t1', 'Read', 'a.js'), life('end', 'clear'), life('start', 'clear')])
+  assert.deepEqual(cleared.filter(c => c.cmd === 'note').map(c => c.text), ['Fresh start'])
+  assert.ok(cleared.some(c => c.cmd === 'clear'))
+})
+
+test('a model, a folder and an added folder are said by the manager, with their names when they came', () => {
+  const texts = commands => commands.filter(c => c.cmd === 'note').map(c => `${c.who}: ${c.text}`)
+
+  assert.deepEqual(texts(run([life('model', 'opus'), life('cwd', 'api'), life('folder', 'shared')])), ['manager: Model: opus', 'manager: Now in api', 'manager: Added shared'])
+  assert.deepEqual(texts(run([life('model'), life('cwd'), life('folder')])), ['manager: Model changed', 'manager: Folder changed', 'manager: Folder added'])
+})
+
+test('memos that follow each other are one memo; something else in between makes the next a new one', () => {
+  const memos = commands => commands.filter(c => c.cmd === 'memo').length
+
+  assert.equal(memos(run([life('memo'), life('memo'), life('memo')])), 1)
+  assert.equal(memos(run([life('memo'), { type: 'prompt', sessionId: S }, life('memo')])), 2)
+})

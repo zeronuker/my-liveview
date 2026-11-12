@@ -14,7 +14,9 @@
 //   ['mcp', 'ok' | 'fail', server]  a tool of an MCP server
 //   ['denied']                    a tool is refused in auto mode
 //   ['compact', ms]               memory is compacted, taking that long
-//   ['fail', error]               the API ends the turn with an error (rate_limit, ...)
+//   ['session', source]  ['end', reason]   the session starts (startup, resume, clear) or ends
+//   ['model', name]  ['cd', folder]  ['addDir', folder]  ['memo']
+//   ['fail', error]             the API ends the turn with an error (rate_limit, ...)
 //   ['wait', ms]
 //   ['chat', name]                from here on, steps are in another chat
 //   ['pace', 'fast' | 'normal']   whether a tool takes any time between its start and end
@@ -99,6 +101,24 @@ export const toActions = (name, steps, { dir, cwd = path.dirname(dir), tick = 30
         break
       case 'fail':
         hook({ hook_event_name: 'StopFailure', error: a ?? 'rate_limit', last_assistant_message: 'API Error: Rate limit reached' })
+        break
+      case 'session':
+        hook({ hook_event_name: 'SessionStart', source: a ?? 'startup' })
+        break
+      case 'end':
+        hook({ hook_event_name: 'SessionEnd', reason: a ?? 'other' })
+        break
+      case 'model':
+        hook({ hook_event_name: 'PostModelSwitch', model: a ?? 'opus' })
+        break
+      case 'cd':
+        hook({ hook_event_name: 'CwdChanged', old_cwd: cwd, new_cwd: `${cwd}/${a ?? 'other'}` })
+        break
+      case 'addDir':
+        hook({ hook_event_name: 'DirectoryAdded', directory: `${cwd}/${a ?? 'extra'}` })
+        break
+      case 'memo':
+        hook({ hook_event_name: 'InstructionsLoaded', file_path: `${cwd}/CLAUDE.md`, load_reason: 'session_start' })
         break
       case 'wait':
         pause(a)

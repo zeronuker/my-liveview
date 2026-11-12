@@ -37,19 +37,21 @@ Hook facts come from the Claude Code hooks reference (checked 2026-11-12). Field
 | A hook blocks a tool | no event (a blocked `PreToolUse` fires neither a failure nor `PermissionDenied`) | none | no hook |
 | Interrupt | no event | covered by the 45 s quiet fallback above | dropped as its own animation |
 
-## Round 2: Lifecycle (Phase 5)
+## Round 2: Lifecycle (Phase 5, built 2026-11-12; seen only in mock sessions)
+
+Field names marked (?) came from a summary of the docs and must be seen in a real session.
 
 | Situation | Trigger | What the Office does | Status |
 |---|---|---|---|
-| Session starts or resumes | `SessionStart`; matcher startup, resume, clear, compact, fork | The office opens for the day | planned |
-| Session ends | `SessionEnd` | The office closes | planned |
-| `/clear` | `SessionStart` with `clear`, or `SessionEnd` with `clear` | Papers swept off the desks | planned |
-| Model switch | `PreModelSwitch` / `PostModelSwitch` | The manager changes badge | planned |
-| Folder added | `DirectoryAdded` | A new room's door opens | planned |
-| Folder changed | `CwdChanged`; fields `old_cwd`, `new_cwd` | The manager moves to another wing | planned |
-| Config loaded or changed | `InstructionsLoaded`, `ConfigChange` | A memo is pinned on the board | planned |
-| Worktree created or removed | `WorktreeCreate`, `WorktreeRemove` | A second desk area appears or goes | planned |
-| Scheduled work | `SessionStart` from a schedule, `Setup` (?) | The night shift | planned |
+| Session starts or resumes | `SessionStart`; field `source` (?) | A bubble over the CEO: "New session" or "Resumed". A start after compaction is not announced (compaction has its own scene) | built |
+| Session ends | `SessionEnd`; field `reason` (?) | Everyone goes home; the CEO shows "Session ended" | built |
+| `/clear` | `SessionEnd` then `SessionStart` with `clear` | Everyone goes home; once they have gone the manager sweeps the tray ("Fresh start"); nothing goes upstairs | built |
+| Model switch | `PostModelSwitch`; field `model` (?) | The manager shows "Model: <name>" (or "Model changed") | built |
+| Folder changed | `CwdChanged`; field `new_cwd` | The manager shows "Now in <folder name>" | built |
+| Folder added | `DirectoryAdded`; field `directory` (?) | The manager shows "Added <folder name>" (or "Folder added") | built |
+| Instructions or config loaded | `InstructionsLoaded`, `ConfigChange` | The manager reads a memo; several in a row are one memo | built |
+| Worktree created or removed | `WorktreeCreate`, `WorktreeRemove` | none: a `WorktreeCreate` hook replaces Claude Code's own worktree creation, so it is not installed | dropped (unsafe) |
+| Scheduled work | no event tells it from a normal start | none | no hook |
 | Permission mode switch | no hook found | none | no hook |
 
 ## Round 3: Extras (Phase 5)

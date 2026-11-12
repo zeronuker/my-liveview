@@ -41,7 +41,7 @@ export const createOffice = ({ canvas, getMult }) => {
   const lastHeard = new Map()
   const feed = event => {
     const now = performance.now()
-    if (event.type === 'turn-end' || event.type === 'turn-fail') lastHeard.delete(event.sessionId)
+    if (event.type === 'turn-end' || event.type === 'turn-fail' || (event.type === 'life' && event.what === 'end')) lastHeard.delete(event.sessionId)
     else if (event.sessionId) lastHeard.set(event.sessionId, now)
     for (const cmd of director.feed(event)) stage.apply(cmd, now)
   }

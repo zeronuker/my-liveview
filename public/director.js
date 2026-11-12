@@ -20,6 +20,9 @@
 //   { cmd: 'fail', sessionId, label }  the API ended the turn with an error
 //   { cmd: 'compact' | 'compacted', sessionId }  memory is being compacted, and is done
 //   { cmd: 'denied', sessionId, tool } a tool was refused in auto mode
+//   { cmd: 'note', who: 'ceo' | 'manager', text, kind }  a few words over one of them
+//   { cmd: 'memo', sessionId }         the manager reads a memo (instructions or settings loaded)
+//   { cmd: 'clear', sessionId }        /clear: the manager's tray is emptied
 // An MCP tool is an errand outside the office: steps call (with `server`) and unavailable.
 
 // a mix of English and Malay, women and men
@@ -70,6 +73,7 @@ export const createDirector = ({ random = Math.random } = {}) => {
   const handedIn = new Map() // session -> workers with work for the manager
   const asking = new Set() // sessions waiting on a permission
   const compacting = new Set() // sessions whose memory is being compacted
+  const memoed = new Set() // sessions where the manager was just given a memo
 
   // one of the free ones; when all are taken they repeat
   const pickFree = (list, taken) => {
@@ -184,9 +188,42 @@ export const createDirector = ({ random = Math.random } = {}) => {
     return [...out, ...sendHome(sessionId)]
   }
 
+  // the life of the session: a note over the CEO or the manager
+  const note = (who, text, kind = 'info') => ({ cmd: 'note', who, text, kind })
+  const onLife = e => {
+    const out = []
+    const { sessionId, detail } = e
+    switch (e.what) {
+      case 'start':
+        if (detail === 'compact') return [] // compaction has its own scene
+        if (detail === 'clear') out.push({ cmd: 'clear', sessionId })
+        return [...out, note('ceo', { resume: 'Resumed', clear: 'Fresh start' }[detail] ?? 'New session')]
+      case 'end':
+        answered(sessionId, out)
+        // /clear ends the session and starts another at once: only the second is announced
+        return [...out, ...(detail === 'clear' ? [] : [note('ceo', 'Session ended')]), ...sendHome(sessionId)]
+      case 'model':
+        return [note('manager', detail ? `Model: ${detail}` : 'Model changed')]
+      case 'cwd':
+        return [note('manager', detail ? `Now in ${detail}` : 'Folder changed')]
+      case 'folder':
+        return [note('manager', detail ? `Added ${detail}` : 'Folder added')]
+      case 'memo':
+        // several in a row are one memo
+        if (memoed.has(sessionId)) return []
+        memoed.add(sessionId)
+        return [{ cmd: 'memo', sessionId }]
+      default:
+        return []
+    }
+  }
+
   const feed = e => {
     const out = []
+    if (!(e.type === 'life' && e.what === 'memo')) memoed.delete(e.sessionId)
     switch (e.type) {
+      case 'life':
+        return onLife(e)
       case 'tool':
         answered(e.sessionId, out)
         return [...out, ...onTool(e)]
