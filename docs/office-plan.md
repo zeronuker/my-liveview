@@ -2,7 +2,7 @@
 
 A new view in Live View that shows a Claude Code session as an animated office. The repo is the office, Claude and its subagents are the workers, and the person is "CEO" upstairs. It is a good story, not a live mirror: an instant edit still plays out as a full walk-and-write.
 
-Status: Phase 0 and Phase 1 are done. Phase 2 (Office MVP) is built and checked against a made-up session; it still needs a look in a real Claude session. Update this file as phases finish.
+Status: Phases 0, 1 and 2 are done and the first half of Phase 3 is built; all checked against a made-up session (`npm run office-demo`), none yet against a real Claude session. The new hooks are installed in the real Claude settings and Live View was restarted on 2026-11-12. Update this file as phases finish.
 
 ## Decisions so far
 
@@ -89,6 +89,12 @@ Suggested ideas for these are in the conversation history; assign them when each
 - Activity labels over heads ("Reading foo.ts"). A bubble style per situation.
 - Pause and Skip in the Office view. Settings remembered between visits.
 - Done when: a whole session feels like one coherent story.
+- **Built so far (2026-11-12):**
+  - Pause and Skip act on the Office: Pause freezes the stage (commands that arrive wait); Skip finishes everything now, except a worker waiting on a permission.
+  - Workers sharing a desk or seat stand beside each other instead of on top of each other.
+  - An interrupted turn (Claude stops without a `Stop` event) ends itself: after 45 s with nothing heard and nothing running, no helper working and no permission waiting, or after 10 min whatever seems to be running, the manager takes the stack upstairs.
+  - Checked in the browser: Pause froze the picture, Skip cleared the office, and a write with no `Stop` was submitted after about a minute.
+- **Still to do in Phase 3:** a look at a real session, and whatever that shows. Names can still overlap in a crowd, and the plan is small in a narrow window.
 
 ### Phase 4: Record
 - Record button: `canvas.captureStream()` plus `MediaRecorder`, downloads a `.webm`.
