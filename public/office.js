@@ -3,6 +3,7 @@
 // time; this file only paints what the stage says. Everything is plain shapes
 // for the pixel art, which is in sprites.js; a pose with no sprite is drawn as plain shapes.
 import { createDirector } from './director.js'
+import { createEffects } from './effects.js'
 import { buildLayout, fit } from './layout.js'
 import { createStage } from './stage.js'
 import { carrySprite, spriteFor } from './sprites.js'
@@ -25,6 +26,9 @@ export const createOffice = ({ canvas, getMult }) => {
   const layout = buildLayout()
   const director = createDirector()
   const stage = createStage({ layout, getMult })
+  const effects = createEffects()
+  let lastDraw = 0
+  let paused = false
   const ctx = canvas.getContext('2d')
   let visible = false
   let frame = 0
@@ -36,7 +40,10 @@ export const createOffice = ({ canvas, getMult }) => {
 
   // the stage keeps its own time whether or not it is being drawn
   const tick = () => stage.tick(performance.now())
-  setInterval(tick, 250)
+  setInterval(() => {
+    tick()
+    if (!visible) stage.takeEffects() // nobody is looking: there is nothing to show
+  }, 250)
 
   // when each chat was last heard from, so a turn that was interrupted (no Stop comes) still ends
   const lastHeard = new Map()
@@ -218,6 +225,56 @@ export const createOffice = ({ canvas, getMult }) => {
     if (p.bubble) bubble(p.bubble.text, p.bubble.kind, cx, headTop, tile, ink)
   }
 
+  // confetti, warnings, rings and code glyphs, on top of everything
+  const drawEffects = ({ tile, left, top }, ink) => {
+    for (const e of effects.all()) {
+      const p = e.age / e.life
+      const cx = left + (e.x + 0.5) * tile
+      const cy = top + (e.y + 0.5) * tile
+      ctx.save()
+      if (e.kind === 'confetti') {
+        ctx.globalAlpha = Math.min(1, (1 - p) * 3)
+        ctx.translate(cx, cy)
+        ctx.rotate(e.spin * e.age)
+        ctx.fillStyle = e.color
+        ctx.fillRect((-tile * 0.12 * e.size) / 2, (-tile * 0.18 * e.size) / 2, tile * 0.12 * e.size, tile * 0.18 * e.size)
+      } else if (e.kind === 'warning') {
+        const size = tile * 0.7
+        const x = cx + Math.sin(e.age * 20) * tile * 0.1 // it wobbles
+        const y = cy - tile * 0.9
+        ctx.globalAlpha = 1 - p
+        ctx.beginPath()
+        ctx.moveTo(x, y - size * 0.5)
+        ctx.lineTo(x + size * 0.5, y + size * 0.4)
+        ctx.lineTo(x - size * 0.5, y + size * 0.4)
+        ctx.closePath()
+        ctx.fillStyle = '#ffcc00'
+        ctx.fill()
+        ctx.strokeStyle = '#111'
+        ctx.lineWidth = 2
+        ctx.stroke()
+        text('!', x, y + size * 0.12, size * 0.5, '#111')
+      } else if (e.kind === 'ring') {
+        ctx.globalAlpha = 1 - p
+        ctx.strokeStyle = ink[e.tone] ?? ink.acc
+        ctx.lineWidth = 0.5 + 2 * (1 - p)
+        ctx.beginPath()
+        ctx.arc(cx, cy + tile * 0.2, tile * (0.3 + 0.7 * p), 0, Math.PI * 2)
+        ctx.stroke()
+      } else if (e.kind === 'glyph') {
+        ctx.globalAlpha = 1 - p
+        ctx.font = `bold ${Math.max(8, tile * 0.35)}px "Courier New", monospace`
+        ctx.textAlign = 'center'
+        ctx.textBaseline = 'middle'
+        ctx.fillStyle = e.color
+        ctx.shadowColor = e.color
+        ctx.shadowBlur = 4
+        ctx.fillText(e.glyph, cx, cy - tile * 0.3)
+      }
+      ctx.restore()
+    }
+  }
+
   const draw = () => {
     frame = 0
     if (!visible) return
@@ -241,6 +298,15 @@ export const createOffice = ({ canvas, getMult }) => {
     drawPerson({ id: 'ceo', name: 'CEO', color: '#264653', kind: 'manager', x: seat.x, y: seat.y, pose: 'idle', facing: 1, bubble: snap.ceo.bubble, label: snap.ceo.papers > 0 ? `${snap.ceo.papers} approved` : '', carry: null }, view, t, ink)
 
     for (const person of [...snap.workers].sort((a, b) => a.y - b.y)) drawPerson(person, view, t, ink)
+
+    // effects: what the stage says happened, and code glyphs rising from whoever is writing
+    const now = performance.now()
+    const dt = paused || !lastDraw ? 0 : Math.min(0.1, (now - lastDraw) / 1000)
+    lastDraw = now
+    for (const e of stage.takeEffects()) effects.spawn(e.kind, e.x, e.y, e)
+    for (const person of snap.workers) if (person.pose === 'type' && !paused && Math.random() < 2 * dt) effects.spawn('glyph', person.x, person.y - 0.6)
+    effects.update(dt)
+    drawEffects(view, ink)
     frame = requestAnimationFrame(draw)
   }
 
@@ -259,5 +325,10 @@ export const createOffice = ({ canvas, getMult }) => {
 
   new ResizeObserver(() => visible && resize()).observe(canvas)
 
-  return { feed, setVisible, setPaused: stage.setPaused, skip: stage.skip, isIdle: stage.isIdle }
+  const setPaused = on => {
+    paused = on
+    stage.setPaused(on)
+  }
+
+  return { feed, setVisible, setPaused, skip: stage.skip, isIdle: stage.isIdle }
 }

@@ -56,6 +56,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
   let skipping = false
   const deskSharers = Array(spots.desks.length).fill(0) // how many share each desk, past the first
   const seatSharers = Array(spots.seats.length).fill(0)
+  const effects = [] // what the Office should show for a moment: confetti, a warning, a ring
   let labTurn = 0
   let shelfTurn = 0
 
@@ -92,6 +93,11 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
   }
   const homeOf = worker => (worker.kind === 'manager' ? spots.managerSeat : seatOf(worker))
 
+  // at instant speed nothing is happening in view, so there is nothing to show
+  const emit = (kind, x, y, extra) => {
+    if (!isInstant()) effects.push({ kind, x, y, ...extra })
+  }
+
   const ok = text => ({ text, kind: 'ok' })
   const bad = text => ({ text, kind: 'bad' })
 
@@ -100,7 +106,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     const file = baseName(cmd.path ?? worker.path)
     const waitsForNext = { until: () => worker.queue.length > 0 }
     const handIn = [
-      { spot: () => spots.handIn, act: { pose: 'give', dur: 0.8, label: 'Handing in', carry: null, done: () => { handedIn.add(worker.id); stack++ } } },
+      { spot: () => spots.handIn, act: { pose: 'give', dur: 0.8, label: 'Handing in', carry: null, done: () => { handedIn.add(worker.id); stack++; emit('ring', spots.handIn.x, spots.handIn.y, { tone: 'ok' }) } } },
       { spot: () => seatOf(worker), act: { pose: 'sit', dur: 0.4 } },
     ]
     switch (cmd.step) {
@@ -152,6 +158,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     worker.pose = act.pose ?? 'idle'
     worker.label = act.label ?? ''
     worker.bubble = act.bubble ?? null
+    if (act.bubble?.kind === 'bad') emit('warning', worker.x, worker.y) // something went wrong
     if (act.carry !== undefined) worker.carry = act.carry
   }
 
@@ -399,6 +406,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
               pose: 'give', dur: 1.2, label: 'Submitting', carry: null, bubble: ok('✓'),
               done: () => {
                 ceo.papers += stack
+                emit('confetti', spots.ceoSeat.x, spots.ceoSeat.y)
                 stack = 0
                 ceo.bubble = { text: 'Received', kind: 'ok', until: clock + 2.5 }
               },
@@ -474,6 +482,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       }
       case 'prompt':
         ceo.bubble = { text: 'New request', kind: 'info', until: clock + 2.5 }
+        emit('ring', spots.ceoSeat.x, spots.ceoSeat.y, { tone: 'info' })
         return
     }
   }
@@ -498,5 +507,8 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       }),
   })
 
-  return { apply, tick, snapshot, isIdle, skip, setPaused }
+  // what has happened since the last call, for the Office to show
+  const takeEffects = () => effects.splice(0)
+
+  return { apply, tick, snapshot, isIdle, skip, setPaused, takeEffects }
 }

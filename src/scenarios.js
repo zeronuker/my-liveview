@@ -5,6 +5,34 @@
 // if an event, a tool or a step of the stage appears in none of them.
 const files = (names, lines = 14) => names.map(name => ['write', name, lines])
 
+// A dozen chats working at once, with helpers, searches, tests that fail and an
+// API error: random, but the same every time (a fixed seed), for showing the
+// Office and for recording it.
+const busyOffice = () => {
+  let seed = 7
+  const random = () => (seed = (seed * 16807) % 2147483647) / 2147483647
+  const pick = list => list[Math.floor(random() * list.length)]
+  const chats = Array.from({ length: 12 }, (_, i) => `c${i + 1}`)
+  const steps = []
+  for (const chat of chats) steps.push(['chat', chat], ['prompt', `Job ${chat}`])
+  for (let round = 0; round < 5; round++) {
+    for (const [i, chat] of chats.entries()) {
+      steps.push(['chat', chat])
+      if (round === 1 && i % 2 === 0) steps.push(['agentStart', `${chat}-helper`, 'Explore'])
+      if (round === 3 && i % 2 === 0) steps.push(['agentStop', `${chat}-helper`, 'Explore'])
+      const action = Math.floor(random() * 5)
+      if (action === 0) steps.push(['read', pick(['cart.js', 'receipt.js', 'sample.js'])])
+      else if (action === 1) steps.push(['write', `${chat}-${round}.js`, 8 + Math.floor(random() * 20)])
+      else if (action === 2) steps.push(['edit', `${chat}-edit${round}.js`])
+      else if (action === 3) steps.push(['bash', random() < 0.3 ? 'fail' : 'ok', 'npm test'])
+      else steps.push(pick([['grep', 'price'], ['web', 'search'], ['mcp', 'ok', 'github'], ['lsp']]))
+    }
+    steps.push(['wait', 300])
+  }
+  for (const [i, chat] of chats.entries()) steps.push(['chat', chat], i % 6 === 5 ? ['fail', 'overloaded'] : ['stop'])
+  return steps
+}
+
 export const SCENARIOS = {
   full: {
     about: 'a whole session: prompt, search, reads, a helper, a permission, a failing then passing test, nine new files, a failed edit',
@@ -115,6 +143,11 @@ export const SCENARIOS = {
       ['prompt', 'Do the plan'], ['command', 'review'], ['task', 'new'], ['read', 'cart.js'], ['batch'], ['message'], ['task', 'done'],
       ['teammate'], ['idle'], ['stop'],
     ],
+  },
+  'busy-office': {
+    about: 'a dozen chats at once, at random but always the same: reads, writes, tests, helpers, searches, an API error',
+    ends: 'stop',
+    steps: busyOffice(),
   },
   lifecycle: {
     about: 'a session is resumed, memos load, the model and folder change, a folder is added, then the session ends',

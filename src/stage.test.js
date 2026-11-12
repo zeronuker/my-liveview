@@ -522,3 +522,48 @@ test('a passed test or a found result is a little hop of joy', () => {
 
   assert.ok(poses.has('cheer'))
 })
+
+test('a failure shows a warning where it happened; success shows nothing of the kind', () => {
+  const { hire, doStep, run, stage } = setup()
+  hire('w1')
+  doStep('w1', 'pass')
+  run(3)
+  assert.equal(stage.takeEffects().some(e => e.kind === 'warning'), false)
+
+  doStep('w1', 'fail')
+  run(3)
+  const warnings = stage.takeEffects().filter(e => e.kind === 'warning')
+  assert.equal(warnings.length, 1)
+  assert.equal(typeof warnings[0].x, 'number')
+})
+
+test('a hand-in shows a ring at the tray, the CEO getting the work shows confetti, and taking the effects empties the list', () => {
+  const { stage, hire, doStep, run, now } = setup()
+  hire('w1', { path: 'a.js' })
+  doStep('w1', 'write', { path: 'a.js', adds: 3, dels: 0 })
+  doStep('w1', 'handIn')
+  stage.apply({ cmd: 'review', sessionId: 's', workers: ['w1'] }, now())
+  stage.apply({ cmd: 'submit', sessionId: 's', workers: ['w1'] }, now())
+  run(80)
+  const seen = stage.takeEffects()
+
+  assert.ok(seen.some(e => e.kind === 'ring' && e.tone === 'ok'))
+  assert.ok(seen.some(e => e.kind === 'confetti'))
+  assert.deepEqual(stage.takeEffects(), [])
+})
+
+test('a prompt shows a ring at the CEO', () => {
+  const { stage, now } = setup()
+  stage.apply({ cmd: 'prompt', sessionId: 's' }, now())
+
+  assert.ok(stage.takeEffects().some(e => e.kind === 'ring' && e.tone === 'info'))
+})
+
+test('at instant speed there are no effects: nothing is in view', () => {
+  const { stage, hire, doStep, run } = setup({ getMult: () => 0 })
+  hire('w1')
+  doStep('w1', 'fail')
+  run(1)
+
+  assert.deepEqual(stage.takeEffects(), [])
+})

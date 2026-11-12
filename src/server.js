@@ -187,6 +187,7 @@ const files = {
   '/walk.js': ['walk.js', 'text/javascript; charset=utf-8'],
   '/recorder.js': ['recorder.js', 'text/javascript; charset=utf-8'],
   '/sprites.js': ['sprites.js', 'text/javascript; charset=utf-8'],
+  '/effects.js': ['effects.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 }
 

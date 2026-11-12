@@ -180,3 +180,12 @@ test('coverage: every command the director gives and every step the stage plays 
   for (const step of ['arrive', 'fetch', 'study', 'write', 'handIn', 'report', 'reject', 'test', 'search', 'pass', 'fail', 'call', 'unavailable'])
     assert.ok(steps.has(step), step)
 })
+
+test('the busy office is a dozen chats, with helpers, an API error and work handed to the CEO', () => {
+  const { events, commands, papers } = results['busy-office']
+
+  assert.equal(new Set(events.map(e => e.sessionId).filter(Boolean)).size, 12)
+  assert.ok(commands.some(c => c.cmd === 'fail'))
+  assert.ok(commands.some(c => c.step === 'arrive'))
+  assert.ok(papers > 0)
+})
