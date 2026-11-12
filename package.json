@@ -12,6 +12,6 @@
     "test": "node --test",
     "demo": "node scripts/demo.js",
     "burst": "node scripts/burst.js",
-    "office-demo": "node scripts/office-demo.js"
+    "mock": "node scripts/mock.js"
   }
 }

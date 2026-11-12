@@ -2,7 +2,7 @@
 
 A new view in Live View that shows a Claude Code session as an animated office. The repo is the office, Claude and its subagents are the workers, and the person is "CEO" upstairs. It is a good story, not a live mirror: an instant edit still plays out as a full walk-and-write.
 
-Status: Phases 0, 1 and 2 are done and the first half of Phase 3 is built; all checked against a made-up session (`npm run office-demo`), none yet against a real Claude session. The new hooks are installed in the real Claude settings and Live View was restarted on 2026-11-12. Update this file as phases finish.
+Status: Phases 0, 1 and 2 are done and the first half of Phase 3 is built; all checked against a made-up session (`npm run mock`), none yet against a real Claude session. The new hooks are installed in the real Claude settings and Live View was restarted on 2026-11-12. Update this file as phases finish.
 
 ## Decisions so far
 
@@ -79,7 +79,7 @@ Suggested ideas for these are in the conversation history; assign them when each
 - Done when: a real Claude session reads clearly as a story in the Office view.
 - **Built (2026-11-12), not yet run against a real session:**
   - `public/layout.js` (floor plan, `fit`), `public/stage.js` (plays commands over time), `public/office.js` (canvas), the Office toggle in the toolbar, and the new files in the server's file table.
-  - `npm run office-demo` plays a made-up session at the server (prompt, search, reads, a helper, a permission, failing then passing tests, nine new files, a failed edit, turn end). Run it with Office switched on; use Focus to hide the side panels for more room.
+  - `npm run mock -- full` plays a made-up session at the server (prompt, search, reads, a helper, a permission, failing then passing tests, nine new files, a failed edit, turn end). Run it with Office switched on; use Focus to hide the side panels for more room.
   - Checked in the browser: both floors draw, workers walk, the manager takes the stack upstairs, and switching Office off and on again shows the session as it has moved on.
   - Known rough edges, for Phase 3: workers share desks and lounge seats once there are more than 16 and 9 (they stand on top of each other); the floor plan is small in a narrow window (Focus helps); Pause and Skip do not act on the Office; names can overlap; there is no sound of any kind.
   - The new hooks are not installed in the real Claude settings yet, so a real session shows only tool events until they are.
@@ -117,6 +117,24 @@ Suggested ideas for these are in the conversation history; assign them when each
 - Optional sound with a mute toggle.
 - Docs and a README for the feature; a final round of manual checks.
 - Done when: it is ready to show others.
+
+## Mock sessions: how to test and add animations
+
+A mock session is a scripted list of plain steps (`src/scenarios.js`, steps explained in `src/mock.js`). `src/mock.js` turns it into the hook events Claude would send; `scripts/mock.js` posts them to the running Live View, the same way the real hooks do. Nothing of the project is touched: files go in `demo/mock`, which git ignores.
+
+- `npm run mock -- --list` says what there is. `npm run mock -- <name>` plays one at the running Live View (with Office switched on). `npm run mock -- --all` plays every one. `PORT=4801 npm run mock -- <name>` plays at another port.
+- Scenarios: `full`, `reading-only`, `search`, `failing-tests`, `permission`, `subagent`, `burst-30` (more workers than desks), `interrupted` (no `Stop`), `two-chats`.
+- `src/scenarios.test.js` plays every scenario at a real server on a spare port, runs what comes out through the director and the stage, and checks that the office ends up empty. Its last tests fail if an event type, a tool, a director command or a stage step appears in no scenario.
+- What it cannot prove: that Claude's real hook payloads match. Only a real session shows that. Later, a real session's events could be saved as a scenario.
+
+**To add an animation:**
+1. If it needs a new hook event, add it to `PLAIN_EVENTS` or `TOOL_EVENTS` in `src/hooks-config.js` (with its test) and publish it in `src/server.js` (with its test). Re-run `node scripts/hooks.js install`.
+2. Add the rule to `public/director.js`, with a test in `src/director.test.js`.
+3. Add the step to `jobs` in `public/stage.js`, with a test in `src/stage.test.js`. Add anything it needs to the floor plan in `public/layout.js`.
+4. Draw it in `public/office.js`.
+5. Add a step to `src/mock.js` if the scenario language lacks one (with a test), and a scenario to `src/scenarios.js` that shows it.
+6. Put the new event, tool, command or step in the coverage lists at the end of `src/scenarios.test.js`.
+7. Play it: `npm run mock -- <name>`, and look.
 
 ## Risks
 
