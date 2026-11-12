@@ -220,6 +220,25 @@ test('a turn ending, a subagent starting and stopping, and a permission asked re
     assert.ok(await page.until('"tool":"Bash","summary":"Ran: npm test"'))
   }))
 
+test('an API error, a compaction and a refused tool reach the page; no answer decides anything', () =>
+  withServer(async ({ token }) => {
+    const page = await listen()
+    const fail = await hook(token, { hook_event_name: 'StopFailure', error: 'rate_limit', last_assistant_message: 'API Error: secret' })
+    await hook(token, { hook_event_name: 'PreCompact', trigger: 'auto' })
+    await hook(token, { hook_event_name: 'PostCompact', trigger: 'auto', compact_summary: 'secret summary' })
+    await hook(token, { hook_event_name: 'PermissionDenied', tool_name: 'Bash', tool_input: { command: 'rm x' }, reason: 'secret reason' })
+
+    assert.equal(await fail.text(), '{}')
+    assert.ok(await page.until('"type":"turn-fail","sessionId":"chat1","cwd":'))
+    assert.ok(await page.until('"reason":"rate_limit"'))
+    assert.ok(await page.until('"type":"compact","sessionId":"chat1"'))
+    assert.ok(await page.until('"phase":"start"'))
+    assert.ok(await page.until('"phase":"end"'))
+    assert.ok(await page.until('"type":"denied","sessionId":"chat1"'))
+    assert.ok(await page.until('"tool":"Bash"'))
+    assert.equal(page.text.includes('secret'), false) // what Claude said or why is not passed on
+  }))
+
 test('a tool used inside a subagent says which subagent', () =>
   withServer(async ({ token }) => {
     const page = await listen()

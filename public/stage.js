@@ -24,6 +24,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
   const workers = new Map() // id -> worker (the manager too)
   const handedIn = new Set() // workers whose work is on the manager's tray
   const answered = new Set() // chats whose permission has been answered
+  const compacted = new Set() // chats whose memory has been compacted
   const lastOf = new Map() // chat -> the worker last given something to do
   const deskOwner = Array(spots.desks.length).fill(null)
   const seatOwner = Array(spots.seats.length).fill(null)
@@ -101,6 +102,10 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
         return [{ spot: () => spots.lab[labTurn++ % spots.lab.length], act: { pose: 'machine', dur: 1.5, label: 'Running tests', ...waitsForNext } }]
       case 'search':
         return [{ spot: () => shelfFor(null), act: { pose: 'scan', dur: 1.2, label: 'Searching', ...waitsForNext } }]
+      case 'call': // an MCP tool: out by the front door, waiting for the answer
+        return [{ spot: () => spots.entrance, act: { pose: 'scan', dur: 1.2, label: cmd.server ? `Calling ${cmd.server}` : 'Calling a tool', ...waitsForNext } }]
+      case 'unavailable':
+        return [{ spot: null, act: { pose: 'shake', dur: 1.5, label: 'Tool unavailable', bubble: bad('✗') } }]
       case 'pass':
         return [{ spot: null, act: { pose: 'idle', dur: 1.2, label: 'Passed', bubble: ok('✓') } }]
       case 'fail':
@@ -313,6 +318,33 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       case 'answered':
         answered.add(cmd.sessionId)
         return
+      case 'fail':
+        manager.queue.push({ spot: () => spots.managerSeat, act: { pose: 'shake', dur: 2.5, label: cmd.label, bubble: bad('!') } })
+        return
+      case 'compact': {
+        // the manager tidies the notes in the file room until the compaction is over
+        compacted.delete(cmd.sessionId)
+        let started = false
+        manager.queue.push(
+          {
+            skipIf: () => compacted.has(cmd.sessionId),
+            onStart: () => { started = true },
+            spot: () => shelfFor(null),
+            act: { pose: 'scan', dur: 1.5, label: 'Compacting memory', bubble: { text: '…', kind: 'info' }, until: () => compacted.has(cmd.sessionId) },
+          },
+          { skipIf: () => !started, spot: () => spots.managerSeat, act: { pose: 'sit', dur: 0.3 } },
+        )
+        return
+      }
+      case 'compacted':
+        compacted.add(cmd.sessionId)
+        return
+      case 'denied': {
+        const last = workers.get(lastOf.get(cmd.sessionId))
+        const worker = last?.present && !last.queue.some(job => job.act?.leave) ? last : manager
+        worker.queue.push({ spot: null, act: { pose: 'shake', dur: 1.4, label: 'Blocked', bubble: bad('✗') } })
+        return
+      }
       case 'prompt':
         ceo.bubble = { text: 'New request', kind: 'info', until: clock + 2.5 }
         return

@@ -17,6 +17,10 @@
 //                                      handed in, then takes it upstairs
 //   { cmd: 'ask', sessionId, tool, summary } / { cmd: 'answered', sessionId }
 //   { cmd: 'prompt', sessionId }       the person sent a message
+//   { cmd: 'fail', sessionId, label }  the API ended the turn with an error
+//   { cmd: 'compact' | 'compacted', sessionId }  memory is being compacted, and is done
+//   { cmd: 'denied', sessionId, tool } a tool was refused in auto mode
+// An MCP tool is an errand outside the office: steps call (with `server`) and unavailable.
 
 // a mix of English and Malay, women and men
 export const NAMES = [
@@ -38,6 +42,23 @@ const ERRANDS = {
 }
 const FILE_TOOLS = new Set(['Read', 'Edit', 'Write'])
 
+// an MCP tool is called mcp__<server>__<tool>: an errand outside the office
+const MCP_TOOL = /^mcp__(.+?)__/
+const MCP_ERRAND = { start: 'call', ok: 'report', fail: 'unavailable' }
+
+// what the manager says when the API ends a turn with an error
+const FAILURES = {
+  rate_limit: 'Rate limit',
+  overloaded: 'Servers busy',
+  server_error: 'API error',
+  max_output_tokens: 'Output too long',
+  authentication_failed: 'Sign-in problem',
+  oauth_org_not_allowed: 'Sign-in problem',
+  cloud_credential_error: 'Sign-in problem',
+  billing_error: 'Billing problem',
+  account_on_hold: 'Billing problem',
+}
+
 export const createDirector = ({ random = Math.random } = {}) => {
   let count = 0
   const names = new Set() // in use right now
@@ -48,6 +69,7 @@ export const createDirector = ({ random = Math.random } = {}) => {
   const staff = new Map() // session -> the workers in that office
   const handedIn = new Map() // session -> workers with work for the manager
   const asking = new Set() // sessions waiting on a permission
+  const compacting = new Set() // sessions whose memory is being compacted
 
   // one of the free ones; when all are taken they repeat
   const pickFree = (list, taken) => {
@@ -75,9 +97,11 @@ export const createDirector = ({ random = Math.random } = {}) => {
   const act = (worker, step, extra) => ({ cmd: 'do', worker: worker.id, step, ...extra })
   const send = worker => ({ cmd: 'fire', worker: worker.id })
 
-  // any later event means a permission that was asked has been answered
+  // any later event means a permission that was asked has been answered, and
+  // that a compaction that began is over
   const answered = (sessionId, out) => {
     if (asking.delete(sessionId)) out.push({ cmd: 'answered', sessionId })
+    if (compacting.delete(sessionId)) out.push({ cmd: 'compacted', sessionId })
   }
 
   const workerFor = (sessionId, path) => {
@@ -90,11 +114,12 @@ export const createDirector = ({ random = Math.random } = {}) => {
   }
 
   const onTool = e => {
-    const errand = ERRANDS[e.tool]
+    const server = e.tool.match(MCP_TOOL)?.[1]
+    const errand = ERRANDS[e.tool] ?? (server && MCP_ERRAND)
     if (errand) {
       const worker = hire(e.sessionId, 'worker')
       calls.set(e.id, { worker, errand })
-      return [{ cmd: 'hire', worker }, act(worker, errand.start)]
+      return [{ cmd: 'hire', worker }, act(worker, errand.start, { server })]
     }
     if (!FILE_TOOLS.has(e.tool) || !e.path) return []
 
@@ -138,11 +163,9 @@ export const createDirector = ({ random = Math.random } = {}) => {
     return [...(worker.wrote ? [] : [act(worker, 'write', { path: worker.path })]), act(worker, 'handIn')]
   }
 
-  const onTurnEnd = sessionId => {
+  // the turn is over, one way or another: everyone goes home
+  const sendHome = sessionId => {
     const out = []
-    const delivered = (handedIn.get(sessionId) ?? []).map(worker => worker.id)
-    if (delivered.length > 0)
-      out.push({ cmd: 'review', sessionId, workers: delivered }, { cmd: 'submit', sessionId, workers: delivered })
     for (const worker of [...(staff.get(sessionId) ?? [])]) {
       out.push(send(worker))
       release(worker)
@@ -152,6 +175,13 @@ export const createDirector = ({ random = Math.random } = {}) => {
     for (const [key, call] of calls) if (call.worker.sessionId === sessionId) calls.delete(key)
     for (const [key, worker] of agents) if (worker.sessionId === sessionId) agents.delete(key)
     return out
+  }
+
+  // Claude finished: the manager checks what was handed in and takes it upstairs
+  const onTurnEnd = sessionId => {
+    const delivered = (handedIn.get(sessionId) ?? []).map(worker => worker.id)
+    const out = delivered.length > 0 ? [{ cmd: 'review', sessionId, workers: delivered }, { cmd: 'submit', sessionId, workers: delivered }] : []
+    return [...out, ...sendHome(sessionId)]
   }
 
   const feed = e => {
@@ -185,6 +215,19 @@ export const createDirector = ({ random = Math.random } = {}) => {
       case 'turn-end':
         answered(e.sessionId, out)
         return [...out, ...onTurnEnd(e.sessionId)]
+      case 'turn-fail':
+        // an API error ends the turn: the manager says so, nothing goes upstairs
+        answered(e.sessionId, out)
+        return [...out, { cmd: 'fail', sessionId: e.sessionId, label: FAILURES[e.reason] ?? 'API error' }, ...sendHome(e.sessionId)]
+      case 'compact':
+        if (e.phase === 'start') {
+          compacting.add(e.sessionId)
+          return [{ cmd: 'compact', sessionId: e.sessionId }]
+        }
+        return compacting.delete(e.sessionId) ? [{ cmd: 'compacted', sessionId: e.sessionId }] : []
+      case 'denied':
+        answered(e.sessionId, out)
+        return [...out, { cmd: 'denied', sessionId: e.sessionId, tool: e.tool }]
       default:
         return []
     }
@@ -196,6 +239,7 @@ export const createDirector = ({ random = Math.random } = {}) => {
   const isQuiet = sessionId =>
     (staff.get(sessionId)?.size ?? 0) > 0 &&
     !asking.has(sessionId) &&
+    !compacting.has(sessionId) &&
     ![...calls.values()].some(call => call.worker.sessionId === sessionId) &&
     ![...agents.values()].some(worker => worker.sessionId === sessionId)
 

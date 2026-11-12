@@ -11,6 +11,10 @@
 //   ['bash', 'ok' | 'fail', command]
 //   ['agentStart', id, type]  ['agentStop', id, type]
 //   ['ask', ms]                   a permission is asked and waits that long
+//   ['mcp', 'ok' | 'fail', server]  a tool of an MCP server
+//   ['denied']                    a tool is refused in auto mode
+//   ['compact', ms]               memory is compacted, taking that long
+//   ['fail', error]               the API ends the turn with an error (rate_limit, ...)
 //   ['wait', ms]
 //   ['chat', name]                from here on, steps are in another chat
 //   ['pace', 'fast' | 'normal']   whether a tool takes any time between its start and end
@@ -81,6 +85,20 @@ export const toActions = (name, steps, { dir, cwd = path.dirname(dir), tick = 30
       case 'ask':
         hook({ hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'npm test' } })
         pause(a)
+        break
+      case 'mcp':
+        tool(`mcp__${b ?? 'github'}__search`, { query: 'x' }, { ok: a === 'ok' })
+        break
+      case 'denied':
+        hook({ hook_event_name: 'PermissionDenied', tool_name: 'Bash', tool_input: { command: 'rm -rf build' }, reason: 'denied by auto mode' })
+        break
+      case 'compact':
+        hook({ hook_event_name: 'PreCompact', trigger: 'auto', custom_instructions: null })
+        pause(a)
+        hook({ hook_event_name: 'PostCompact', trigger: 'auto', compact_summary: 'summary' })
+        break
+      case 'fail':
+        hook({ hook_event_name: 'StopFailure', error: a ?? 'rate_limit', last_assistant_message: 'API Error: Rate limit reached' })
         break
       case 'wait':
         pause(a)

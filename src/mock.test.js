@@ -42,6 +42,14 @@ test('the other steps are the hooks they say', () => {
   assert.equal(actions[4].ms, 1000)
 })
 
+test('the trouble steps are the hooks they say', () => {
+  const actions = toActions('t', [['compact', 2000], ['denied'], ['fail', 'overloaded'], ['mcp', 'fail', 'github']], opts)
+
+  assert.deepEqual(kinds(actions), ['PreCompact', 'wait', 'PostCompact', 'PermissionDenied', 'StopFailure', 'PreToolUse', 'wait', 'PostToolUseFailure'])
+  assert.equal(actions.find(a => a.do === 'hook' && a.body.hook_event_name === 'StopFailure').body.error, 'overloaded')
+  assert.equal(actions.at(-1).body.tool_name, 'mcp__github__search')
+})
+
 test('every tool has its own id, and a chat is named after the scenario and the chat', () => {
   const actions = toActions('t', [['read', 'a.js'], ['chat', 'two'], ['read', 'b.js']], opts)
   const pre = actions.filter(a => a.do === 'hook' && a.body.hook_event_name === 'PreToolUse')

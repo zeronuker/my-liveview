@@ -129,6 +129,10 @@ const onHook = p => {
     return publish({ type, sessionId, cwd, agentId: p.agent_id, agentType: p.agent_type, at })
   }
   if (kind === 'PermissionRequest') return publish({ type: 'permission', sessionId, cwd, tool, summary: summarize(tool, input), at })
+  // trouble: the turn ended by an API error, memory being compacted, a tool refused in auto mode
+  if (kind === 'StopFailure') return publish({ type: 'turn-fail', sessionId, cwd, reason: typeof p.error === 'string' ? p.error : 'unknown', at })
+  if (kind === 'PreCompact' || kind === 'PostCompact') return publish({ type: 'compact', sessionId, cwd, phase: kind === 'PreCompact' ? 'start' : 'end', at })
+  if (kind === 'PermissionDenied') return publish({ type: 'denied', sessionId, cwd, tool, at })
   if (!tool) return
 
   if (kind === 'PreToolUse') {

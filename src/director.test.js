@@ -181,3 +181,46 @@ test('a tool still running, a subagent still working or a permission still waiti
   asked.feed({ type: 'prompt', sessionId: S }) // answered
   assert.equal(asked.isQuiet(S), true)
 })
+
+test('an MCP tool is an errand outside: call, then report; a failure is unavailable', () => {
+  const ok = run([tool('m1', 'mcp__github__search_repositories'), done('m1')])
+  assert.deepEqual(steps(ok), ['call', 'report'])
+  assert.equal(ok.find(c => c.step === 'call').server, 'github')
+  assert.equal(ok.at(-1).cmd, 'fire')
+
+  const failed = run([tool('m1', 'mcp__github__search_repositories'), done('m1', false)])
+  assert.deepEqual(steps(failed), ['call', 'unavailable'])
+})
+
+test('an API error ends the turn with the reason, and what was handed in is not submitted', () => {
+  const commands = run([tool('t1', 'Write', 'a.js'), edit('t1', 'a.js', true), done('t1'), { type: 'turn-fail', sessionId: S, reason: 'rate_limit' }])
+
+  assert.equal(commands.find(c => c.cmd === 'fail').label, 'Rate limit')
+  assert.equal(commands.some(c => c.cmd === 'submit' || c.cmd === 'review'), false)
+  assert.equal(commands.filter(c => c.cmd === 'fire').length, 1)
+})
+
+test('an API error of a kind nobody planned for is just an API error', () => {
+  const commands = run([{ type: 'turn-fail', sessionId: S, reason: 'something_new' }])
+
+  assert.equal(commands[0].label, 'API error')
+})
+
+test('a compaction starts and ends; anything else that happens ends it too; it is not a quiet turn', () => {
+  const director = createDirector({ random: () => 0 })
+  director.feed(tool('t1', 'Read', 'a.js'))
+  director.feed(done('t1'))
+  assert.deepEqual(director.feed({ type: 'compact', sessionId: S, phase: 'start' }), [{ cmd: 'compact', sessionId: S }])
+  assert.equal(director.isQuiet(S), false)
+  assert.deepEqual(director.feed({ type: 'compact', sessionId: S, phase: 'end' }), [{ cmd: 'compacted', sessionId: S }])
+  assert.deepEqual(director.feed({ type: 'compact', sessionId: S, phase: 'end' }), []) // nothing was going on
+
+  director.feed({ type: 'compact', sessionId: S, phase: 'start' })
+  assert.ok(director.feed(tool('t2', 'Read', 'b.js')).some(c => c.cmd === 'compacted'))
+})
+
+test('a refused tool is said once, for the chat it happened in', () => {
+  const commands = run([{ type: 'denied', sessionId: S, tool: 'Bash' }])
+
+  assert.deepEqual(commands, [{ cmd: 'denied', sessionId: S, tool: 'Bash' }])
+})

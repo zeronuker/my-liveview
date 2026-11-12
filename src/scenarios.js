@@ -78,6 +78,26 @@ export const SCENARIOS = {
     ends: 'quiet',
     steps: [['prompt', 'Refactor the totals'], ...files(['one.js', 'two.js'])],
   },
+  'api-error': {
+    about: 'work is handed in, then the API fails the turn: the manager says why, everyone goes home, nothing goes upstairs',
+    ends: 'stop',
+    steps: [['prompt', 'Update the report'], ['read', 'cart.js'], ...files(['report.js']), ['wait', 500], ['fail', 'rate_limit']],
+  },
+  compaction: {
+    about: 'memory is compacted in the middle of a turn: the manager tidies the notes, then work goes on',
+    ends: 'stop',
+    steps: [['prompt', 'Keep going'], ['read', 'cart.js'], ['compact', 3500], ...files(['next.js']), ['stop']],
+  },
+  mcp: {
+    about: 'a tool of an MCP server works, then one fails: an errand outside the office',
+    ends: 'stop',
+    steps: [['prompt', 'Check the issue tracker'], ['mcp', 'ok', 'github'], ['mcp', 'fail', 'github'], ['stop']],
+  },
+  denied: {
+    about: 'a tool is refused in auto mode: a "blocked" bubble, then work goes on',
+    ends: 'stop',
+    steps: [['prompt', 'Tidy the build'], ['read', 'cart.js'], ['denied'], ['bash', 'ok', 'npm run lint'], ['stop']],
+  },
   'two-chats': {
     about: 'two chats working at once, each finishing on its own',
     ends: 'stop',

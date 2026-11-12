@@ -4,7 +4,10 @@
 const TOOL_EVENTS = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure']
 // These name no tool to match: the first message names a chat in the sidebar,
 // the rest drive the Office view (a turn ending, a permission asked, a subagent).
-const PLAIN_EVENTS = ['UserPromptSubmit', 'Stop', 'SubagentStart', 'SubagentStop', 'PermissionRequest']
+const PLAIN_EVENTS = [
+  'UserPromptSubmit', 'Stop', 'SubagentStart', 'SubagentStop', 'PermissionRequest',
+  'StopFailure', 'PreCompact', 'PostCompact', 'PermissionDenied',
+]
 
 const isOurs = (url, handler) => handler.type === 'http' && handler.url === url
 

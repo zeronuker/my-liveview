@@ -322,3 +322,63 @@ test('workers who share a desk do not stand on one spot', () => {
 
   assert.equal(new Set(spots).size, count)
 })
+
+test('an API error: the manager shows what went wrong, in red', () => {
+  const { stage, run, person } = setup()
+  stage.apply({ cmd: 'fail', sessionId: 's', label: 'Rate limit' }, 0)
+  run(1)
+
+  assert.equal(person('manager').label, 'Rate limit')
+  assert.equal(person('manager').bubble.kind, 'bad')
+})
+
+test('a compaction sends the manager to the file room until it is over, then back', () => {
+  const { stage, run, person } = setup()
+  stage.apply({ cmd: 'compact', sessionId: 's' }, 0)
+  run(30)
+
+  assert.ok(at(person('manager'), layout.spots.files))
+  assert.equal(person('manager').label, 'Compacting memory')
+
+  stage.apply({ cmd: 'compacted', sessionId: 's' }, 0)
+  run(30)
+  assert.deepEqual([person('manager').x, person('manager').y], [layout.spots.managerSeat.x, layout.spots.managerSeat.y])
+  assert.equal(person('manager').label, '')
+})
+
+test('a compaction that was over before the manager got there is skipped', () => {
+  const { stage, settle, person } = setup()
+  stage.apply({ cmd: 'compact', sessionId: 's' }, 0)
+  stage.apply({ cmd: 'compacted', sessionId: 's' }, 0)
+  settle()
+
+  assert.equal(stage.isIdle(), true)
+  assert.deepEqual([person('manager').x, person('manager').y], [layout.spots.managerSeat.x, layout.spots.managerSeat.y])
+})
+
+test('a refused tool: the last worker shakes their head, "Blocked"', () => {
+  const { stage, hire, doStep, run, person, now } = setup()
+  hire('w1')
+  doStep('w1', 'arrive')
+  run(20)
+  stage.apply({ cmd: 'denied', sessionId: 's', tool: 'Bash' }, now())
+  run(0.5)
+
+  assert.equal(person('w1').label, 'Blocked')
+  assert.equal(person('w1').bubble.kind, 'bad')
+})
+
+test('an MCP call goes out by the front door and waits; unavailable shakes the head', () => {
+  const { hire, doStep, run, person, settle } = setup()
+  hire('w1')
+  doStep('w1', 'call', { server: 'github' })
+  run(30)
+
+  assert.deepEqual([Math.round(person('w1').x), Math.round(person('w1').y)], [layout.spots.entrance.x, layout.spots.entrance.y])
+  assert.equal(person('w1').label, 'Calling github')
+
+  doStep('w1', 'unavailable')
+  for (let i = 0; i < 100 && person('w1').label !== 'Tool unavailable'; i++) run(0.1)
+  assert.equal(person('w1').bubble.kind, 'bad')
+  settle()
+})

@@ -112,6 +112,19 @@ test('what is written is handed to the CEO: the writing scenarios end with paper
   assert.equal(results['reading-only'].papers, 0)
 })
 
+test('an API error ends the turn: the manager says why and nothing goes upstairs', () => {
+  const { commands, papers } = results['api-error']
+
+  assert.equal(commands.find(c => c.cmd === 'fail').label, 'Rate limit')
+  assert.equal(papers, 0)
+})
+
+test('a compaction is a trip to the file room, and it ends', () => {
+  const cmds = results.compaction.commands.map(c => c.cmd)
+
+  assert.ok(cmds.indexOf('compact') < cmds.indexOf('compacted'))
+})
+
 test('the crowd scenario has more workers than there are desks', () => {
   const hired = results['burst-30'].commands.filter(c => c.cmd === 'hire').length
 
@@ -124,12 +137,14 @@ const all = pick => new Set(Object.values(results).flatMap(r => pick(r)))
 
 test('coverage: every kind of event the server sends to the Office is in some scenario', () => {
   const seen = all(r => r.events.map(e => e.type))
-  for (const type of ['tool', 'edit', 'done', 'turn-end', 'agent-start', 'agent-stop', 'permission', 'prompt']) assert.ok(seen.has(type), type)
+  for (const type of ['tool', 'edit', 'done', 'turn-end', 'agent-start', 'agent-stop', 'permission', 'prompt', 'turn-fail', 'compact', 'denied'])
+    assert.ok(seen.has(type), type)
 })
 
 test('coverage: every tool the Office has a scene for is in some scenario', () => {
   const seen = all(r => r.events.filter(e => e.type === 'tool').map(e => e.tool))
   for (const tool of ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob']) assert.ok(seen.has(tool), tool)
+  assert.ok([...seen].some(tool => tool.startsWith('mcp__')), 'an MCP tool')
 })
 
 test('coverage: a tool that fails, an edit that does not apply and a test that passes are in some scenario', () => {
@@ -141,7 +156,9 @@ test('coverage: a tool that fails, an edit that does not apply and a test that p
 
 test('coverage: every command the director gives and every step the stage plays is in some scenario', () => {
   const commands = all(r => r.commands.map(c => c.cmd))
-  for (const cmd of ['hire', 'do', 'fire', 'review', 'submit', 'ask', 'answered', 'prompt']) assert.ok(commands.has(cmd), cmd)
+  for (const cmd of ['hire', 'do', 'fire', 'review', 'submit', 'ask', 'answered', 'prompt', 'fail', 'compact', 'compacted', 'denied'])
+    assert.ok(commands.has(cmd), cmd)
   const steps = all(r => r.commands.filter(c => c.cmd === 'do').map(c => c.step))
-  for (const step of ['arrive', 'fetch', 'study', 'write', 'handIn', 'report', 'reject', 'test', 'search', 'pass', 'fail']) assert.ok(steps.has(step), step)
+  for (const step of ['arrive', 'fetch', 'study', 'write', 'handIn', 'report', 'reject', 'test', 'search', 'pass', 'fail', 'call', 'unavailable'])
+    assert.ok(steps.has(step), step)
 })
