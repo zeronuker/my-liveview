@@ -200,3 +200,37 @@ test('the first message names a chat that has no app name, and the app name wins
     },
     { TITLE_POLL_MS: '150' },
   ))
+
+test('a turn ending, a subagent starting and stopping, and a permission asked reach the page', () =>
+  withServer(async ({ token }) => {
+    const page = await listen()
+    const stop = await hook(token, { hook_event_name: 'Stop', last_assistant_message: 'done' })
+    await hook(token, { hook_event_name: 'SubagentStart', agent_id: 'a1', agent_type: 'Explore' })
+    await hook(token, { hook_event_name: 'SubagentStop', agent_id: 'a1', agent_type: 'Explore' })
+    await hook(token, { hook_event_name: 'PermissionRequest', tool_name: 'Bash', tool_input: { command: 'npm test' } })
+
+    // the answer stays empty: it must not block Claude or decide a permission
+    assert.equal(stop.status, 200)
+    assert.equal(await stop.text(), '{}')
+    assert.ok(await page.until('"type":"turn-end","sessionId":"chat1"'))
+    assert.ok(await page.until('"type":"agent-start","sessionId":"chat1"'))
+    assert.ok(await page.until('"type":"agent-stop","sessionId":"chat1"'))
+    assert.ok(await page.until('"agentId":"a1","agentType":"Explore"'))
+    assert.ok(await page.until('"type":"permission","sessionId":"chat1"'))
+    assert.ok(await page.until('"tool":"Bash","summary":"Ran: npm test"'))
+  }))
+
+test('a tool used inside a subagent says which subagent', () =>
+  withServer(async ({ token }) => {
+    const page = await listen()
+    await hook(token, {
+      hook_event_name: 'PreToolUse',
+      tool_name: 'Read',
+      tool_use_id: 'r1',
+      tool_input: { file_path: 'C:\proj\a.js' },
+      agent_id: 'a1',
+      agent_type: 'Explore',
+    })
+
+    assert.ok(await page.until('"agentId":"a1","agentType":"Explore"'))
+  }))

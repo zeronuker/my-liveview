@@ -120,10 +120,20 @@ const onHook = p => {
     publish({ type: 'title', sessionId, cwd, title, source: 'message', at: Date.now() })
     return
   }
+  // the Office view: a turn ends, a subagent comes and goes, a permission is asked
+  const at = Date.now()
+  if (kind === 'Stop') return publish({ type: 'turn-end', sessionId, cwd, at })
+  if (kind === 'SubagentStart' || kind === 'SubagentStop') {
+    const type = kind === 'SubagentStart' ? 'agent-start' : 'agent-stop'
+    return publish({ type, sessionId, cwd, agentId: p.agent_id, agentType: p.agent_type, at })
+  }
+  if (kind === 'PermissionRequest') return publish({ type: 'permission', sessionId, cwd, tool, summary: summarize(tool, input), at })
   if (!tool) return
 
   if (kind === 'PreToolUse') {
-    publish({ type: 'tool', id, sessionId, cwd, tool, summary: summarize(tool, input), at: Date.now() })
+    // inside a subagent the hook says which one, so the Office can tell its workers apart
+    const agent = p.agent_id ? { agentId: p.agent_id, agentType: p.agent_type } : {}
+    publish({ type: 'tool', id, sessionId, cwd, tool, summary: summarize(tool, input), ...agent, at })
     if (tool === 'Edit' || tool === 'Write') publishEdit({ tool, input, id, sessionId, cwd })
   } else if (kind === 'PostToolUse' || kind === 'PostToolUseFailure') {
     publish({ type: 'done', id, ok: kind === 'PostToolUse' })

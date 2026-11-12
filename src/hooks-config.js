@@ -2,6 +2,9 @@
 // only ever reports (the server answers fast and empty; a down server never
 // holds Claude up). Both functions return a new settings object.
 const TOOL_EVENTS = ['PreToolUse', 'PostToolUse', 'PostToolUseFailure']
+// These name no tool to match: the first message names a chat in the sidebar,
+// the rest drive the Office view (a turn ending, a permission asked, a subagent).
+const PLAIN_EVENTS = ['UserPromptSubmit', 'Stop', 'SubagentStart', 'SubagentStop', 'PermissionRequest']
 
 const isOurs = (url, handler) => handler.type === 'http' && handler.url === url
 
@@ -29,7 +32,6 @@ export const install = (settings, url, token) => {
       ...(hooks[event] ?? []),
       { matcher: '*', hooks: [handler] }, // every tool: the activity feed shows reads and commands too
     ]
-  // a chat's first message names it in the sidebar; this event has no tool to match
-  hooks.UserPromptSubmit = [...(hooks.UserPromptSubmit ?? []), { hooks: [handler] }]
+  for (const event of PLAIN_EVENTS) hooks[event] = [...(hooks[event] ?? []), { hooks: [handler] }]
   return { ...base, hooks }
 }

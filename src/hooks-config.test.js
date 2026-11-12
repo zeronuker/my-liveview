@@ -7,13 +7,17 @@ const URL = 'http://127.0.0.1:4747/event'
 const rtk = { matcher: 'Bash', hooks: [{ type: 'command', command: 'rtk hook claude' }] }
 const existing = { hooks: { PreToolUse: [rtk] }, theme: 'dark' }
 
-test('install adds the four events and keeps every existing hook and setting', () => {
+test('install adds the eight events and keeps every existing hook and setting', () => {
   const next = install(existing, URL, 't0ken')
 
   assert.deepEqual(Object.keys(next.hooks).sort(), [
+    'PermissionRequest',
     'PostToolUse',
     'PostToolUseFailure',
     'PreToolUse',
+    'Stop',
+    'SubagentStart',
+    'SubagentStop',
     'UserPromptSubmit',
   ])
   assert.deepEqual(next.hooks.PreToolUse[0], rtk)
