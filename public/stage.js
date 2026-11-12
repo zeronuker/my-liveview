@@ -33,29 +33,35 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
   let lastTick = null
   let lastArrival = -Infinity
   let shared = 0 // desks and seats used by more than one when the places run out
+  let paused = false
+  let skipping = false
+  const deskSharers = Array(spots.desks.length).fill(0) // how many share each desk, past the first
+  const seatSharers = Array(spots.seats.length).fill(0)
   let labTurn = 0
   let shelfTurn = 0
 
   const makeWorker = (info, x, y, present) => ({
     queue: [], cells: [], pending: null, act: null,
     pose: 'idle', facing: 1, bubble: null, label: '', carry: null,
-    desk: -1, seat: -1, enterAt: 0, present, x, y, ...info,
+    desk: -1, seat: -1, deskSlot: 0, seatSlot: 0, enterAt: 0, present, x, y, ...info,
   })
 
   const manager = makeWorker({ id: 'manager', name: 'Manager', color: '#8d6e63', kind: 'manager', sessionId: null }, spots.managerSeat.x, spots.managerSeat.y, true)
   workers.set(manager.id, manager)
 
   // a free desk or seat first; when all are taken, one is shared
-  const claim = (owners, worker, key) => {
+  const claim = (owners, sharers, worker, key) => {
     if (worker[key] !== -1) return worker[key]
     let i = owners.indexOf(null)
-    if (i === -1) i = shared++ % owners.length
-    else owners[i] = worker.id
+    if (i === -1) {
+      i = shared++ % owners.length
+      worker[`${key}Slot`] = ++sharers[i] // a place to stand beside whoever is there
+    } else owners[i] = worker.id
     worker[key] = i
     return i
   }
-  const deskOf = worker => spots.desks[claim(deskOwner, worker, 'desk')]
-  const seatOf = worker => spots.seats[claim(seatOwner, worker, 'seat')]
+  const deskOf = worker => spots.desks[claim(deskOwner, deskSharers, worker, 'desk')]
+  const seatOf = worker => spots.seats[claim(seatOwner, seatSharers, worker, 'seat')]
   const shelfFor = path => {
     if (!path) return spots.files[shelfTurn++ % spots.files.length]
     const sum = [...path].reduce((total, ch) => total + ch.charCodeAt(0), 0)
@@ -144,7 +150,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       worker.pending = job.act
       const spot = typeof job.spot === 'function' ? job.spot() : job.spot
       if (!spot) return begin(worker)
-      const path = getMult() === 0 ? null : findPath(grid, [Math.round(worker.x), Math.round(worker.y)], [spot.x, spot.y])
+      const path = isInstant() ? null : findPath(grid, [Math.round(worker.x), Math.round(worker.y)], [spot.x, spot.y])
       if (path && path.length > 0) {
         worker.cells = path
         worker.pose = 'walk'
@@ -193,6 +199,8 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     startNext(worker)
   }
 
+  const isInstant = () => skipping || getMult() === 0
+
   const isIdle = () => [...workers.values()].every(w => w.queue.length === 0 && !w.act && w.cells.length === 0 && !w.pending && w.present)
 
   // a long line of work makes everyone hurry a little
@@ -209,17 +217,33 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     }
     const real = Math.max(0, (now - lastTick) / 1000)
     lastTick = now
+    if (paused) return
     const mult = getMult()
     const instant = mult === 0
     const sim = instant ? INSTANT_STEPS : Math.min(real / mult, MAX_CATCH_UP) * rush()
     const steps = instant ? INSTANT_STEPS : Math.max(1, Math.ceil(sim / STEP))
     const dt = instant ? 1 : sim / steps
     for (let i = 0; i < steps; i++) {
-      clock += dt
-      for (const worker of [...workers.values()]) update(worker, dt, instant)
+      step(dt, instant)
       if (instant && isIdle()) break
     }
+  }
+
+  const step = (dt, instant) => {
+    clock += dt
+    for (const worker of [...workers.values()]) update(worker, dt, instant)
     if (ceo.bubble && ceo.bubble.until <= clock) ceo.bubble = null
+  }
+
+  // Skip: what is going on is over, now. A worker waiting on a permission still waits.
+  const skip = () => {
+    skipping = true
+    for (let i = 0; i < INSTANT_STEPS && !isIdle(); i++) step(1, true)
+    skipping = false
+  }
+
+  const setPaused = on => {
+    paused = on
   }
 
   const apply = (cmd, now) => {
@@ -295,14 +319,25 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     }
   }
 
+  // someone sharing a desk or seat stands beside whoever is already there
+  const OFFSETS = [[0, 0], [0.3, 0], [-0.3, 0], [0, 0.28], [0.3, 0.28], [-0.3, 0.28], [0, -0.28]]
+  const onSpot = (w, spot) => spot && w.x === spot.x && w.y === spot.y
+  const shift = w => {
+    const slot = onSpot(w, spots.desks[w.desk]) ? w.deskSlot : onSpot(w, spots.seats[w.seat]) ? w.seatSlot : 0
+    return OFFSETS[slot % OFFSETS.length]
+  }
+
   const snapshot = () => ({
     clock,
     stack,
     ceo: { papers: ceo.papers, bubble: ceo.bubble && { text: ceo.bubble.text, kind: ceo.bubble.kind } },
     workers: [...workers.values()]
       .filter(w => w.present)
-      .map(({ id, name, color, kind, x, y, pose, facing, bubble, label, carry }) => ({ id, name, color, kind, x, y, pose, facing, bubble, label, carry })),
+      .map(w => {
+        const [dx, dy] = shift(w)
+        return { id: w.id, name: w.name, color: w.color, kind: w.kind, x: w.x + dx, y: w.y + dy, pose: w.pose, facing: w.facing, bubble: w.bubble, label: w.label, carry: w.carry }
+      }),
   })
 
-  return { apply, tick, snapshot, isIdle }
+  return { apply, tick, snapshot, isIdle, skip, setPaused }
 }

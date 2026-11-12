@@ -9,6 +9,8 @@ import { createStage } from './stage.js'
 const TONES = { gray: '#8a8f98', teal: '#2a9d8f', purple: '#9b5de5', amber: '#e9c46a', coral: '#e76f51', blue: '#457b9d' }
 const BUBBLES = { ok: '--afg', bad: '--dfg', ask: '--nfg', info: '--acc' }
 const SKIN = '#f1c9a5'
+const QUIET_MS = 45 * 1000 // nothing heard, and nothing running: the turn is taken to be over
+const STALE_MS = 10 * 60 * 1000 // nothing heard for this long: over, whatever seems to be running
 
 const hash = text => [...text].reduce((total, ch) => (total * 31 + ch.charCodeAt(0)) % 1000, 7)
 
@@ -35,10 +37,19 @@ export const createOffice = ({ canvas, getMult }) => {
   const tick = () => stage.tick(performance.now())
   setInterval(tick, 250)
 
+  // when each chat was last heard from, so a turn that was interrupted (no Stop comes) still ends
+  const lastHeard = new Map()
   const feed = event => {
     const now = performance.now()
+    if (event.type === 'turn-end') lastHeard.delete(event.sessionId)
+    else if (event.sessionId) lastHeard.set(event.sessionId, now)
     for (const cmd of director.feed(event)) stage.apply(cmd, now)
   }
+  setInterval(() => {
+    const now = performance.now()
+    for (const [sessionId, at] of lastHeard)
+      if (now - at > STALE_MS || (now - at > QUIET_MS && director.isQuiet(sessionId))) feed({ type: 'turn-end', sessionId })
+  }, 5000)
 
   const resize = () => {
     const box = canvas.getBoundingClientRect()
@@ -196,5 +207,5 @@ export const createOffice = ({ canvas, getMult }) => {
 
   new ResizeObserver(() => visible && resize()).observe(canvas)
 
-  return { feed, setVisible, stage }
+  return { feed, setVisible, setPaused: stage.setPaused, skip: stage.skip, isIdle: stage.isIdle }
 }

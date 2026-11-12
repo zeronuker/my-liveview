@@ -254,3 +254,71 @@ test('commands for a worker that was never hired are ignored', () => {
   assert.doesNotThrow(() => doStep('ghost', 'write', { path: 'a.js' }))
   assert.equal(stage.isIdle(), true)
 })
+
+test('paused: nothing moves, and it carries on from where it was when resumed', () => {
+  const { stage, hire, doStep, run, person } = setup()
+  hire('w1', { path: 'a.js' })
+  doStep('w1', 'fetch', { path: 'a.js' })
+  run(2)
+  stage.setPaused(true)
+  const before = { x: person('w1').x, y: person('w1').y }
+  run(30)
+
+  assert.deepEqual({ x: person('w1').x, y: person('w1').y }, before)
+  stage.setPaused(false)
+  run(30)
+  assert.ok(at(person('w1'), layout.spots.files))
+})
+
+test('commands that arrive while paused wait for the resume', () => {
+  const { stage, hire, doStep, run, settle, person } = setup()
+  stage.setPaused(true)
+  hire('w1', { path: 'a.js' })
+  doStep('w1', 'fetch', { path: 'a.js' })
+  run(10)
+  assert.equal(stage.snapshot().workers.some(w => w.id === 'w1'), false)
+
+  stage.setPaused(false)
+  settle()
+  assert.ok(at(person('w1'), layout.spots.files))
+})
+
+test('skip finishes everything that is going on, now', () => {
+  const { stage, hire, doStep, person } = setup()
+  for (const id of ['w1', 'w2', 'w3']) {
+    hire(id, { path: `${id}.js` })
+    doStep(id, 'fetch', { path: `${id}.js` })
+    doStep(id, 'study')
+    doStep(id, 'write', { path: `${id}.js`, adds: 100, dels: 0 })
+    doStep(id, 'handIn')
+  }
+  stage.skip()
+
+  assert.equal(stage.isIdle(), true)
+  assert.equal(stage.snapshot().stack, 3)
+  assert.ok(at(person('w1'), layout.spots.seats))
+})
+
+test('skip does not send a worker upstairs who is waiting on a permission', () => {
+  const { stage, hire, doStep, person } = setup()
+  hire('w1', { path: 'a.js' })
+  doStep('w1', 'fetch', { path: 'a.js' })
+  stage.apply({ cmd: 'ask', sessionId: 's', tool: 'Bash' }, 0)
+  stage.skip()
+
+  assert.equal(person('w1').bubble.text, '?')
+  assert.equal(stage.isIdle(), false)
+})
+
+test('workers who share a desk do not stand on one spot', () => {
+  const { stage, hire, doStep, settle } = setup()
+  const count = layout.spots.desks.length + 6
+  for (let i = 0; i < count; i++) {
+    hire(`w${i}`)
+    doStep(`w${i}`, 'write', { path: `${i}.js`, adds: 1, dels: 0 })
+  }
+  settle()
+  const spots = stage.snapshot().workers.filter(w => w.kind === 'worker').map(w => `${w.x.toFixed(2)},${w.y.toFixed(2)}`)
+
+  assert.equal(new Set(spots).size, count)
+})

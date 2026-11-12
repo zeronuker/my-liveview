@@ -153,3 +153,31 @@ test('a prompt is announced, and events of no interest do nothing', () => {
   assert.deepEqual(run([{ type: 'prompt', sessionId: S }]), [{ cmd: 'prompt', sessionId: S }])
   assert.deepEqual(run([{ type: 'title', sessionId: S, title: 'x' }, { type: 'status', sessionId: S }, { type: 'ready' }]), [])
 })
+
+test('a turn is quiet when people are in the office, nothing is running and no permission is waiting', () => {
+  const director = createDirector({ random: () => 0 })
+  assert.equal(director.isQuiet(S), false) // an empty office is not waiting on anything
+
+  for (const e of [tool('t1', 'Edit', 'a.js'), edit('t1', 'a.js'), done('t1')]) director.feed(e)
+  assert.equal(director.isQuiet(S), true)
+  assert.equal(director.isQuiet('chat2'), false)
+
+  director.feed({ type: 'turn-end', sessionId: S })
+  assert.equal(director.isQuiet(S), false)
+})
+
+test('a tool still running, a subagent still working or a permission still waiting is not quiet', () => {
+  const running = createDirector({ random: () => 0 })
+  running.feed(tool('t1', 'Bash'))
+  assert.equal(running.isQuiet(S), false)
+
+  const helper = createDirector({ random: () => 0 })
+  helper.feed({ type: 'agent-start', sessionId: S, agentId: 'a1', agentType: 'Explore' })
+  assert.equal(helper.isQuiet(S), false)
+
+  const asked = createDirector({ random: () => 0 })
+  for (const e of [tool('t1', 'Read', 'a.js'), done('t1'), { type: 'permission', sessionId: S, tool: 'Bash' }]) asked.feed(e)
+  assert.equal(asked.isQuiet(S), false)
+  asked.feed({ type: 'prompt', sessionId: S }) // answered
+  assert.equal(asked.isQuiet(S), true)
+})

@@ -190,5 +190,14 @@ export const createDirector = ({ random = Math.random } = {}) => {
     }
   }
 
-  return { feed }
+  // Has the turn gone quiet? People are in the office, but nothing is running,
+  // no helper is working and no permission is waiting. Stop does not fire when
+  // Claude is interrupted, so the Office uses this to end such a turn itself.
+  const isQuiet = sessionId =>
+    (staff.get(sessionId)?.size ?? 0) > 0 &&
+    !asking.has(sessionId) &&
+    ![...calls.values()].some(call => call.worker.sessionId === sessionId) &&
+    ![...agents.values()].some(worker => worker.sessionId === sessionId)
+
+  return { feed, isQuiet }
 }

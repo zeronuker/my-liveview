@@ -237,7 +237,7 @@ const setState = (state, note = '') => {
 const refreshState = () => {
   const busy = panes.filter(pane => pane.isBusy)
   const failed = panes.some(pane => pane.current && results.get(pane.current.id) === false)
-  $('b-skip').disabled = busy.length === 0 && queue.length === 0
+  $('b-skip').disabled = !prefs.office && busy.length === 0 && queue.length === 0
   const waiting = queue.length > 0 ? ` · ${queue.length} waiting` : ''
   if (isPaused) setState('paused', waiting)
   else if (failed) setState('failed')
@@ -615,6 +615,7 @@ const save = (key, value) => {
   prefs[key] = value
   store.set(key, value)
   apply()
+  refreshState() // Skip is on in the Office, whatever the panes are doing
 }
 
 // Stay awake: a screen wake lock keeps the display on (no screensaver) while the
@@ -659,12 +660,16 @@ const setPaused = on => {
   document.body.classList.toggle('paused', on)
   $('b-pause').textContent = on ? 'Resume' : 'Pause'
   $('b-pause').setAttribute('aria-pressed', String(on))
+  office.setPaused(on)
   for (const pane of panes) pane.refresh()
   refreshState()
 }
 
 $('b-pause').onclick = () => setPaused(!isPaused)
-$('b-skip').onclick = skipAll
+$('b-skip').onclick = () => {
+  skipAll()
+  office.skip()
+}
 $('b-follow').onclick = () => save('follow', !prefs.follow)
 $('b-wrap').onclick = () => save('wrap', !prefs.wrap)
 $('b-whole').onclick = () => {
