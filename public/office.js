@@ -5,13 +5,15 @@
 // pose with no sprite is drawn as plain shapes.
 import { createDirector } from './director.js'
 import { createEffects } from './effects.js'
-import { buildLayout, fit } from './layout.js'
+import { buildLayout, fit, keepInView, zoomAt } from './layout.js'
 import { createStage } from './stage.js'
 import { groundOps, itemsOf, LAPTOP, paint, TILE } from './scenery.js'
 import { carrySprite, spriteFor } from './sprites.js'
 
 const BUBBLES = { ok: '--afg', bad: '--dfg', ask: '--nfg', info: '--acc' }
 const SKIN = '#f1c9a5'
+// one colour for each chat, when more than one is at work
+const CHAT_COLORS = ['#ffd166', '#06d6a0', '#ef476f', '#118ab2', '#c77dff', '#f78c6b', '#80ed99', '#9bf6ff', '#ffadad', '#bdb2ff', '#fdffb6', '#caffbf']
 const SEATED = new Set(['sit', 'type', 'read', 'review']) // behind a desk or on a seat: lower, so a desk hides the legs
 const QUIET_MS = 45 * 1000 // nothing heard, and nothing running: the turn is taken to be over
 const STALE_MS = 10 * 60 * 1000 // nothing heard for this long: over, whatever seems to be running
@@ -23,14 +25,22 @@ const roundRect = (ctx, x, y, w, h, r) => {
   ctx.roundRect(x, y, w, h, r)
 }
 
-// `getMult` is the speed (see stage.js); `onChange` says the picture changed while it was not being drawn
-export const createOffice = ({ canvas, getMult }) => {
+// `getMult` is the speed (see stage.js); `getChatName` says what a chat is called
+export const createOffice = ({ canvas, getMult, getChatName = () => '', onView = () => {} }) => {
   const layout = buildLayout()
   const director = createDirector()
   const stage = createStage({ layout, getMult })
   const effects = createEffects()
   let lastDraw = 0
   let paused = false
+  let manual = null // a zoomed and panned view { tile, left, top }; null while the whole plan is fitted
+  let selected = '' // the chat picked in the list, whose workers stand out; '' for all
+  let multiChat = false // more than one chat at work: tag every name with its chat's colour
+  const chatSlots = new Map()
+  const chatColor = id => {
+    if (!chatSlots.has(id)) chatSlots.set(id, CHAT_COLORS[chatSlots.size % CHAT_COLORS.length])
+    return chatSlots.get(id)
+  }
   const ctx = canvas.getContext('2d')
   let visible = false
   let frame = 0
@@ -70,8 +80,12 @@ export const createOffice = ({ canvas, getMult }) => {
     canvas.height = Math.floor(height * ratio)
   }
 
+  // the font does not change, so it is asked for once
+  let family = ''
+  const fontFamily = () => (family ||= getComputedStyle(canvas).fontFamily)
+
   const text = (value, x, y, size, fill, align = 'center') => {
-    ctx.font = `500 ${size}px ${getComputedStyle(canvas).fontFamily}`
+    ctx.font = `500 ${size}px ${fontFamily()}`
     ctx.textAlign = align
     ctx.textBaseline = 'middle'
     ctx.fillStyle = fill
@@ -109,7 +123,7 @@ export const createOffice = ({ canvas, getMult }) => {
     for (const room of layout.rooms) {
       // a room's name goes on the wall above it
       const onWall = room.y === layout.groundTop ? -0.45 : 0.55
-      label(room.name, left + (room.x + 0.4) * tile, top + (room.y + onWall) * tile, Math.max(9, tile * 0.5), 'left')
+      if (tile >= 9) label(room.name, left + (room.x + 0.4) * tile, top + (room.y + onWall) * tile, Math.max(9, tile * 0.5), 'left')
     }
     const door = layout.spots.entrance
     label('Entrance', left + (door.x + 0.5) * tile, top + (door.y + 0.5) * tile, Math.max(8, tile * 0.4))
@@ -124,7 +138,7 @@ export const createOffice = ({ canvas, getMult }) => {
 
   const bubble = (value, kind, x, y, tile, ink) => {
     const size = Math.max(9, tile * 0.5)
-    ctx.font = `600 ${size}px ${getComputedStyle(canvas).fontFamily}`
+    ctx.font = `600 ${size}px ${fontFamily()}`
     const w = ctx.measureText(value).width + size
     const h = size * 1.5
     roundRect(ctx, x - w / 2, y - h, w, h, h / 2)
@@ -184,6 +198,10 @@ export const createOffice = ({ canvas, getMult }) => {
       ? -Math.abs(Math.sin(phase)) * tile * 0.12
       : p.pose === 'cheer' ? -Math.abs(Math.sin(phase * 0.8)) * tile * 0.2 // a little hop
         : p.pose === 'type' ? Math.sin(phase * 2) * tile * 0.03 : 0
+    // someone from a chat other than the one picked is dimmed
+    const dim = selected && p.sessionId && p.sessionId !== selected
+    ctx.save()
+    if (dim) ctx.globalAlpha = 0.35
     const cx = left + (p.x + 0.5) * tile + dx
     const drop = SEATED.has(p.pose) ? tile * 0.3 : 0
     const cy = top + (p.y + 0.5) * tile + dy + drop
@@ -240,12 +258,47 @@ export const createOffice = ({ canvas, getMult }) => {
       }
     }
 
+    ctx.restore()
+
     tags.push(() => {
+      ctx.save()
+      if (dim) ctx.globalAlpha = 0.35
       const fontSize = Math.max(8, tile * 0.42)
-      label(p.name, cx, cy + tile * 0.62, fontSize)
+      const named = tile >= 11 // too small to read: no names
+      if (named) label(p.name, cx, cy + tile * 0.62, fontSize)
+      if (multiChat && p.sessionId) {
+        // a dot in the chat's colour, just before the name
+        ctx.font = `500 ${fontSize}px ${fontFamily()}`
+        const radius = Math.max(2, tile * 0.11)
+        ctx.beginPath()
+        ctx.arc(named ? cx - ctx.measureText(p.name).width / 2 - radius - 2 : cx, cy + tile * 0.62, radius, 0, Math.PI * 2)
+        ctx.fillStyle = chatColor(p.sessionId)
+        ctx.fill()
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)'
+        ctx.stroke()
+      }
       if (p.label && tile >= 14) text(p.label, cx, cy + tile * 0.62 + fontSize * 1.1, fontSize * 0.9, '#b9b4c8')
       if (p.bubble) bubble(p.bubble.text, p.bubble.kind, cx, headTop, tile, ink)
+      ctx.restore()
     })
+  }
+
+  // which colour is which chat, in the corner
+  const drawLegend = here => {
+    const size = 11
+    const shown = here.slice(0, 10)
+    shown.forEach((id, i) => {
+      const y = 14 + i * 16
+      ctx.beginPath()
+      ctx.arc(14, y, 4, 0, Math.PI * 2)
+      ctx.fillStyle = chatColor(id)
+      ctx.fill()
+      ctx.strokeStyle = 'rgba(0,0,0,0.6)'
+      ctx.stroke()
+      const name = getChatName(id) || id.slice(0, 6)
+      label(name.length > 24 ? `${name.slice(0, 23)}…` : name, 24, y, size, 'left')
+    })
+    if (here.length > shown.length) label(`+${here.length - shown.length} more`, 24, 14 + shown.length * 16, size, 'left')
   }
 
   // confetti, warnings, rings and code glyphs, on top of everything
@@ -302,7 +355,7 @@ export const createOffice = ({ canvas, getMult }) => {
     frame = 0
     if (!visible) return
     const snap = stage.snapshot()
-    const view = fit(width, height, layout)
+    const view = manual ? keepInView(manual, layout, width, height) : fit(width, height, layout)
     const t = performance.now() / 1000
     const ink = {
       fg: color('--fg'), dim: color('--dim'), line: color('--line'), panel: color('--panel'), bg: color('--bg'), acc: color('--acc'),
@@ -328,6 +381,8 @@ export const createOffice = ({ canvas, getMult }) => {
     for (const item of items) if (item.under) drawItem(item, view, open)
     const seat = layout.spots.ceoSeat
     const ceo = { id: 'ceo', name: 'CEO', color: '#264653', kind: 'manager', x: seat.x, y: seat.y, pose: 'sit', dir: 'down', facing: 1, bubble: snap.ceo.bubble, label: snap.ceo.papers > 0 ? `${snap.ceo.papers} approved` : '', carry: null }
+    const here = [...new Set(snap.workers.map(w => w.sessionId).filter(Boolean))]
+    multiChat = here.length > 1
     const tags = []
     const draws = items.filter(item => !item.under).map(item => ({ key: item.y + item.h, run: () => drawItem(item, view, open) }))
     for (const person of [ceo, ...snap.workers]) draws.push({ key: person.y + 0.9, run: () => drawPerson(person, view, t, ink, tags) })
@@ -337,6 +392,7 @@ export const createOffice = ({ canvas, getMult }) => {
     const tray = layout.furniture.find(item => item.kind === 'tray')
     if (snap.stack > 0) label(`${snap.stack}`, view.left + (tray.x + 0.5) * view.tile, view.top + (tray.y + 0.5) * view.tile, Math.max(9, view.tile * 0.5))
     for (const tag of tags) tag()
+    if (multiChat) drawLegend(here)
 
     // effects: what the stage says happened, and code glyphs rising from whoever is writing
     const now = performance.now()
@@ -364,10 +420,53 @@ export const createOffice = ({ canvas, getMult }) => {
 
   new ResizeObserver(() => visible && resize()).observe(canvas)
 
+  // Zoom with the wheel, pan by dragging, double-click to fit the whole plan again.
+  const setManual = value => {
+    const was = manual !== null
+    manual = value
+    if ((manual !== null) !== was) {
+      canvas.style.cursor = manual ? 'grab' : ''
+      onView(manual !== null)
+    }
+  }
+  canvas.addEventListener(
+    'wheel',
+    event => {
+      event.preventDefault()
+      const base = fit(width, height, layout)
+      const next = zoomAt(manual ?? base, base, { x: event.offsetX, y: event.offsetY }, Math.exp(-event.deltaY * 0.0015))
+      setManual(next.tile <= base.tile * 1.001 ? null : next) // all the way out is the fitted plan
+    },
+    { passive: false },
+  )
+  let drag = null
+  canvas.addEventListener('pointerdown', event => {
+    if (!manual || event.button !== 0) return
+    drag = { x: event.clientX, y: event.clientY }
+    canvas.setPointerCapture(event.pointerId)
+    canvas.style.cursor = 'grabbing'
+  })
+  canvas.addEventListener('pointermove', event => {
+    if (!drag || !manual) return
+    manual = keepInView({ ...manual, left: manual.left + event.clientX - drag.x, top: manual.top + event.clientY - drag.y }, layout, width, height)
+    drag = { x: event.clientX, y: event.clientY }
+  })
+  const endDrag = () => {
+    drag = null
+    if (manual) canvas.style.cursor = 'grab'
+  }
+  canvas.addEventListener('pointerup', endDrag)
+  canvas.addEventListener('pointercancel', endDrag)
+  canvas.addEventListener('dblclick', () => setManual(null))
+
+  const setSelected = id => {
+    selected = id
+  }
+
   const setPaused = on => {
     paused = on
     stage.setPaused(on)
   }
 
-  return { feed, setVisible, setPaused, skip: stage.skip, isIdle: stage.isIdle }
+  return { feed, setVisible, setPaused, setSelected, resetView: () => setManual(null), isZoomed: () => manual !== null, skip: stage.skip, isIdle: stage.isIdle }
 }

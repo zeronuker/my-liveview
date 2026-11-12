@@ -552,11 +552,13 @@ body.office #rz-split {
 }
 
 /* Record is only for the Office, and shows a red dot while it records */
-#b-record {
+#b-record,
+#b-fit {
   display: none;
 }
 
-body.office #b-record {
+body.office #b-record,
+body.office #b-fit {
   display: inline-block;
 }
 

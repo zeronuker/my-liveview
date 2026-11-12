@@ -599,3 +599,13 @@ test('sitting at a seat or a desk, a worker faces the room', () => {
   assert.equal(person('w1').pose, 'read')
   assert.equal(person('w1').dir, 'down')
 })
+
+test('the snapshot says which chat each worker belongs to; the manager belongs to none', () => {
+  const { stage, hire, run } = setup()
+  hire('w1', { sessionId: 'chat-a' })
+  run(1)
+  const workers = stage.snapshot().workers
+
+  assert.equal(workers.find(w => w.id === 'w1').sessionId, 'chat-a')
+  assert.equal(workers.find(w => w.kind === 'manager').sessionId, null)
+})

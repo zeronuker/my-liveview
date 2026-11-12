@@ -515,7 +515,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       .filter(w => w.present)
       .map(w => {
         const [dx, dy] = shift(w)
-        return { id: w.id, name: w.name, color: w.color, kind: w.kind, x: w.x + dx, y: w.y + dy, pose: w.pose, facing: w.facing, dir: w.dir, bubble: w.bubble, label: w.label, carry: w.carry }
+        return { id: w.id, name: w.name, color: w.color, kind: w.kind, x: w.x + dx, y: w.y + dy, pose: w.pose, facing: w.facing, dir: w.dir, sessionId: w.sessionId, bubble: w.bubble, label: w.label, carry: w.carry }
       }),
   })
 

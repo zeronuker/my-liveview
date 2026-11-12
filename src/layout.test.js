@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { buildLayout, fit } from '../public/layout.js'
+import { buildLayout, fit, keepInView, zoomAt } from '../public/layout.js'
 import { findPath } from '../public/walk.js'
 
 const layout = buildLayout()
@@ -106,4 +106,31 @@ test('every open cell of the plan is in a room, so it has a floor', () => {
   for (const [y, row] of layout.grid.entries())
     for (const [x, ch] of [...row].entries())
       if (ch !== '#') assert.ok(layout.rooms.some(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h), `${x},${y}`)
+})
+
+test('zooming keeps the point under the pointer where it is', () => {
+  const fitted = fit(1000, 600, layout, 0)
+  const point = { x: 400, y: 300 }
+  const world = { x: (point.x - fitted.left) / fitted.tile, y: (point.y - fitted.top) / fitted.tile }
+  const zoomed = zoomAt(fitted, fitted, point, 2)
+
+  assert.equal(zoomed.tile, fitted.tile * 2)
+  assert.ok(Math.abs(zoomed.left + world.x * zoomed.tile - point.x) < 1e-9)
+  assert.ok(Math.abs(zoomed.top + world.y * zoomed.tile - point.y) < 1e-9)
+})
+
+test('the plan cannot be zoomed out past the fitted size, or in past six times it', () => {
+  const fitted = fit(1000, 600, layout, 0)
+
+  assert.equal(zoomAt(fitted, fitted, { x: 0, y: 0 }, 0.1).tile, fitted.tile)
+  assert.equal(zoomAt(fitted, fitted, { x: 0, y: 0 }, 100).tile, fitted.tile * 6)
+})
+
+test('a view cannot be pushed so far that the plan leaves the canvas', () => {
+  const fitted = fit(1000, 600, layout, 0)
+  const far = keepInView({ tile: fitted.tile, left: -99999, top: 99999 }, layout, 1000, 600)
+
+  assert.ok(far.left + layout.width * fitted.tile >= 40)
+  assert.ok(far.top <= 600 - 40)
+  assert.deepEqual(keepInView(fitted, layout, 1000, 600), fitted) // a good view is left alone
 })

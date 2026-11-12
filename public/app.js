@@ -112,7 +112,7 @@ const panes = [0, 1, 2, 3].map(index =>
 )
 $('panes').append(...panes.map(pane => pane.root))
 
-const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[prefs.speed - 1].mult })
+const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[prefs.speed - 1].mult, getChatName: id => nameOfChat(id), onView: zoomed => ($('b-fit').disabled = !zoomed) })
 
 // the recording is a download, named after the day and time
 const download = (blob, name) => {
@@ -569,6 +569,7 @@ setInterval(renderElapsed, 1000)
 
 const renderLists = () => {
   isListsDue = false
+  office.setSelected(selected) // the picked chat's workers stand out in the Office
   $('chat-list').replaceChildren(chatTree())
 
   $('feed-list').replaceChildren(
@@ -702,6 +703,7 @@ $('b-office').onclick = () => {
   recorder.stop()
   save('office', !prefs.office)
 }
+$('b-fit').onclick = () => office.resetView()
 $('b-record').disabled = !recorder.isSupported()
 if (!recorder.isSupported()) $('b-record').title = "This browser can't record mp4 (Chrome or Edge 126 or later can)"
 $('b-record').onclick = () => (recorder.isRecording ? recorder.stop() : recorder.start())
