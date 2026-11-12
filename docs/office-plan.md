@@ -2,7 +2,7 @@
 
 A new view in Live View that shows a Claude Code session as an animated office. The repo is the office, Claude and its subagents are the workers, and the person is "CEO" upstairs. It is a good story, not a live mirror: an instant edit still plays out as a full walk-and-write.
 
-Status: Phase 0 and Phase 1 are done. Phase 2 (Office MVP) is next. Update this file as phases finish.
+Status: Phase 0 and Phase 1 are done. Phase 2 (Office MVP) is built and checked against a made-up session; it still needs a look in a real Claude session. Update this file as phases finish.
 
 ## Decisions so far
 
@@ -77,6 +77,12 @@ Suggested ideas for these are in the conversation history; assign them when each
 - The MVP animations above. Speeds. Keeps running in the background and catches up when shown.
 - A demo script, extending `scripts/demo.js` or `scripts/burst.js`.
 - Done when: a real Claude session reads clearly as a story in the Office view.
+- **Built (2026-11-12), not yet run against a real session:**
+  - `public/layout.js` (floor plan, `fit`), `public/stage.js` (plays commands over time), `public/office.js` (canvas), the Office toggle in the toolbar, and the new files in the server's file table.
+  - `npm run office-demo` plays a made-up session at the server (prompt, search, reads, a helper, a permission, failing then passing tests, nine new files, a failed edit, turn end). Run it with Office switched on; use Focus to hide the side panels for more room.
+  - Checked in the browser: both floors draw, workers walk, the manager takes the stack upstairs, and switching Office off and on again shows the session as it has moved on.
+  - Known rough edges, for Phase 3: workers share desks and lounge seats once there are more than 16 and 9 (they stand on top of each other); the floor plan is small in a narrow window (Focus helps); Pause and Skip do not act on the Office; names can overlap; there is no sound of any kind.
+  - The new hooks are not installed in the real Claude settings yet, so a real session shows only tool events until they are.
 
 ### Phase 3: Story polish
 - Manager waits for the batch, reviews it, carries it upstairs. CEO shows a "?" while waiting on the person.

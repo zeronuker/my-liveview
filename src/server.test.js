@@ -247,3 +247,13 @@ test('a tool event carries the file it works on, and a prompt is announced witho
     assert.equal(page.text.includes('secret plan'), true) // the first message still names the chat
     assert.equal(page.text.split('secret plan').length - 1, 1) // but only that once: the prompt event carries no words
   }))
+
+test('the Office view\'s files are served', () =>
+  withServer(async () => {
+    for (const name of ['office', 'director', 'stage', 'layout', 'walk']) {
+      const res = await fetch(`${base}/${name}.js`)
+
+      assert.equal(res.status, 200, name)
+      assert.match(res.headers.get('content-type'), /javascript/)
+    }
+  }))

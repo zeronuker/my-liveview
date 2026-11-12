@@ -1,3 +1,4 @@
+import { createOffice } from './office.js'
 import { createPane } from './pane.js'
 import { nextInLine, placeEdit } from './place.js'
 import { clamp, makeResizer } from './resize.js'
@@ -47,6 +48,7 @@ const prefs = {
   follow: store.get('follow', true) !== false,
   focus: store.get('focus', false) === true,
   awake: store.get('awake', false) === true,
+  office: store.get('office', false) === true,
 }
 
 const collapsed = new Set(store.get('collapsed', [])) // folders the person closed
@@ -108,6 +110,8 @@ const panes = [0, 1, 2, 3].map(index =>
   }),
 )
 $('panes').append(...panes.map(pane => pane.root))
+
+const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[prefs.speed - 1].mult })
 
 /* how wide each part is: the person drags the edges, and it is remembered */
 
@@ -638,7 +642,9 @@ const apply = () => {
   document.documentElement.style.setProperty('--code-size', `${prefs.size}px`)
   document.body.classList.toggle('wrap', prefs.wrap)
   document.body.classList.toggle('focus', prefs.focus)
-  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake']])
+  document.body.classList.toggle('office', prefs.office)
+  office.setVisible(prefs.office)
+  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake'], ['b-office', 'office']])
     $(id).setAttribute('aria-pressed', String(prefs[key]))
   for (const swatch of document.querySelectorAll('.swatch'))
     swatch.setAttribute('aria-pressed', String(swatch.dataset.theme === prefs.theme))
@@ -667,6 +673,7 @@ $('b-whole').onclick = () => {
 }
 $('b-focus').onclick = () => save('focus', !prefs.focus)
 $('b-awake').onclick = () => save('awake', !prefs.awake)
+$('b-office').onclick = () => save('office', !prefs.office)
 $('b-side').onclick = () => {
   save('side', !prefs.side)
   rerenderAll()
@@ -715,6 +722,8 @@ source.onerror = () => {
 }
 source.onmessage = message => {
   const event = JSON.parse(message.data)
+  // the office plays what happens now, not the history a new window is sent first
+  if (!isReplaying && event.type !== 'close' && event.type !== 'ready') office.feed(event)
   if (event.type === 'close') {
     // the server is stopping: close this window, or say so where a tab may not close
     isStopped = true

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { buildLayout } from '../public/layout.js'
+import { buildLayout, fit } from '../public/layout.js'
 import { findPath } from '../public/walk.js'
 
 const layout = buildLayout()
@@ -59,4 +59,19 @@ test('there are enough desks, seats, shelves and lab places to share around', ()
 test('no two spots of a kind are the same place', () => {
   for (const spots of [layout.spots.desks, layout.spots.seats, layout.spots.files, layout.spots.lab])
     assert.equal(new Set(spots.map(s => `${s.x},${s.y}`)).size, spots.length)
+})
+
+test('the plan fits a wide canvas by its height and a tall one by its width, centred', () => {
+  const wide = fit(2000, 440, layout, 0)
+  assert.equal(wide.tile, 440 / layout.height)
+  assert.equal(wide.top, 0)
+  assert.equal(wide.left, (2000 - wide.tile * layout.width) / 2)
+
+  const tall = fit(380, 2000, layout, 0)
+  assert.equal(tall.tile, 380 / layout.width)
+  assert.equal(tall.left, 0)
+})
+
+test('a canvas with no room still gives a usable tile', () => {
+  assert.ok(fit(0, 0, layout).tile >= 1)
 })

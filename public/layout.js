@@ -97,3 +97,10 @@ export const buildLayout = () => {
     },
   }
 }
+
+// How big a tile is, and where the plan starts, to fit the plan in a canvas
+// of this size (in CSS pixels) with a little room round the edge.
+export const fit = (canvasWidth, canvasHeight, layout, margin = 8) => {
+  const tile = Math.max(1, Math.min((canvasWidth - 2 * margin) / layout.width, (canvasHeight - 2 * margin) / layout.height))
+  return { tile, left: (canvasWidth - tile * layout.width) / 2, top: (canvasHeight - tile * layout.height) / 2 }
+}

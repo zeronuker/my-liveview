@@ -526,6 +526,31 @@ aside .failed .tool {
   color: var(--dfg);
 }
 
+/* the office: the session as a canvas, in place of the panes */
+#office {
+  display: none;
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+#office canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body.office #office {
+  display: block;
+}
+
+body.office #panes,
+body.office #rz-split {
+  display: none;
+}
+
 /* the panes: up to four files watched at once (two stack when there is little width) */
 #panes {
   position: relative;

@@ -153,6 +153,11 @@ const files = {
   '/pane.js': ['pane.js', 'text/javascript; charset=utf-8'],
   '/place.js': ['place.js', 'text/javascript; charset=utf-8'],
   '/resize.js': ['resize.js', 'text/javascript; charset=utf-8'],
+  '/office.js': ['office.js', 'text/javascript; charset=utf-8'],
+  '/director.js': ['director.js', 'text/javascript; charset=utf-8'],
+  '/stage.js': ['stage.js', 'text/javascript; charset=utf-8'],
+  '/layout.js': ['layout.js', 'text/javascript; charset=utf-8'],
+  '/walk.js': ['walk.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 }
 

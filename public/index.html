@@ -37,6 +37,7 @@
       <button id="b-whole" type="button" aria-pressed="true">Whole file</button>
       <button id="b-side" type="button" aria-pressed="false">Side by side</button>
       <button id="b-focus" type="button" aria-pressed="false">Focus</button>
+      <button id="b-office" type="button" aria-pressed="false" title="Watch the session as an office">Office</button>
       <button id="b-awake" type="button" aria-pressed="false" title="Keep the screen on while this window is visible">Stay awake</button>
       <select id="win-size" aria-label="Window size">
         <option value="" selected>Window size</option>
@@ -61,6 +62,9 @@
       <div class="resizer" id="rz-nav"></div>
       <section id="panes" aria-label="Files being written">
         <div class="resizer split" id="rz-split"></div>
+      </section>
+      <section id="office" aria-label="The session as an office">
+        <canvas id="office-canvas"></canvas>
       </section>
       <div class="resizer" id="rz-aside"></div>
       <aside id="feed" aria-label="Activity">
