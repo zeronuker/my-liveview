@@ -1,20 +1,21 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { carrySprite, framesOf, HEIGHT, lookOf, poses, shadeOf, spriteFor, tint, WIDTH } from '../public/sprites.js'
+import { carrySprite, framesOf, HEIGHT, lookOf, poses, shadeOf, spriteFor, tint, viewOf, views, WIDTH } from '../public/sprites.js'
 
 const LETTERS = new Set('.obBhHsSpkewlmygt'.split(''))
 
-test('every frame of every pose, with either head, is a clean 12 by 16 grid of known letters', () => {
-  for (const pose of poses())
-    for (const head of ['short', 'long'])
-      for (const [i, frame] of framesOf(pose, head).entries()) {
-        assert.equal(frame.length, HEIGHT, `${pose} ${head} ${i}: rows`)
-        for (const row of frame) {
-          assert.equal(row.length, WIDTH, `${pose} ${head} ${i}: "${row}"`)
-          for (const letter of row) assert.ok(LETTERS.has(letter), `${pose}: ${letter}`)
+test('every frame of every pose, from every view, with either head, is a clean 12 by 16 grid of known letters', () => {
+  for (const view of views())
+    for (const pose of poses())
+      for (const head of ['short', 'long'])
+        for (const [i, frame] of framesOf(pose, head, view).entries()) {
+          assert.equal(frame.length, HEIGHT, `${view} ${pose} ${head} ${i}: rows`)
+          for (const row of frame) {
+            assert.equal(row.length, WIDTH, `${view} ${pose} ${head} ${i}: "${row}"`)
+            for (const letter of row) assert.ok(LETTERS.has(letter), `${view} ${pose}: ${letter}`)
+          }
         }
-      }
 })
 
 test('every pose the stage uses has a sprite, and walking has four frames', () => {
@@ -81,4 +82,61 @@ test('a book and papers can be carried; nothing else', () => {
   assert.ok(carrySprite('papers'))
   assert.equal(carrySprite('anvil'), null)
   assert.equal(carrySprite(null), null)
+})
+
+test('the way someone faces picks the view: down is the front, up the back, left and right the side', () => {
+  assert.equal(viewOf('idle', 'down'), 'front')
+  assert.equal(viewOf('idle', 'up'), 'back')
+  assert.equal(viewOf('walk', 'left'), 'side')
+  assert.equal(viewOf('walk', 'right'), 'side')
+  assert.equal(viewOf('walk'), 'front')
+  assert.equal(viewOf('walk', 'sideways'), 'front')
+})
+
+test('poses that need to face you, such as a raised hand or typing, show the front when seen from behind', () => {
+  assert.equal(viewOf('ask', 'left'), 'front')
+  assert.equal(viewOf('cheer', 'up'), 'front')
+  assert.equal(viewOf('type', 'up'), 'front')
+  assert.equal(viewOf('type', 'right'), 'side')
+})
+
+test('the views look different, and a walk has four frames in each', () => {
+  for (const view of views()) assert.equal(framesOf('walk', 'short', view).length, 4)
+  const first = view => framesOf('idle', 'short', view)[0].join('')
+
+  assert.notEqual(first('front'), first('side'))
+  assert.notEqual(first('front'), first('back'))
+  assert.notEqual(first('side'), first('back'))
+})
+
+test('from behind there is no face: no eyes, no skin on the head', () => {
+  const head = framesOf('idle', 'short', 'back')[0].slice(0, 6).join('')
+
+  assert.equal(head.includes('e'), false)
+  assert.equal(head.includes('s'), false)
+})
+
+test('from the side a walking arm swings: the three swing frames put the arm in different places', () => {
+  const arm = frame => frame.slice(7, 11).join('')
+  const frames = framesOf('walk', 'short', 'side')
+
+  assert.notEqual(arm(frames[0]), arm(frames[2]))
+  assert.notEqual(arm(frames[0]), arm(frames[1]))
+})
+
+test('a sprite carries its view, so each view has its own place in the cache', () => {
+  const a = spriteFor({ pose: 'idle', t: 0, id: 'w1', color: '#2a9d8f', dir: 'down' })
+  const b = spriteFor({ pose: 'idle', t: 0, id: 'w1', color: '#2a9d8f', dir: 'right' })
+  const c = spriteFor({ pose: 'idle', t: 0, id: 'w1', color: '#2a9d8f', dir: 'up' })
+
+  assert.equal(new Set([a.key, b.key, c.key]).size, 3)
+})
+
+test('the manager has the tie from the front only, and glasses from the front and the side', () => {
+  const cells = dir => spriteFor({ pose: 'idle', t: 0, id: 'x', kind: 'manager', color: '#457b9d', dir }).cells.flat()
+  const tie = '#c0392b'
+
+  assert.ok(cells('down').includes(tie))
+  assert.equal(cells('right').includes(tie), false)
+  assert.equal(cells('up').includes(tie), false)
 })

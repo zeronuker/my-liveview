@@ -4,62 +4,127 @@
 // when the grid is turned into cells. Plain data in, plain data out, so it can
 // be tested; office.js draws the cells on the canvas.
 //
-// The grids face the front and are flipped to face left or right. They are 12
-// pixels wide and 16 tall. Walking has 4 frames, resting poses 2 (a small
-// squash, like breathing), as small sprites need no more.
+// There are three views: the front, the side (facing right; the Office flips
+// it to face left) and the back. A view only holds the parts that differ from
+// the front; anything it lacks is taken from the front. Grids are 12 pixels
+// wide and 16 tall. Walking has 4 frames, resting poses 2 (a small squash,
+// like breathing), as small sprites need no more.
 
 export const WIDTH = 12
 export const HEIGHT = 16
 
 const BLANK = '............'
 
-// two heads: short hair and long hair
+// the heads: short hair and long hair, from the front, the side and the back
 const HEADS = {
-  short: [
-    '...oooooo...',
-    '..ohhhhhho..',
-    '.ohhhhhhhho.',
-    '.ohssssssho.',
-    '.ohsessesho.',
-    '.osssssssso.',
-    '..oSSSSSSo..',
-  ],
-  long: [
-    '...oooooo...',
-    '..ohhhhhho..',
-    '.ohhhhhhhho.',
-    '.ohhsssshho.',
-    '.ohsessesho.',
-    '.ohssssssho.',
-    '..ohSSSSho..',
-  ],
+  front: {
+    short: [
+      '...oooooo...',
+      '..ohhhhhho..',
+      '.ohhhhhhhho.',
+      '.ohssssssho.',
+      '.ohsessesho.',
+      '.osssssssso.',
+      '..oSSSSSSo..',
+    ],
+    long: [
+      '...oooooo...',
+      '..ohhhhhho..',
+      '.ohhhhhhhho.',
+      '.ohhsssshho.',
+      '.ohsessesho.',
+      '.ohssssssho.',
+      '..ohSSSSho..',
+    ],
+  },
+  side: {
+    short: [
+      '...oooooo...',
+      '..ohhhhhho..',
+      '.ohhhhhhhho.',
+      '.ohhhhsssso.',
+      '.ohhhsssesso',
+      '.ohhssssso..',
+      '..ohsSSSSo..',
+    ],
+    long: [
+      '...oooooo...',
+      '..ohhhhhho..',
+      '.ohhhhhhhho.',
+      '.ohhhhsssso.',
+      '.ohhhsssesso',
+      '.ohhhssssso.',
+      '..ohhhSSSo..',
+    ],
+  },
+  back: {
+    short: [
+      '...oooooo...',
+      '..ohhhhhho..',
+      '.ohhhhhhhho.',
+      '.ohhhhhhhho.',
+      '.ohhhhhhhho.',
+      '.ohhhhhhhho.',
+      '..ohhSShho..',
+    ],
+    long: [
+      '...oooooo...',
+      '..ohhhhhho..',
+      '.ohhhhhhhho.',
+      '.ohhhhhhhho.',
+      '.ohhhhhhhho.',
+      '.ohhhhhhhho.',
+      '..ohhhhhho..',
+    ],
+  },
 }
 
 // five rows each, the last being the hips
 const HIPS = '..oppppppo..'
 const TORSOS = {
-  down: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.osbbbbbbso.', HIPS],
-  type1: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.obbsssbbbo.', HIPS],
-  type2: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.obbbsssbbo.', HIPS],
-  read1: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBmwwwwmBo.', '.osmwwwwmso.', HIPS],
-  read2: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBmwlwwmBo.', '.osmwlwwmso.', HIPS],
-  give: ['.obbbbbbbbo.', '.oBbbbbbbbbs', '.oBbbbbbbBo.', '.osbbbbbbso.', HIPS],
-  up: ['sobbbbbbbbos', 'BoBbbbbbbBoB', '.oBbbbbbbBo.', '.obbbbbbbbo.', HIPS],
+  front: {
+    down: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.osbbbbbbso.', HIPS],
+    type1: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.obbsssbbbo.', HIPS],
+    type2: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.obbbsssbbo.', HIPS],
+    read1: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBmwwwwmBo.', '.osmwwwwmso.', HIPS],
+    read2: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBmwlwwmBo.', '.osmwlwwmso.', HIPS],
+    give: ['.obbbbbbbbo.', '.oBbbbbbbbbs', '.oBbbbbbbBo.', '.osbbbbbbso.', HIPS],
+    up: ['sobbbbbbbbos', 'BoBbbbbbbBoB', '.oBbbbbbbBo.', '.obbbbbbbbo.', HIPS],
+  },
+  // from the side the one arm we see hangs in the middle, and swings
+  side: {
+    down: ['.obbbbbbbbo.', '.obbbBBbbbo.', '.obbbBBbbbo.', '.obbbBsbbbo.', HIPS],
+    swingA: ['.obbbbbbbbo.', '.obbbbbBBbo.', '.obbbbbBBbo.', '.obbbbbBsbo.', HIPS],
+    swingB: ['.obbbbbbbbo.', '.obbBBbbbbo.', '.obbBBbbbbo.', '.obbBsbbbbo.', HIPS],
+    type1: ['.obbbbbbbbo.', '.obbbBBbbbo.', '.obbbBBbbbo.', '.obbbbbbsso.', HIPS],
+    type2: ['.obbbbbbbbo.', '.obbbBBbbbo.', '.obbbBBbbbo.', '.obbbbbbsbo.', HIPS],
+    read1: ['.obbbbbbbbo.', '.obbbBBbbbo.', '.obbbbBmwwo.', '.obbbbbsmwo.', HIPS],
+    read2: ['.obbbbbbbbo.', '.obbbBBbbbo.', '.obbbbBmwlo.', '.obbbbbsmwo.', HIPS],
+  },
+  back: {},
 }
 
 // four rows each
 const LEGS = {
-  stand: ['..oppooppo..', '..oppooppo..', '..okkookko..', '..oooooooo..'],
-  walkA: ['..oppooppo..', '.oppo.oppo..', '.okko.okko..', '.oooo.oooo..'],
-  walkB: ['..oppooppo..', '..oppo.oppo.', '..okko.okko.', '..oooo.oooo.'],
-  sit: ['..oppppppo..', '..okkppkko..', BLANK, BLANK],
+  front: {
+    stand: ['..oppooppo..', '..oppooppo..', '..okkookko..', '..oooooooo..'],
+    walkA: ['..oppooppo..', '.oppo.oppo..', '.okko.okko..', '.oooo.oooo..'],
+    walkB: ['..oppooppo..', '..oppo.oppo.', '..okko.okko.', '..oooo.oooo.'],
+    sit: ['..oppppppo..', '..okkppkko..', BLANK, BLANK],
+  },
+  side: {},
+  back: {},
 }
+
+const VIEWS = ['front', 'side', 'back']
+const part = (parts, view, key) => parts[view]?.[key] ?? parts.front[key]
 
 // A frame is a head, a torso and legs. `squash` takes a row off the hair (the
 // person is a little shorter: a breath, or the middle of a step); `overlay` is
 // a list of [x, y, letter] drawn on top.
-const compose = (look, torso, legs, { squash = false, overlay = [] } = {}) => {
-  let rows = [...HEADS[look], ...TORSOS[torso], ...LEGS[legs]]
+const compose = (view, look, torso, legs, { squash = false, overlay = [] } = {}) => {
+  const torsoRows = part(TORSOS, view, torso) ?? part(TORSOS, view, 'down')
+  let rows = [...part(HEADS, view, look), ...torsoRows, ...part(LEGS, view, legs)]
   if (squash) rows = [BLANK, rows[0], ...rows.slice(2)]
   const grid = rows.map(row => [...row])
   for (const [x, y, letter] of overlay) grid[y][x] = letter
@@ -68,34 +133,49 @@ const compose = (look, torso, legs, { squash = false, overlay = [] } = {}) => {
 
 const HAND_UP = [[0, 3, 's'], [0, 4, 's'], [1, 5, 'B'], [1, 6, 'B']]
 
-// What each pose looks like over time: its frames (for the short and the long
-// hair, which only differ in the head) and how long each is shown, in seconds.
+// What each pose looks like over time: its frames (for a view and a head) and
+// how long each is shown, in seconds.
+const breathe = (view, look, torso, legs) => [compose(view, look, torso, legs), compose(view, look, torso, legs, { squash: true })]
 const POSES = {
-  idle: { every: 0.7, frames: look => [compose(look, 'down', 'stand'), compose(look, 'down', 'stand', { squash: true })] },
+  idle: { every: 0.7, frames: (v, l) => breathe(v, l, 'down', 'stand') },
   walk: {
     every: 0.15,
-    frames: look => [
-      compose(look, 'down', 'walkA'),
-      compose(look, 'down', 'stand', { squash: true }),
-      compose(look, 'down', 'walkB'),
-      compose(look, 'down', 'stand', { squash: true }),
+    frames: (v, l) => [
+      compose(v, l, 'swingA', 'walkA'),
+      compose(v, l, 'down', 'stand', { squash: true }),
+      compose(v, l, 'swingB', 'walkB'),
+      compose(v, l, 'down', 'stand', { squash: true }),
     ],
   },
-  sit: { every: 0.9, frames: look => [compose(look, 'down', 'sit'), compose(look, 'down', 'sit', { squash: true })] },
-  type: { every: 0.18, frames: look => [compose(look, 'type1', 'sit'), compose(look, 'type2', 'sit')] },
-  read: { every: 0.8, frames: look => [compose(look, 'read1', 'sit'), compose(look, 'read2', 'sit')] },
-  grab: { every: 1, frames: look => [compose(look, 'give', 'stand')] },
-  give: { every: 1, frames: look => [compose(look, 'give', 'stand')] },
-  ask: { every: 0.35, frames: look => [compose(look, 'down', 'stand', { overlay: HAND_UP }), compose(look, 'down', 'stand')] },
-  machine: { every: 0.25, frames: look => [compose(look, 'type1', 'stand'), compose(look, 'type2', 'stand')] },
-  scan: { every: 0.5, frames: look => [compose(look, 'down', 'stand'), compose(look, 'down', 'stand', { squash: true })] },
-  review: { every: 0.8, frames: look => [compose(look, 'read1', 'sit'), compose(look, 'read2', 'sit')] },
-  cheer: { every: 0.16, frames: look => [compose(look, 'up', 'stand'), compose(look, 'up', 'stand', { squash: true })] },
-  shake: { every: 0.7, frames: look => [compose(look, 'down', 'stand'), compose(look, 'down', 'stand', { squash: true })] },
+  sit: { every: 0.9, frames: (v, l) => breathe(v, l, 'down', 'sit') },
+  type: { every: 0.18, frames: (v, l) => [compose(v, l, 'type1', 'sit'), compose(v, l, 'type2', 'sit')] },
+  read: { every: 0.8, frames: (v, l) => [compose(v, l, 'read1', 'sit'), compose(v, l, 'read2', 'sit')] },
+  grab: { every: 1, frames: (v, l) => [compose(v, l, 'give', 'stand')] },
+  give: { every: 1, frames: (v, l) => [compose(v, l, 'give', 'stand')] },
+  ask: { every: 0.35, frames: (v, l) => [compose(v, l, 'down', 'stand', { overlay: HAND_UP }), compose(v, l, 'down', 'stand')] },
+  machine: { every: 0.25, frames: (v, l) => [compose(v, l, 'type1', 'stand'), compose(v, l, 'type2', 'stand')] },
+  scan: { every: 0.5, frames: (v, l) => breathe(v, l, 'down', 'stand') },
+  review: { every: 0.8, frames: (v, l) => [compose(v, l, 'read1', 'sit'), compose(v, l, 'read2', 'sit')] },
+  cheer: { every: 0.16, frames: (v, l) => breathe(v, l, 'up', 'stand') },
+  shake: { every: 0.7, frames: (v, l) => breathe(v, l, 'down', 'stand') },
 }
 
+// Poses that only make sense facing you (a raised hand, a cheer, hands on a
+// book or a keyboard seen from the front); from behind or beside they show the front.
+const FRONT_ONLY = new Set(['ask', 'cheer'])
+const NOT_FROM_BEHIND = new Set(['type', 'read', 'review'])
+
 export const poses = () => Object.keys(POSES)
-export const framesOf = (pose, look = 'short') => POSES[pose]?.frames(look) ?? null
+export const views = () => [...VIEWS]
+export const framesOf = (pose, head = 'short', view = 'front') => POSES[pose]?.frames(view, head) ?? null
+
+// which view someone in a pose, going a way, is seen in; and does it face left (to be flipped)
+const VIEW_OF = { down: 'front', up: 'back', left: 'side', right: 'side' }
+export const viewOf = (pose, dir = 'down') => {
+  const view = VIEW_OF[dir] ?? 'front'
+  if (FRONT_ONLY.has(pose) || (view === 'back' && NOT_FROM_BEHIND.has(pose))) return 'front'
+  return view
+}
 
 // Colours, as ramps: each shade is a little darker and a little cooler, never
 // just black added.
@@ -143,12 +223,16 @@ export const shadeOf = hex => {
   return `#${[r2, g2, b2].map(v => Math.round((v + m) * 255).toString(16).padStart(2, '0')).join('')}`
 }
 
-// what a kind of person wears: the manager a tie and glasses, a helper a hard hat
-const dressed = (rows, kind) => {
+// what a kind of person wears: the manager a tie (from the front) and glasses
+// (front and side), a helper a hard hat
+const dressed = (rows, kind, view) => {
   const grid = rows.map(row => [...row])
   if (kind === 'manager') {
-    for (const [x, y] of [[5, 8], [6, 8], [5, 9], [6, 9], [5, 10], [6, 10]]) if (grid[y][x] === 'b') grid[y][x] = 't'
-    for (const x of [3, 8]) if (grid[4][x] === 's') grid[4][x] = 'g'
+    if (view === 'front') {
+      for (const [x, y] of [[5, 8], [6, 8], [5, 9], [6, 9], [5, 10], [6, 10]]) if (grid[y][x] === 'b') grid[y][x] = 't'
+      for (const x of [3, 8]) if (grid[4][x] === 's') grid[4][x] = 'g'
+    }
+    if (view === 'side' && grid[4][9] === 's') grid[4][9] = 'g'
   }
   if (kind === 'subagent')
     for (const y of [1, 2]) grid[y] = grid[y].map(cell => (cell === 'h' ? 'y' : cell))
@@ -156,28 +240,30 @@ const dressed = (rows, kind) => {
 }
 
 // the cells of one frame in someone's colours: a grid of '#rrggbb' or null
-export const tint = (rows, { look, shirt, kind = 'worker' }) => {
+export const tint = (rows, { look, shirt, kind = 'worker', view = 'front' }) => {
   const ink = {
     ...INK,
     s: look.skin[0], S: look.skin[1], h: look.hair[0], H: look.hair[1], p: look.pants,
     b: shirt, B: shadeOf(shirt),
   }
-  return dressed(rows, kind).map(row => row.map(letter => ink[letter] ?? null))
+  return dressed(rows, kind, view).map(row => row.map(letter => ink[letter] ?? null))
 }
 
-// Which frame someone is in: `t` is the time in seconds, and the id puts
-// neighbours out of step. Null for a pose with no sprite (the Office then draws a shape).
-export const spriteFor = ({ pose, t, id, kind = 'worker', color }) => {
+// Which frame someone is in: `t` is the time in seconds, `dir` which way they
+// face ('down', 'up', 'left', 'right'), and the id puts neighbours out of
+// step. Null for a pose with no sprite (the Office then draws a shape).
+export const spriteFor = ({ pose, t, id, kind = 'worker', color, dir = 'down' }) => {
   const def = POSES[pose]
   if (!def) return null
   const look = lookOf(id, kind)
-  const frames = def.frames(look.head)
+  const view = viewOf(pose, dir)
+  const frames = def.frames(view, look.head)
   const index = Math.floor(t / def.every + (look.h % 7)) % frames.length
   return {
     width: WIDTH,
     height: HEIGHT,
-    cells: tint(frames[index], { look, shirt: color, kind }),
-    key: `${pose}${index}|${look.head}|${look.skin[0]}|${look.hair[0]}|${look.pants}|${color}|${kind}`,
+    cells: tint(frames[index], { look, shirt: color, kind, view }),
+    key: `${pose}${index}|${view}|${look.head}|${look.skin[0]}|${look.hair[0]}|${look.pants}|${color}|${kind}`,
   }
 }
 

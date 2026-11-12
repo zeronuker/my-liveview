@@ -23,6 +23,9 @@ const STEP = 0.1 // simulated seconds per step; longer gaps use fewer, bigger st
 const MAX_CATCH_UP = 120 // simulated seconds a long gap is allowed to cover
 const INSTANT_STEPS = 200 // at instant speed: how many steps a tick may take
 
+// poses at a desk or a seat: the person faces the viewer
+const FACES_YOU = new Set(['sit', 'type', 'read', 'review'])
+
 const baseName = path => String(path ?? '').split(/[\\/]/).filter(Boolean).pop() ?? ''
 
 // Everyone is a little different, and always the same: how fast they walk, how
@@ -62,7 +65,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
 
   const makeWorker = (info, x, y, present) => ({
     queue: [], cells: [], pending: null, act: null,
-    pose: 'idle', facing: 1, bubble: null, label: '', carry: null,
+    pose: 'idle', facing: 1, dir: 'down', bubble: null, label: '', carry: null,
     desk: -1, seat: -1, deskSlot: 0, seatSlot: 0, enterAt: 0, present, x, y,
     wait: null, // { left, then }: a moment of hesitating or settling, then carry on
     warm: false, // already busy, so the next job is started without hesitating
@@ -156,6 +159,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     worker.pending = null
     worker.act = act
     worker.pose = act.pose ?? 'idle'
+    if (FACES_YOU.has(act.pose)) worker.dir = 'down' // sitting at a desk or a seat, they face the room
     worker.label = act.label ?? ''
     worker.bubble = act.bubble ?? null
     if (act.bubble?.kind === 'bad') emit('warning', worker.x, worker.y) // something went wrong
@@ -199,6 +203,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       if (path && path.length > 0) {
         worker.cells = path
         worker.pose = 'walk'
+        face(worker, path[0][0] - worker.x, path[0][1] - worker.y) // turns to the first step at once
         worker.v = 0
         worker.stall = 0
         worker.rerouted = false
@@ -209,6 +214,13 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       }
       return
     }
+  }
+
+  // which way they face, as pixel-agent-desk does it: by the larger part of the step
+  const face = (worker, dx, dy) => {
+    if (dx !== 0) worker.facing = Math.sign(dx)
+    if (Math.abs(dx) > Math.abs(dy)) worker.dir = dx > 0 ? 'right' : 'left'
+    else if (dy !== 0) worker.dir = dy > 0 ? 'down' : 'up'
   }
 
   // someone is in the way: go round them, by a new path that leaves their cells out
@@ -267,7 +279,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       const dx = tx - worker.x
       const dy = ty - worker.y
       const gap = Math.hypot(dx, dy)
-      if (dx !== 0) worker.facing = Math.sign(dx)
+      face(worker, dx, dy)
       if (gap <= distance) {
         worker.x = tx
         worker.y = ty
@@ -503,7 +515,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       .filter(w => w.present)
       .map(w => {
         const [dx, dy] = shift(w)
-        return { id: w.id, name: w.name, color: w.color, kind: w.kind, x: w.x + dx, y: w.y + dy, pose: w.pose, facing: w.facing, bubble: w.bubble, label: w.label, carry: w.carry }
+        return { id: w.id, name: w.name, color: w.color, kind: w.kind, x: w.x + dx, y: w.y + dy, pose: w.pose, facing: w.facing, dir: w.dir, bubble: w.bubble, label: w.label, carry: w.carry }
       }),
   })
 

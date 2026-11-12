@@ -567,3 +567,35 @@ test('at instant speed there are no effects: nothing is in view', () => {
 
   assert.deepEqual(stage.takeEffects(), [])
 })
+
+test('a worker faces the way they walk: right, left, up or down, by the larger part of each step', () => {
+  const floor = corridor(['.......', '.......', '.......'], { entrance: { x: 0, y: 2 }, seats: [{ x: 6, y: 2 }], files: [{ x: 0, y: 0 }] })
+  const { stage, run, now } = setup({ layout: floor })
+  const who = () => stage.snapshot().workers.find(w => w.id === 'a')
+  const dirsOver = seconds => {
+    const seen = new Set()
+    for (let i = 0; i < seconds * 10; i++) {
+      run(0.1)
+      if (who().pose === 'walk') seen.add(who().dir)
+    }
+    return seen
+  }
+  stage.apply({ cmd: 'hire', worker: { id: 'a', name: 'a', color: '#fff', kind: 'worker', sessionId: 's' } }, now())
+
+  stage.apply({ cmd: 'do', worker: 'a', step: 'arrive' }, now()) // along the bottom to the right
+  assert.deepEqual([...dirsOver(8)], ['right'])
+  stage.apply({ cmd: 'do', worker: 'a', step: 'fetch', path: 'a.js' }, now()) // back left, then up
+  assert.deepEqual([...dirsOver(12)].sort(), ['left', 'up'])
+})
+
+test('sitting at a seat or a desk, a worker faces the room', () => {
+  const { hire, doStep, run, person } = setup()
+  hire('w1', { path: 'a.js' })
+  doStep('w1', 'fetch', { path: 'a.js' }) // up to the shelves: they face away
+  run(30)
+  doStep('w1', 'study')
+  for (let i = 0; i < 300 && person('w1').pose !== 'read'; i++) run(0.1)
+
+  assert.equal(person('w1').pose, 'read')
+  assert.equal(person('w1').dir, 'down')
+})

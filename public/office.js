@@ -173,7 +173,7 @@ export const createOffice = ({ canvas, getMult }) => {
     ctx.fill()
 
     // the pixel-art person, and the plain shapes for a pose that has no sprite
-    const sprite = spriteFor({ pose: p.pose, t, id: p.id, kind: p.kind, color: p.color })
+    const sprite = spriteFor({ pose: p.pose, t, id: p.id, kind: p.kind, color: p.color, dir: p.dir })
     let headTop = cy - tile * 0.5 // where a bubble goes
     if (sprite) headTop = drawSprite(sprite, p, cx, cy, tile)
     else {
