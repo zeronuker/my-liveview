@@ -1,16 +1,18 @@
 // The Office view: a canvas that draws the stage. Events from the server go in
 // (feed); the director turns them into commands; the stage plays them over
-// time; this file only paints what the stage says. Everything is plain shapes
-// for the pixel art, which is in sprites.js; a pose with no sprite is drawn as plain shapes.
+// time; this file only paints what the stage says. The pixel art is in
+// sprites.js (the people) and scenery.js (the floors, walls and furniture); a
+// pose with no sprite is drawn as plain shapes.
 import { createDirector } from './director.js'
 import { createEffects } from './effects.js'
 import { buildLayout, fit } from './layout.js'
 import { createStage } from './stage.js'
+import { groundOps, itemsOf, LAPTOP, paint, TILE } from './scenery.js'
 import { carrySprite, spriteFor } from './sprites.js'
 
-const TONES = { gray: '#8a8f98', teal: '#2a9d8f', purple: '#9b5de5', amber: '#e9c46a', coral: '#e76f51', blue: '#457b9d' }
 const BUBBLES = { ok: '--afg', bad: '--dfg', ask: '--nfg', info: '--acc' }
 const SKIN = '#f1c9a5'
+const SEATED = new Set(['sit', 'type', 'read', 'review']) // behind a desk or on a seat: lower, so a desk hides the legs
 const QUIET_MS = 45 * 1000 // nothing heard, and nothing running: the turn is taken to be over
 const STALE_MS = 10 * 60 * 1000 // nothing heard for this long: over, whatever seems to be running
 
@@ -76,31 +78,48 @@ export const createOffice = ({ canvas, getMult }) => {
     ctx.fillText(value, x, y)
   }
 
-  const drawPlan = ({ tile, left, top }, ink) => {
-    ctx.lineWidth = 1
+  // The floor, walls and furniture are painted once on small canvases, 16 pixels
+  // to a tile, and drawn scaled up with no smoothing.
+  const smallCanvas = (w, h, ops) => {
+    const small = document.createElement('canvas')
+    small.width = w
+    small.height = h
+    paint(small.getContext('2d'), ops)
+    return small
+  }
+  const ground = smallCanvas(layout.width * TILE, layout.height * TILE, groundOps(layout))
+  const items = itemsOf(layout).map(item => ({ ...item, image: smallCanvas(item.w * TILE, item.h * TILE, item.ops) }))
+  const laptops = { open: smallCanvas(TILE, TILE, LAPTOP.open), closed: smallCanvas(TILE, TILE, LAPTOP.closed) }
+  // the desk behind each seat, so its laptop can open when someone is writing there
+  const deskOfSeat = new Map(layout.spots.desks.map(d => [`${d.x},${d.y}`, `${d.x},${d.y + 1}`]))
+  const laptopDesks = new Set(deskOfSeat.values())
+
+  // words on the floor and walls: light, with a dark edge, so they read on any theme
+  const label = (value, x, y, size, align = 'center') => {
+    ctx.save()
+    ctx.shadowColor = 'rgba(0,0,0,0.8)'
+    ctx.shadowBlur = 3
+    text(value, x, y, size, '#e6e2f2', align)
+    ctx.restore()
+  }
+
+  const drawPlan = ({ tile, left, top }) => {
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(ground, left, top, layout.width * tile, layout.height * tile)
     for (const room of layout.rooms) {
-      const tone = TONES[room.tone]
-      roundRect(ctx, left + room.x * tile + 1, top + room.y * tile + 1, room.w * tile - 2, room.h * tile - 2, tile * 0.3)
-      ctx.globalAlpha = 0.14
-      ctx.fillStyle = tone
-      ctx.fill()
-      ctx.globalAlpha = 0.6
-      ctx.strokeStyle = tone
-      ctx.stroke()
-      ctx.globalAlpha = 1
-      text(room.name, left + (room.x + 0.4) * tile, top + (room.y + 0.55) * tile, Math.max(9, tile * 0.5), ink.dim, 'left')
-    }
-    for (const item of layout.furniture) {
-      roundRect(ctx, left + item.x * tile + tile * 0.06, top + item.y * tile + tile * 0.06, item.w * tile - tile * 0.12, item.h * tile - tile * 0.12, tile * 0.15)
-      ctx.fillStyle = item.kind === 'machine' ? ink.acc : ink.line
-      ctx.globalAlpha = item.kind === 'machine' ? 0.5 : 1
-      ctx.fill()
-      ctx.globalAlpha = 1
-      ctx.strokeStyle = ink.dim
-      ctx.stroke()
+      // a room's name goes on the wall above it
+      const onWall = room.y === layout.groundTop ? -0.45 : 0.55
+      label(room.name, left + (room.x + 0.4) * tile, top + (room.y + onWall) * tile, Math.max(9, tile * 0.5), 'left')
     }
     const door = layout.spots.entrance
-    text('Entrance', left + (door.x + 0.5) * tile, top + (door.y + 0.5) * tile, Math.max(8, tile * 0.4), ink.dim)
+    label('Entrance', left + (door.x + 0.5) * tile, top + (door.y + 0.5) * tile, Math.max(8, tile * 0.4))
+  }
+
+  const drawItem = (item, { tile, left, top }, open) => {
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(item.image, left + item.x * tile, top + item.y * tile, item.w * tile, item.h * tile)
+    const key = `${item.x},${item.y}`
+    if (item.kind === 'desk' && laptopDesks.has(key)) ctx.drawImage(open.has(key) ? laptops.open : laptops.closed, left + item.x * tile, top + item.y * tile, tile, tile)
   }
 
   const bubble = (value, kind, x, y, tile, ink) => {
@@ -156,7 +175,8 @@ export const createOffice = ({ canvas, getMult }) => {
     return feet - h - 2
   }
 
-  const drawPerson = (p, { tile, left, top }, t, ink) => {
+  // draws the body now; the name, label and bubble go in `tags`, to be drawn on top of everything
+  const drawPerson = (p, { tile, left, top }, t, ink, tags) => {
     const phase = t * 10 + hash(p.id)
     const walking = p.pose === 'walk'
     const dx = p.pose === 'shake' ? Math.sin(phase * 3) * tile * 0.1 : 0
@@ -165,7 +185,8 @@ export const createOffice = ({ canvas, getMult }) => {
       : p.pose === 'cheer' ? -Math.abs(Math.sin(phase * 0.8)) * tile * 0.2 // a little hop
         : p.pose === 'type' ? Math.sin(phase * 2) * tile * 0.03 : 0
     const cx = left + (p.x + 0.5) * tile + dx
-    const cy = top + (p.y + 0.5) * tile + dy
+    const drop = SEATED.has(p.pose) ? tile * 0.3 : 0
+    const cy = top + (p.y + 0.5) * tile + dy + drop
 
     ctx.fillStyle = 'rgba(0,0,0,0.25)'
     ctx.beginPath()
@@ -219,10 +240,12 @@ export const createOffice = ({ canvas, getMult }) => {
       }
     }
 
-    const fontSize = Math.max(8, tile * 0.42)
-    text(p.name, cx, cy + tile * 0.62, fontSize, ink.fg)
-    if (p.label && tile >= 14) text(p.label, cx, cy + tile * 0.62 + fontSize * 1.1, fontSize * 0.9, ink.dim)
-    if (p.bubble) bubble(p.bubble.text, p.bubble.kind, cx, headTop, tile, ink)
+    tags.push(() => {
+      const fontSize = Math.max(8, tile * 0.42)
+      label(p.name, cx, cy + tile * 0.62, fontSize)
+      if (p.label && tile >= 14) text(p.label, cx, cy + tile * 0.62 + fontSize * 1.1, fontSize * 0.9, '#b9b4c8')
+      if (p.bubble) bubble(p.bubble.text, p.bubble.kind, cx, headTop, tile, ink)
+    })
   }
 
   // confetti, warnings, rings and code glyphs, on top of everything
@@ -289,15 +312,31 @@ export const createOffice = ({ canvas, getMult }) => {
     // an opaque ground, so a recording of the canvas looks like the screen
     ctx.fillStyle = ink.bg
     ctx.fillRect(0, 0, width, height)
-    drawPlan(view, ink)
+    drawPlan(view)
 
-    // the manager's tray and the CEO
-    const tray = layout.spots.handIn
-    if (snap.stack > 0) text(`${snap.stack}`, view.left + (tray.x + 0.5) * view.tile, view.top + (tray.y + 0.5) * view.tile, Math.max(9, view.tile * 0.5), ink.fg)
+    // who is writing where: that desk's laptop is open
+    const open = new Set()
+    for (const person of snap.workers) {
+      if (person.pose !== 'type') continue
+      const desk = deskOfSeat.get(`${Math.round(person.x)},${Math.round(person.y)}`)
+      if (desk) open.add(desk)
+    }
+
+    // Everything is drawn from the back to the front: chairs and sofas first,
+    // then whatever is further up the plan before what is further down, so a
+    // desk hides the legs of whoever sits behind it.
+    for (const item of items) if (item.under) drawItem(item, view, open)
     const seat = layout.spots.ceoSeat
-    drawPerson({ id: 'ceo', name: 'CEO', color: '#264653', kind: 'manager', x: seat.x, y: seat.y, pose: 'idle', facing: 1, bubble: snap.ceo.bubble, label: snap.ceo.papers > 0 ? `${snap.ceo.papers} approved` : '', carry: null }, view, t, ink)
+    const ceo = { id: 'ceo', name: 'CEO', color: '#264653', kind: 'manager', x: seat.x, y: seat.y, pose: 'sit', dir: 'down', facing: 1, bubble: snap.ceo.bubble, label: snap.ceo.papers > 0 ? `${snap.ceo.papers} approved` : '', carry: null }
+    const tags = []
+    const draws = items.filter(item => !item.under).map(item => ({ key: item.y + item.h, run: () => drawItem(item, view, open) }))
+    for (const person of [ceo, ...snap.workers]) draws.push({ key: person.y + 0.9, run: () => drawPerson(person, view, t, ink, tags) })
+    for (const one of draws.sort((a, b) => a.key - b.key)) one.run()
 
-    for (const person of [...snap.workers].sort((a, b) => a.y - b.y)) drawPerson(person, view, t, ink)
+    // the number of papers on the manager's tray, and then names, labels and bubbles
+    const tray = layout.furniture.find(item => item.kind === 'tray')
+    if (snap.stack > 0) label(`${snap.stack}`, view.left + (tray.x + 0.5) * view.tile, view.top + (tray.y + 0.5) * view.tile, Math.max(9, view.tile * 0.5))
+    for (const tag of tags) tag()
 
     // effects: what the stage says happened, and code glyphs rising from whoever is writing
     const now = performance.now()

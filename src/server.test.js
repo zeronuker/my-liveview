@@ -269,7 +269,7 @@ test('a tool event carries the file it works on, and a prompt is announced witho
 
 test('the Office view\'s files are served', () =>
   withServer(async () => {
-    for (const name of ['office', 'director', 'stage', 'layout', 'walk', 'recorder', 'sprites', 'effects']) {
+    for (const name of ['office', 'director', 'stage', 'layout', 'walk', 'recorder', 'sprites', 'effects', 'scenery']) {
       const res = await fetch(`${base}/${name}.js`)
 
       assert.equal(res.status, 200, name)

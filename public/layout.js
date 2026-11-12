@@ -7,7 +7,11 @@
 //
 // grid: rows of text, '#' is in the way (a wall, a desk, a shelf)
 // rooms: [{ name, x, y, w, h, tone }]  to draw
-// furniture: [{ kind, x, y, w, h }]    to draw (all of it is also '#' in the grid)
+// furniture: [{ kind, x, y, w, h, solid }]  to draw; the solid ones are also '#' in
+//            the grid (a desk, a shelf), the rest are walked over (a chair, a sofa
+//            that is sat on)
+// Seats are on the far side of a desk from the viewer: the person sits behind
+// it, facing the room, and the desk hides their legs.
 // spots: where people stand for each kind of job; each is { x, y }
 
 export const buildLayout = () => {
@@ -20,9 +24,11 @@ export const buildLayout = () => {
   }
   const furniture = []
   const block = (kind, x, y, w = 1, h = 1) => {
-    furniture.push({ kind, x, y, w, h })
+    furniture.push({ kind, x, y, w, h, solid: true })
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) cells[j][i] = '#'
   }
+  // furniture people walk over or sit on
+  const lay = (kind, x, y, w = 1, h = 1) => furniture.push({ kind, x, y, w, h, solid: false })
 
   open(0, groundTop, 34, 21) // the ground floor
   open(22, 0, 34, 6) // the CEO's floor
@@ -44,24 +50,30 @@ export const buildLayout = () => {
   const files = []
   for (const y of [10, 13, 16, 19]) for (const x of [1, 2, 3]) files.push({ x, y })
 
-  // the lounge: three sofas, with a seat in front of each
+  // the lounge: three sofas, each with three seats on it
   const seats = []
   for (const y of [10, 14, 18]) {
-    block('sofa', 6, y, 3, 1)
-    for (const x of [6, 7, 8]) seats.push({ x, y: y + 1 })
+    lay('sofa', 6, y, 3, 1)
+    for (const x of [6, 7, 8]) seats.push({ x, y })
   }
 
-  // the desks: four across, four down, a chair below each
+  // the desks: four across, four down, a chair above each (the desk is in front of it)
   const desks = []
-  for (const y of [9, 12, 15, 18])
+  for (const y of [10, 13, 16, 19])
     for (const x of [12, 15, 18, 21]) {
       block('desk', x, y, 2, 1)
-      desks.push({ x, y: y + 1 })
+      lay('chair', x, y - 1)
+      desks.push({ x, y: y - 1 })
     }
 
   // the manager's desk, with a tray beside it where work is handed in
-  block('desk', 27, 10, 2, 1)
-  block('tray', 26, 9, 1, 1)
+  block('desk', 27, 11, 2, 1)
+  lay('chair', 27, 10)
+  block('tray', 26, 11, 1, 1)
+
+  // plants in two corners
+  block('plant', 10, 8)
+  block('plant', 24, 8)
 
   // the test lab: a machine with places around it
   block('machine', 32, 10, 2, 3)
@@ -71,8 +83,9 @@ export const buildLayout = () => {
     { x: 34, y: 11 }, { x: 34, y: 10 },
   ]
 
-  // the CEO's desk
-  block('desk', 28, 1, 3, 1)
+  // the CEO's desk, with the CEO's chair behind it
+  block('desk', 28, 2, 3, 1)
+  lay('chair', 29, 1)
 
   return {
     width,
@@ -88,8 +101,8 @@ export const buildLayout = () => {
       desks,
       lab,
       handIn: { x: 26, y: 10 },
-      managerSeat: { x: 27, y: 11 },
-      ceoSeat: { x: 29, y: 2 },
+      managerSeat: { x: 27, y: 10 },
+      ceoSeat: { x: 29, y: 1 },
       ceoDelivery: { x: 29, y: 3 },
       ceoDoor: { x: 24, y: 4 },
       stairsBottom: { x: 36, y: 20 },

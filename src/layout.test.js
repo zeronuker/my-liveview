@@ -75,3 +75,35 @@ test('the plan fits a wide canvas by its height and a tall one by its width, cen
 test('a canvas with no room still gives a usable tile', () => {
   assert.ok(fit(0, 0, layout).tile >= 1)
 })
+
+test('every desk seat has a desk directly below it, and a chair', () => {
+  const solid = (kind, x, y) => layout.furniture.some(f => f.kind === kind && f.solid && x >= f.x && x < f.x + f.w && y >= f.y && y < f.y + f.h)
+  const chair = (x, y) => layout.furniture.some(f => f.kind === 'chair' && f.x === x && f.y === y)
+
+  for (const seat of layout.spots.desks) {
+    assert.ok(solid('desk', seat.x, seat.y + 1), `desk below ${seat.x},${seat.y}`)
+    assert.ok(chair(seat.x, seat.y), `chair at ${seat.x},${seat.y}`)
+  }
+  const { managerSeat, ceoSeat, ceoDelivery } = layout.spots
+  assert.ok(solid('desk', managerSeat.x, managerSeat.y + 1) && chair(managerSeat.x, managerSeat.y))
+  assert.ok(solid('desk', ceoSeat.x, ceoSeat.y + 1) && chair(ceoSeat.x, ceoSeat.y))
+  assert.ok(solid('desk', ceoDelivery.x, ceoDelivery.y - 1)) // work is handed over the CEO's desk
+})
+
+test('every sofa seat is on a sofa, and the sofa is walked over', () => {
+  for (const seat of layout.spots.seats) {
+    assert.ok(layout.furniture.some(f => f.kind === 'sofa' && !f.solid && seat.x >= f.x && seat.x < f.x + f.w && seat.y === f.y), `sofa at ${seat.x},${seat.y}`)
+  }
+})
+
+test('solid furniture is in the way on the grid and the rest is not', () => {
+  for (const f of layout.furniture)
+    for (let y = f.y; y < f.y + f.h; y++)
+      for (let x = f.x; x < f.x + f.w; x++) assert.equal(layout.grid[y][x] === '#', f.solid, `${f.kind} at ${x},${y}`)
+})
+
+test('every open cell of the plan is in a room, so it has a floor', () => {
+  for (const [y, row] of layout.grid.entries())
+    for (const [x, ch] of [...row].entries())
+      if (ch !== '#') assert.ok(layout.rooms.some(r => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h), `${x},${y}`)
+})
