@@ -1,6 +1,7 @@
 import { createOffice } from './office.js'
 import { createPane } from './pane.js'
 import { nextInLine, placeEdit } from './place.js'
+import { createRecorder } from './recorder.js'
 import { clamp, makeResizer } from './resize.js'
 import { fileLabels } from './tree.js'
 import { wholeRows } from './whole.js'
@@ -112,6 +113,23 @@ const panes = [0, 1, 2, 3].map(index =>
 $('panes').append(...panes.map(pane => pane.root))
 
 const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[prefs.speed - 1].mult })
+
+// the recording is a download, named after the day and time
+const download = (blob, name) => {
+  const link = item('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = name
+  link.click()
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000)
+}
+const recorder = createRecorder({
+  canvas: $('office-canvas'),
+  save: download,
+  onChange: () => {
+    $('b-record').setAttribute('aria-pressed', String(recorder.isRecording))
+    $('b-record').textContent = recorder.isRecording ? 'Stop recording' : 'Record'
+  },
+})
 
 /* how wide each part is: the person drags the edges, and it is remembered */
 
@@ -678,7 +696,23 @@ $('b-whole').onclick = () => {
 }
 $('b-focus').onclick = () => save('focus', !prefs.focus)
 $('b-awake').onclick = () => save('awake', !prefs.awake)
-$('b-office').onclick = () => save('office', !prefs.office)
+// leaving the Office is the one in-app way out of the picture, so it asks first
+$('b-office').onclick = () => {
+  if (recorder.isRecording && !window.confirm('Leave the Office and stop recording? The video so far is saved.')) return
+  recorder.stop()
+  save('office', !prefs.office)
+}
+$('b-record').disabled = !recorder.isSupported()
+if (!recorder.isSupported()) $('b-record').title = "This browser can't record mp4 (Chrome or Edge 126 or later can)"
+$('b-record').onclick = () => (recorder.isRecording ? recorder.stop() : recorder.start())
+// nothing is drawn while the window is hidden: the recording waits, and carries on when it is back
+document.addEventListener('visibilitychange', () => (document.hidden ? recorder.pause() : recorder.resume()))
+// closing or reloading the window while recording: the browser asks first
+window.addEventListener('beforeunload', event => {
+  if (!recorder.isRecording) return
+  event.preventDefault()
+  event.returnValue = ''
+})
 $('b-side').onclick = () => {
   save('side', !prefs.side)
   rerenderAll()

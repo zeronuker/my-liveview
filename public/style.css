@@ -551,6 +551,25 @@ body.office #rz-split {
   display: none;
 }
 
+/* Record is only for the Office, and shows a red dot while it records */
+#b-record {
+  display: none;
+}
+
+body.office #b-record {
+  display: inline-block;
+}
+
+#b-record[aria-pressed='true']::before {
+  content: '';
+  display: inline-block;
+  width: 0.6em;
+  height: 0.6em;
+  margin-right: 0.4em;
+  border-radius: 50%;
+  background: #e5484d;
+}
+
 /* the panes: up to four files watched at once (two stack when there is little width) */
 #panes {
   position: relative;
