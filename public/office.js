@@ -179,7 +179,9 @@ export const createOffice = ({ canvas, getMult }) => {
       ok: color(BUBBLES.ok), bad: color(BUBBLES.bad), ask: color(BUBBLES.ask), info: color(BUBBLES.info),
     }
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0)
-    ctx.clearRect(0, 0, width, height)
+    // an opaque ground, so a recording of the canvas looks like the screen
+    ctx.fillStyle = ink.bg
+    ctx.fillRect(0, 0, width, height)
     drawPlan(view, ink)
 
     // the manager's tray and the CEO
