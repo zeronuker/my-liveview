@@ -267,3 +267,17 @@ The prototype works end to end (all phases built, 271 tests). The user watched i
    - **Stairs more defined** (today a plain grey strip).
 3. Things the layout change will touch: spots (entrance, files, seats, desks, lab, handIn, manager, CEO, stairs), the director and stage's use of them, `scenery.js` art, depth ordering in `office.js`, the mock scenarios, and the tests. Keep the rule that every spot is reachable from the entrance.
 4. Still open from before: watch a real Claude session in the Office; the polish list at the end of Phase 7.
+
+### The user's reference picture for the renovation (described, not stored)
+
+The user shared a screenshot of the "Operational Floorplan" of pixel-agent-desk as what they imagine. Its art is under a restrictive licence (no copying, no redistribution), so the picture is not in this repo; we draw our own in the same spirit. What it shows:
+- **Garden:** grass all round with pine trees; the building sits inside it.
+- **Terrace** (top left): wood parquet floor, flower pots, two yellow armchairs, small dining tables with green chairs, a wooden fence; glass doors lead inside.
+- **Kitchen and pantry** (top right): counter, coffee machine, fridge, sink; next to it a **living area**: sofa, rug, coffee table, bookshelf, TV unit, warm yellow wall.
+- **Central hall** with a wide **staircase** (steps, a landing, green bench cushions).
+- **Printer room** (left): printer, boxes, bin, radiator.
+- **Open-plan work area** (bottom): two long white desk islands on a checkered carpet, chairs, monitors and laptops, a glass wall along the bottom edge.
+- **Meeting room** (right): a big table, eight green chairs, a TV, a whiteboard, a bookshelf, a plant, dark grey carpet.
+- Thick dark **walls** with doorways and glass doors between rooms; hanging lamps, plants, rugs and boxes in almost every room.
+- Each character has a name tag with a state badge ("THINKING", "DONE") under a speech bubble.
+- Decisions to take when planning: the **tile size** (the picture looks like 32-pixel tiles, ours are 16, so furniture and people would need much more detail, or the whole art scaled up); where **trees and animals** live (outside the walls, with their own simple wandering, apart from the workers); and which rooms the workers use for what (meeting room for helpers or planning, pantry for idling, printer room for hand-ins or reports).
