@@ -2,7 +2,7 @@
 
 A new view in Live View that shows a Claude Code session as an animated office. The repo is the office, Claude and its subagents are the workers, and the person is "CEO" upstairs. It is a good story, not a live mirror: an instant edit still plays out as a full walk-and-write.
 
-Status: planning. Phase 0 is next. Update this file as phases finish.
+Status: Phase 0 and Phase 1 are done. Phase 2 (Office MVP) is next. Update this file as phases finish.
 
 ## Decisions so far
 
@@ -64,6 +64,12 @@ Suggested ideas for these are in the conversation history; assign them when each
 - Director, `public/director.js` with `src/director.test.js`: events in, scenes out. One worker per file, unlimited, staggered. Random names and colours. Subagents as workers.
 - Walking, `public/walk.js` with `src/walk.test.js`: grid path-finding.
 - Done when: tests pass and a fake event stream produces sensible scenes.
+- **Done (2026-11-12).** What changed from the plan:
+  - The server now publishes `turn-end`, `agent-start`, `agent-stop`, `permission` and `prompt` events (the prompt event carries no words). Tool events carry `path` and, inside a subagent, `agentId` and `agentType`.
+  - The director (`public/director.js`) is pure: it turns events into commands (`hire`, `do`, `fire`, `review`, `submit`, `ask`, `answered`, `prompt`). Staggering and timing are **not** in the director: the Office view's scene player (Phase 2) decides how long each step takes and spaces out arrivals.
+  - Names and colours are picked from free ones first, and released when a worker goes home.
+  - `public/walk.js` is a plain grid path-finder (no diagonals). The two floors are two grids; the stairs hand-off is for the renderer in Phase 2.
+  - Not yet handled by the director, on purpose: tools inside a subagent are not tied to that subagent's worker, and only Read, Edit, Write, Bash, Grep and Glob have scenes.
 
 ### Phase 2: Office MVP
 - Office toggle in `public/index.html`, `public/app.js`, `public/style.css`.
