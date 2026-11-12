@@ -2,7 +2,7 @@
 
 A new view in Live View that shows a Claude Code session as an animated office. The repo is the office, Claude and its subagents are the workers, and the person is "CEO" upstairs. It is a good story, not a live mirror: an instant edit still plays out as a full walk-and-write.
 
-Status: Phases 0, 1 and 2 are done, the first half of Phase 3 is built and Phase 4 (Record) is built; all checked against a made-up session (`npm run mock`), none yet against a real Claude session. The new hooks are installed in the real Claude settings and Live View was restarted on 2026-11-12. Update this file as phases finish.
+Status: all eight phases are built as a first working version (2026-11-12), checked in tests, mock sessions and the browser pane; none yet against a real Claude session or by the user on their own screen for the later parts. Next: watch real sessions, then polish (see the end of Phase 7). Update this file as things change.
 
 ## Decisions so far
 
@@ -125,6 +125,17 @@ Suggested ideas for these are in the conversation history; assign them when each
 - Optional sound with a mute toggle.
 - Docs and a README for the feature; a final round of manual checks.
 - Done when: it is ready to show others.
+
+**Phase 7 built (2026-11-12):**
+- **Many chats (decided: one shared office with tags):** a dot in the chat's colour before each name when more than one chat is at work, a legend in the corner, and a chat picked in the left list makes its workers stand out (the others are dimmed). A chat that is followed automatically does not dim anyone.
+- **Small windows and crowds (decided: zoom and pan):** mouse wheel zooms (up to six times the fitted size), dragging pans, Fit or a double-click resets. Room names and worker names hide when too small to read. Checked at 520 pixels wide.
+- **Reduced motion:** follows the system setting only (no button): no confetti, rings, floating code, bobbing, breathing or head-shaking; the warning triangle stays, without wobbling.
+- **Sound (decided: yes, off by default):** `public/sound.js`, made with Web Audio, no files; chime, buzz, tick, click, with a minimum gap per sound; a Sound button in the Office toolbar, remembered. Not heard by Claude: only tested with a fake audio context.
+- **Performance:** about 2.5 ms per drawn frame with around 60 workers from five scenarios at once (the browser pane draws few frames, so the sample was small); the stage ticks 150 workers in about 2.5 ms. The font is now looked up once, not for every label.
+- **All five themes:** checked light, terminal, contrast and midnight in the browser pane: the floors and walls keep one colour scheme, labels are light with a dark edge so they read on any background.
+- **README.md** added (there was none).
+- **Final manual checks still to do by the user:** watch a real Claude session in the Office (do Stop, permission, helper and the newer hook events arrive?), hear the sounds, try the Record button again with the new scenery, and check the animations in the list in `docs/office-situations.md` marked "seen only in mock sessions".
+- **Polish list (from the user and from checks):** better faces and hair; names overlapping in a crowd (names could be shown only for the picked chat or the busy ones); the ring on every state change, name tags coloured by state, helpers drawn smaller; a planning scene for plan mode and `TodoWrite`; numbered queues; idle fidgets and blinking; MCP elicitation; stairs art; room names over the wall windows.
 
 ## Mock sessions: how to test and add animations
 

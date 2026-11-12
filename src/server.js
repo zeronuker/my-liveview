@@ -189,6 +189,7 @@ const files = {
   '/sprites.js': ['sprites.js', 'text/javascript; charset=utf-8'],
   '/effects.js': ['effects.js', 'text/javascript; charset=utf-8'],
   '/scenery.js': ['scenery.js', 'text/javascript; charset=utf-8'],
+  '/sound.js': ['sound.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 }
 

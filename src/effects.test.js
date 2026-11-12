@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { createEffects } from '../public/effects.js'
+import { createEffects, isShown } from '../public/effects.js'
 
 // a random number generator that counts up, so a test is the same every time
 const counting = () => {
@@ -71,4 +71,12 @@ test('nothing to update is fine', () => {
   effects.update(1)
 
   assert.deepEqual(effects.all(), [])
+})
+
+test('with less motion, only the warning is kept', () => {
+  for (const kind of ['confetti', 'ring', 'glyph']) {
+    assert.equal(isShown(kind, true), false, kind)
+    assert.equal(isShown(kind, false), true, kind)
+  }
+  assert.equal(isShown('warning', true), true)
 })

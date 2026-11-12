@@ -50,6 +50,7 @@ const prefs = {
   focus: store.get('focus', false) === true,
   awake: store.get('awake', false) === true,
   office: store.get('office', false) === true,
+  sound: store.get('sound', false) === true,
 }
 
 const collapsed = new Set(store.get('collapsed', [])) // folders the person closed
@@ -362,6 +363,13 @@ const select = sessionId => {
   scheduleLists()
 }
 
+// the person picks a chat in the list: it is selected, and in the Office its
+// workers stand out (a chat that is followed automatically does not dim the others)
+const pickChat = sessionId => {
+  select(sessionId)
+  office.setSelected(sessionId)
+}
+
 // a file under a chat: that chat becomes the selected one, showing that file
 const openFile = file => {
   selected = file.sessionId
@@ -513,7 +521,7 @@ const chatTree = () => {
     right: plainCount(list.reduce((sum, chat) => sum + chat.count, 0)),
     isSelected: selected === '',
     activity: rootState,
-    onPress: () => select(''),
+    onPress: () => pickChat(''),
     kids: kidsOf.map(({ chat, own, state }) => {
       const labels = fileLabels(own.map(file => file.path), chat.cwd)
       return node({
@@ -524,7 +532,7 @@ const chatTree = () => {
         right: plainCount(chat.count),
         isSelected: selected === chat.id,
         activity: state,
-        onPress: () => select(chat.id),
+        onPress: () => pickChat(chat.id),
         onRename: () => renameChat(chat),
         kids: own.map(file =>
           node({
@@ -536,7 +544,10 @@ const chatTree = () => {
             right: changeCount(file),
             isSelected: panes.some(pane => pane.isVisible && pane.key() === fileKey(file)),
             activity: fileActivity(file),
-            onPress: () => openFile(file),
+            onPress: () => {
+              openFile(file)
+              office.setSelected(file.sessionId)
+            },
           }),
         ),
       })
@@ -569,7 +580,6 @@ setInterval(renderElapsed, 1000)
 
 const renderLists = () => {
   isListsDue = false
-  office.setSelected(selected) // the picked chat's workers stand out in the Office
   $('chat-list').replaceChildren(chatTree())
 
   $('feed-list').replaceChildren(
@@ -664,7 +674,8 @@ const apply = () => {
   document.body.classList.toggle('focus', prefs.focus)
   document.body.classList.toggle('office', prefs.office)
   office.setVisible(prefs.office)
-  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake'], ['b-office', 'office']])
+  office.setSound(prefs.sound)
+  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake'], ['b-office', 'office'], ['b-sound', 'sound']])
     $(id).setAttribute('aria-pressed', String(prefs[key]))
   for (const swatch of document.querySelectorAll('.swatch'))
     swatch.setAttribute('aria-pressed', String(swatch.dataset.theme === prefs.theme))
@@ -703,6 +714,7 @@ $('b-office').onclick = () => {
   recorder.stop()
   save('office', !prefs.office)
 }
+$('b-sound').onclick = () => save('sound', !prefs.sound)
 $('b-fit').onclick = () => office.resetView()
 $('b-record').disabled = !recorder.isSupported()
 if (!recorder.isSupported()) $('b-record').title = "This browser can't record mp4 (Chrome or Edge 126 or later can)"

@@ -4,7 +4,8 @@
 // sprites.js (the people) and scenery.js (the floors, walls and furniture); a
 // pose with no sprite is drawn as plain shapes.
 import { createDirector } from './director.js'
-import { createEffects } from './effects.js'
+import { createEffects, isShown } from './effects.js'
+import { createSound, soundFor } from './sound.js'
 import { buildLayout, fit, keepInView, zoomAt } from './layout.js'
 import { createStage } from './stage.js'
 import { groundOps, itemsOf, LAPTOP, paint, TILE } from './scenery.js'
@@ -31,6 +32,11 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   const director = createDirector()
   const stage = createStage({ layout, getMult })
   const effects = createEffects()
+  const sound = createSound()
+  // the person's setting for less motion: no confetti, rings, glyphs, bobbing or breathing
+  const motion = window.matchMedia?.('(prefers-reduced-motion: reduce)')
+  let reduced = motion?.matches ?? false
+  motion?.addEventListener?.('change', event => (reduced = event.matches))
   let lastDraw = 0
   let paused = false
   let manual = null // a zoomed and panned view { tile, left, top }; null while the whole plan is fitted
@@ -193,8 +199,8 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   const drawPerson = (p, { tile, left, top }, t, ink, tags) => {
     const phase = t * 10 + hash(p.id)
     const walking = p.pose === 'walk'
-    const dx = p.pose === 'shake' ? Math.sin(phase * 3) * tile * 0.1 : 0
-    const dy = walking
+    const dx = p.pose === 'shake' && !reduced ? Math.sin(phase * 3) * tile * 0.1 : 0
+    const dy = reduced ? 0 : walking
       ? -Math.abs(Math.sin(phase)) * tile * 0.12
       : p.pose === 'cheer' ? -Math.abs(Math.sin(phase * 0.8)) * tile * 0.2 // a little hop
         : p.pose === 'type' ? Math.sin(phase * 2) * tile * 0.03 : 0
@@ -212,7 +218,8 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.fill()
 
     // the pixel-art person, and the plain shapes for a pose that has no sprite
-    const sprite = spriteFor({ pose: p.pose, t, id: p.id, kind: p.kind, color: p.color, dir: p.dir })
+    // with less motion, a resting person stays in one frame; walking still walks
+    const sprite = spriteFor({ pose: p.pose, t: reduced && !walking ? 0 : t, id: p.id, kind: p.kind, color: p.color, dir: p.dir })
     let headTop = cy - tile * 0.5 // where a bubble goes
     if (sprite) headTop = drawSprite(sprite, p, cx, cy, tile)
     else {
@@ -316,7 +323,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
         ctx.fillRect((-tile * 0.12 * e.size) / 2, (-tile * 0.18 * e.size) / 2, tile * 0.12 * e.size, tile * 0.18 * e.size)
       } else if (e.kind === 'warning') {
         const size = tile * 0.7
-        const x = cx + Math.sin(e.age * 20) * tile * 0.1 // it wobbles
+        const x = cx + (reduced ? 0 : Math.sin(e.age * 20) * tile * 0.1) // it wobbles
         const y = cy - tile * 0.9
         ctx.globalAlpha = 1 - p
         ctx.beginPath()
@@ -398,8 +405,15 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     const now = performance.now()
     const dt = paused || !lastDraw ? 0 : Math.min(0.1, (now - lastDraw) / 1000)
     lastDraw = now
-    for (const e of stage.takeEffects()) effects.spawn(e.kind, e.x, e.y, e)
-    for (const person of snap.workers) if (person.pose === 'type' && !paused && Math.random() < 2 * dt) effects.spawn('glyph', person.x, person.y - 0.6)
+    for (const e of stage.takeEffects()) {
+      sound.play(soundFor(e.kind))
+      if (isShown(e.kind, reduced)) effects.spawn(e.kind, e.x, e.y, e)
+    }
+    for (const person of snap.workers) {
+      if (person.pose !== 'type' || paused || Math.random() >= 2 * dt) continue
+      sound.play('click') // each line of code typed
+      if (isShown('glyph', reduced)) effects.spawn('glyph', person.x, person.y - 0.6)
+    }
     effects.update(dt)
     drawEffects(view, ink)
     frame = requestAnimationFrame(draw)
@@ -468,5 +482,5 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     stage.setPaused(on)
   }
 
-  return { feed, setVisible, setPaused, setSelected, resetView: () => setManual(null), isZoomed: () => manual !== null, skip: stage.skip, isIdle: stage.isIdle }
+  return { feed, setVisible, setPaused, setSelected, setSound: sound.setOn, resetView: () => setManual(null), isZoomed: () => manual !== null, skip: stage.skip, isIdle: stage.isIdle }
 }

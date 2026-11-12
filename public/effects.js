@@ -8,6 +8,10 @@ const GLYPHS = ['0', '1', '{', '}', ';', '>', '_']
 const GLYPH_COLORS = ['#00f2ff', '#00ffaa']
 const GRAVITY = 9 // tiles a second, each second
 
+// With the "reduce motion" setting on, only the warning is kept (and does not
+// wobble): confetti, rings and code glyphs are decoration.
+export const isShown = (kind, reduced) => !reduced || kind === 'warning'
+
 export const createEffects = ({ random = Math.random, max = 400 } = {}) => {
   let list = []
   const between = (low, high) => low + random() * (high - low)
