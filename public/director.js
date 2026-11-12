@@ -21,6 +21,7 @@
 //   { cmd: 'compact' | 'compacted', sessionId }  memory is being compacted, and is done
 //   { cmd: 'denied', sessionId, tool } a tool was refused in auto mode
 //   { cmd: 'note', who: 'ceo' | 'manager', text, kind }  a few words over one of them
+//   { cmd: 'ask', ..., label }          also Claude asking a question, labelled "Has a question"
 //   { cmd: 'memo', sessionId }         the manager reads a memo (instructions or settings loaded)
 //   { cmd: 'clear', sessionId }        /clear: the manager's tray is emptied
 // An MCP tool is an errand outside the office: steps call (with `server`) and unavailable.
@@ -42,6 +43,9 @@ const ERRANDS = {
   Bash: { start: 'test', ok: 'pass', fail: 'fail' },
   Grep: { start: 'search', ok: 'report', fail: 'fail' },
   Glob: { start: 'search', ok: 'report', fail: 'fail' },
+  LSP: { start: 'search', ok: 'report', fail: 'fail', label: 'Checking the code' },
+  WebSearch: { start: 'call', ok: 'report', fail: 'unavailable', label: 'Searching the web' },
+  WebFetch: { start: 'call', ok: 'report', fail: 'unavailable', label: 'Reading a web page' },
 }
 const FILE_TOOLS = new Set(['Read', 'Edit', 'Write'])
 
@@ -118,12 +122,19 @@ export const createDirector = ({ random = Math.random } = {}) => {
   }
 
   const onTool = e => {
+    if (e.tool === 'SendMessage') return [note('manager', 'Message sent')]
+    if (e.tool === 'AskUserQuestion') {
+      // Claude asks the person something: someone waits at the CEO's door until it is answered
+      asking.add(e.sessionId)
+      calls.set(e.id, { question: true, sessionId: e.sessionId, worker: { sessionId: e.sessionId } })
+      return [{ cmd: 'ask', sessionId: e.sessionId, tool: e.tool, label: 'Has a question' }]
+    }
     const server = e.tool.match(MCP_TOOL)?.[1]
     const errand = ERRANDS[e.tool] ?? (server && MCP_ERRAND)
     if (errand) {
       const worker = hire(e.sessionId, 'worker')
       calls.set(e.id, { worker, errand })
-      return [{ cmd: 'hire', worker }, act(worker, errand.start, { server })]
+      return [{ cmd: 'hire', worker }, act(worker, errand.start, { server, label: errand.label })]
     }
     if (!FILE_TOOLS.has(e.tool) || !e.path) return []
 
@@ -151,6 +162,7 @@ export const createDirector = ({ random = Math.random } = {}) => {
     const call = calls.get(e.id)
     if (!call) return []
     calls.delete(e.id)
+    if (call.question) return asking.delete(call.sessionId) ? [{ cmd: 'answered', sessionId: call.sessionId }] : []
     const { worker } = call
 
     if (call.errand) {
@@ -208,6 +220,18 @@ export const createDirector = ({ random = Math.random } = {}) => {
         return [note('manager', detail ? `Now in ${detail}` : 'Folder changed')]
       case 'folder':
         return [note('manager', detail ? `Added ${detail}` : 'Folder added')]
+      case 'batch':
+        return [note('manager', 'Batch finished', 'ok')]
+      case 'task-new':
+        return [note('manager', 'New task')]
+      case 'task-done':
+        return [note('manager', 'Task done', 'ok')]
+      case 'teammate':
+        return [note('manager', 'Teammate idle')]
+      case 'idle':
+        return [note('manager', 'Waiting for you')]
+      case 'command':
+        return [note('ceo', detail ? `/${detail}` : 'Command')]
       case 'memo':
         // several in a row are one memo
         if (memoed.has(sessionId)) return []

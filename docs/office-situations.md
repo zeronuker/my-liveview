@@ -54,17 +54,20 @@ Field names marked (?) came from a summary of the docs and must be seen in a rea
 | Scheduled work | no event tells it from a normal start | none | no hook |
 | Permission mode switch | no hook found | none | no hook |
 
-## Round 3: Extras (Phase 5)
+## Round 3: Extras (Phase 5, built 2026-11-12; seen only in mock sessions)
+
+Only the kind of event is sent to the page: never a notification's words, a task's name or a command's arguments.
 
 | Situation | Trigger | What the Office does | Status |
 |---|---|---|---|
-| Parallel batch finished | `PostToolBatch` | The workers of the batch line up at the manager | planned |
-| Task list changes | `TaskCreated`, `TaskCompleted` | A task is pinned to or ticked on the whiteboard | planned |
-| Web browsing | `WebFetch`, `WebSearch` tools | An errand worker goes to the library | planned |
-| Code intelligence | `LSP` tool | An errand worker consults the reference desk | planned |
-| Teammate goes idle | `TeammateIdle` | A helper sits down and waits | planned |
-| Message to a subagent | tool `SendMessage` | A note is passed to the helper | planned |
-| Slash command expands | `UserPromptExpansion`; field `command_name` | The prompt bubble shows the command | planned |
-| Claude asks a question | `Notification` with type `elicitation_dialog`; `Elicitation` for MCP | A "?" at the CEO's door | planned |
+| Web browsing | `WebSearch`, `WebFetch` tools | An errand worker goes out the front door ("Searching the web", "Reading a web page"); a failure is "Tool unavailable" | built |
+| Code intelligence | `LSP` tool | An errand worker goes to the shelves ("Checking the code") | built |
+| Claude asks a question | `AskUserQuestion` tool | A worker waits at the CEO's door with a "?" ("Has a question") until the tool ends | built |
+| Waiting too long | `Notification` with type `idle_prompt` | The manager shows "Waiting for you" | built |
+| Slash command expands | `UserPromptExpansion`; field `command_name` | A bubble over the CEO: "/review" | built |
+| Parallel batch finished | `PostToolBatch` | The manager shows "Batch finished" | built |
+| Task list changes | `TaskCreated`, `TaskCompleted` | The manager shows "New task" or "Task done" | built |
+| Message to a subagent | tool `SendMessage` | The manager shows "Message sent" | built |
+| Teammate goes idle | `TeammateIdle` | The manager shows "Teammate idle" | built |
 | Permission denied by you | no event for a manual denial | none | no hook |
-| Waiting too long | `Notification` with type `idle_prompt` | The manager looks at the clock | planned |
+| MCP elicitation (an MCP server asks you something) | `Elicitation` | not done: not asked for in this round | planned |

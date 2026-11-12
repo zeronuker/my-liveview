@@ -15,6 +15,9 @@
 //   ['denied']                    a tool is refused in auto mode
 //   ['compact', ms]               memory is compacted, taking that long
 //   ['session', source]  ['end', reason]   the session starts (startup, resume, clear) or ends
+//   ['web', 'search' | 'fetch', 'fail']  ['lsp']  ['message']   web, code and subagent tools
+//   ['question', ms]              Claude asks the person something, and waits that long
+//   ['idle']  ['command', name]  ['batch']  ['task', 'new' | 'done']  ['teammate']
 //   ['model', name]  ['cd', folder]  ['addDir', folder]  ['memo']
 //   ['fail', error]             the API ends the turn with an error (rate_limit, ...)
 //   ['wait', ms]
@@ -101,6 +104,38 @@ export const toActions = (name, steps, { dir, cwd = path.dirname(dir), tick = 30
         break
       case 'fail':
         hook({ hook_event_name: 'StopFailure', error: a ?? 'rate_limit', last_assistant_message: 'API Error: Rate limit reached' })
+        break
+      case 'web':
+        if (a === 'fetch') tool('WebFetch', { url: 'https://example.com' })
+        else tool('WebSearch', { query: 'how to' }, { ok: b !== 'fail' })
+        break
+      case 'lsp':
+        tool('LSP', { operation: 'hover' })
+        break
+      case 'question': {
+        const quick = wait
+        wait = a
+        tool('AskUserQuestion', { questions: [] })
+        wait = quick
+        break
+      }
+      case 'message':
+        tool('SendMessage', { to: 'helper', message: 'hello' })
+        break
+      case 'idle':
+        hook({ hook_event_name: 'Notification', notification_type: 'idle_prompt', message: 'Claude is waiting' })
+        break
+      case 'command':
+        hook({ hook_event_name: 'UserPromptExpansion', command_name: a ?? 'review' })
+        break
+      case 'batch':
+        hook({ hook_event_name: 'PostToolBatch' })
+        break
+      case 'task':
+        hook({ hook_event_name: a === 'done' ? 'TaskCompleted' : 'TaskCreated' })
+        break
+      case 'teammate':
+        hook({ hook_event_name: 'TeammateIdle' })
         break
       case 'session':
         hook({ hook_event_name: 'SessionStart', source: a ?? 'startup' })

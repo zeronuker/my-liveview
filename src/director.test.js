@@ -256,3 +256,38 @@ test('memos that follow each other are one memo; something else in between makes
   assert.equal(memos(run([life('memo'), life('memo'), life('memo')])), 1)
   assert.equal(memos(run([life('memo'), { type: 'prompt', sessionId: S }, life('memo')])), 2)
 })
+
+test('web tools are errands out the door with their own words; a failed one is unavailable', () => {
+  const search = run([tool('w1', 'WebSearch'), done('w1')])
+  assert.deepEqual(steps(search), ['call', 'report'])
+  assert.equal(search.find(c => c.step === 'call').label, 'Searching the web')
+
+  assert.equal(run([tool('w1', 'WebFetch')])[1].label, 'Reading a web page')
+  assert.deepEqual(steps(run([tool('w1', 'WebFetch'), done('w1', false)])), ['call', 'unavailable'])
+})
+
+test('the code check is a trip to the shelves, with its own words', () => {
+  const commands = run([tool('l1', 'LSP'), done('l1')])
+
+  assert.deepEqual(steps(commands), ['search', 'report'])
+  assert.equal(commands.find(c => c.step === 'search').label, 'Checking the code')
+})
+
+test("a question from Claude waits at the CEO's door until the tool is over", () => {
+  const director = createDirector({ random: () => 0 })
+  const asked = director.feed(tool('q1', 'AskUserQuestion'))
+
+  assert.deepEqual(asked, [{ cmd: 'ask', sessionId: S, tool: 'AskUserQuestion', label: 'Has a question' }])
+  assert.equal(director.isQuiet(S), false)
+  assert.deepEqual(director.feed(done('q1')), [{ cmd: 'answered', sessionId: S }])
+})
+
+test('a message to a helper, a batch, a task, a waiting notice and a command are notes', () => {
+  const texts = commands => commands.filter(c => c.cmd === 'note').map(c => `${c.who}: ${c.text}`)
+
+  assert.deepEqual(texts(run([tool('s1', 'SendMessage')])), ['manager: Message sent'])
+  assert.deepEqual(
+    texts(run([life('batch'), life('task-new'), life('task-done'), life('teammate'), life('idle'), life('command', 'review'), life('command')])),
+    ['manager: Batch finished', 'manager: New task', 'manager: Task done', 'manager: Teammate idle', 'manager: Waiting for you', 'ceo: /review', 'ceo: Command'],
+  )
+})

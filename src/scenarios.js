@@ -98,6 +98,24 @@ export const SCENARIOS = {
     ends: 'stop',
     steps: [['prompt', 'Tidy the build'], ['read', 'cart.js'], ['denied'], ['bash', 'ok', 'npm run lint'], ['stop']],
   },
+  'web-and-code': {
+    about: 'a web search, a page fetch, a search that fails, and a code check: errands out the door and to the shelves',
+    ends: 'stop',
+    steps: [['prompt', 'Look it up'], ['web', 'search'], ['web', 'fetch'], ['web', 'search', 'fail'], ['lsp'], ['stop']],
+  },
+  question: {
+    about: "Claude asks the person a question: a worker waits at the CEO's door until it is answered",
+    ends: 'stop',
+    steps: [['prompt', 'Pick a design'], ['read', 'cart.js'], ['question', 4000], ...files(['chosen.js']), ['stop']],
+  },
+  notes: {
+    about: 'small things the manager or CEO says: waiting for you, a command, a batch, tasks, a message, an idle teammate',
+    ends: 'stop',
+    steps: [
+      ['prompt', 'Do the plan'], ['command', 'review'], ['task', 'new'], ['read', 'cart.js'], ['batch'], ['message'], ['task', 'done'],
+      ['teammate'], ['idle'], ['stop'],
+    ],
+  },
   lifecycle: {
     about: 'a session is resumed, memos load, the model and folder change, a folder is added, then the session ends',
     ends: 'stop',

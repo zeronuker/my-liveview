@@ -101,9 +101,9 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       case 'test':
         return [{ spot: () => spots.lab[labTurn++ % spots.lab.length], act: { pose: 'machine', dur: 1.5, label: 'Running tests', ...waitsForNext } }]
       case 'search':
-        return [{ spot: () => shelfFor(null), act: { pose: 'scan', dur: 1.2, label: 'Searching', ...waitsForNext } }]
+        return [{ spot: () => shelfFor(null), act: { pose: 'scan', dur: 1.2, label: cmd.label ?? 'Searching', ...waitsForNext } }]
       case 'call': // an MCP tool: out by the front door, waiting for the answer
-        return [{ spot: () => spots.entrance, act: { pose: 'scan', dur: 1.2, label: cmd.server ? `Calling ${cmd.server}` : 'Calling a tool', ...waitsForNext } }]
+        return [{ spot: () => spots.entrance, act: { pose: 'scan', dur: 1.2, label: cmd.label ?? (cmd.server ? `Calling ${cmd.server}` : 'Calling a tool'), ...waitsForNext } }]
       case 'unavailable':
         return [{ spot: null, act: { pose: 'shake', dur: 1.5, label: 'Tool unavailable', bubble: bad('✗') } }]
       case 'pass':
@@ -309,7 +309,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
             skipIf: () => answered.has(cmd.sessionId),
             onStart: () => { started = true },
             spot: () => spots.ceoDoor,
-            act: { pose: 'ask', dur: 0.5, label: 'Needs approval', bubble: { text: '?', kind: 'ask' }, until: () => answered.has(cmd.sessionId) },
+            act: { pose: 'ask', dur: 0.5, label: cmd.label ?? 'Needs approval', bubble: { text: '?', kind: 'ask' }, until: () => answered.has(cmd.sessionId) },
           },
           { skipIf: () => !started, spot: () => homeOf(worker), act: { pose: 'sit', dur: 0.3 } },
         )

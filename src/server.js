@@ -103,6 +103,7 @@ const publishEdit = ({ tool, input, id, sessionId, cwd }) => {
 const LIFE = {
   SessionStart: 'start', SessionEnd: 'end', PostModelSwitch: 'model', CwdChanged: 'cwd',
   DirectoryAdded: 'folder', InstructionsLoaded: 'memo', ConfigChange: 'memo',
+  PostToolBatch: 'batch', TaskCreated: 'task-new', TaskCompleted: 'task-done', TeammateIdle: 'teammate', UserPromptExpansion: 'command',
 }
 const firstText = (...values) => values.find(value => typeof value === 'string' && value) ?? ''
 const lastPart = text => text.split(/[\\/]/).filter(Boolean).pop() ?? ''
@@ -141,6 +142,8 @@ const onHook = p => {
   if (kind === 'StopFailure') return publish({ type: 'turn-fail', sessionId, cwd, reason: typeof p.error === 'string' ? p.error : 'unknown', at })
   if (kind === 'PreCompact' || kind === 'PostCompact') return publish({ type: 'compact', sessionId, cwd, phase: kind === 'PreCompact' ? 'start' : 'end', at })
   if (kind === 'PermissionDenied') return publish({ type: 'denied', sessionId, cwd, tool, at })
+  // Claude has been left waiting: only that kind of notification, never its words
+  if (kind === 'Notification') return p.notification_type === 'idle_prompt' ? publish({ type: 'life', what: 'idle', detail: '', sessionId, cwd, at }) : undefined
   if (LIFE[kind]) {
     // only a short word comes along: how it started or ended, the model, the folder's name
     const detail = {
@@ -149,8 +152,8 @@ const onHook = p => {
       model: firstText(p.model, p.model_name),
       cwd: lastPart(firstText(p.new_cwd)),
       folder: lastPart(firstText(p.directory, p.path)),
-      memo: '',
-    }[LIFE[kind]]
+      command: firstText(p.command_name),
+    }[LIFE[kind]] ?? ''
     return publish({ type: 'life', what: LIFE[kind], detail, sessionId, cwd, at })
   }
   if (!tool) return

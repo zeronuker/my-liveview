@@ -8,6 +8,7 @@ const PLAIN_EVENTS = [
   'UserPromptSubmit', 'Stop', 'SubagentStart', 'SubagentStop', 'PermissionRequest',
   'StopFailure', 'PreCompact', 'PostCompact', 'PermissionDenied',
   'SessionStart', 'SessionEnd', 'PostModelSwitch', 'CwdChanged', 'DirectoryAdded', 'InstructionsLoaded', 'ConfigChange',
+  'PostToolBatch', 'TaskCreated', 'TaskCompleted', 'TeammateIdle', 'UserPromptExpansion', 'Notification',
 ]
 
 const isOurs = (url, handler) => handler.type === 'http' && handler.url === url

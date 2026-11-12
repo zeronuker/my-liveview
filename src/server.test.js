@@ -298,3 +298,21 @@ test('the life of a session reaches the page with only a short word, not paths o
     assert.equal(page.text.includes('private'), false)
     assert.equal(page.text.includes('user_settings'), false)
   }))
+
+test('batches, tasks, an idle teammate, a command and a waiting notice reach the page as kinds only', () =>
+  withServer(async ({ token }) => {
+    const page = await listen()
+    await hook(token, { hook_event_name: 'PostToolBatch' })
+    await hook(token, { hook_event_name: 'TaskCreated', task_subject: 'secret job' })
+    await hook(token, { hook_event_name: 'TaskCompleted', task_subject: 'secret job' })
+    await hook(token, { hook_event_name: 'TeammateIdle', teammate_name: 'secret mate' })
+    await hook(token, { hook_event_name: 'UserPromptExpansion', command_name: 'review', command_args: 'secret args' })
+    await hook(token, { hook_event_name: 'Notification', notification_type: 'permission_prompt', message: 'secret ask' })
+    await hook(token, { hook_event_name: 'Notification', notification_type: 'idle_prompt', message: 'secret wait' })
+
+    for (const what of ['batch', 'task-new', 'task-done', 'teammate']) assert.ok(await page.until(`"what":"${what}"`), what)
+    assert.ok(await page.until('"what":"command","detail":"review"'))
+    assert.ok(await page.until('"what":"idle"'))
+    assert.equal(page.text.includes('permission'), false) // other notices are not passed on
+    assert.equal(page.text.includes('secret'), false)
+  }))

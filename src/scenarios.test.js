@@ -119,6 +119,13 @@ test('an API error ends the turn: the manager says why and nothing goes upstairs
   assert.equal(papers, 0)
 })
 
+test("a question from Claude is a wait at the CEO's door that ends when it is answered", () => {
+  const cmds = results.question.commands
+
+  assert.equal(cmds.find(c => c.cmd === 'ask' && c.label === 'Has a question').tool, 'AskUserQuestion')
+  assert.ok(cmds.some(c => c.cmd === 'answered'))
+})
+
 test('/clear sweeps away what was on the tray: nothing is left and nothing went upstairs', () => {
   assert.equal(results.clear.stack, 0)
   assert.equal(results.clear.papers, 0)
@@ -150,6 +157,7 @@ test('coverage: every tool the Office has a scene for is in some scenario', () =
   const seen = all(r => r.events.filter(e => e.type === 'tool').map(e => e.tool))
   for (const tool of ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob']) assert.ok(seen.has(tool), tool)
   assert.ok([...seen].some(tool => tool.startsWith('mcp__')), 'an MCP tool')
+  for (const tool of ['WebSearch', 'WebFetch', 'LSP', 'AskUserQuestion', 'SendMessage']) assert.ok(seen.has(tool), tool)
 })
 
 test('coverage: a tool that fails, an edit that does not apply and a test that passes are in some scenario', () => {
@@ -161,7 +169,7 @@ test('coverage: a tool that fails, an edit that does not apply and a test that p
 
 test('coverage: every kind of session life the Office knows is in some scenario', () => {
   const seen = all(r => r.events.filter(e => e.type === 'life').map(e => e.what))
-  for (const what of ['start', 'end', 'model', 'cwd', 'folder', 'memo']) assert.ok(seen.has(what), what)
+  for (const what of ['start', 'end', 'model', 'cwd', 'folder', 'memo', 'batch', 'task-new', 'task-done', 'teammate', 'command', 'idle']) assert.ok(seen.has(what), what)
 })
 
 test('coverage: every command the director gives and every step the stage plays is in some scenario', () => {
