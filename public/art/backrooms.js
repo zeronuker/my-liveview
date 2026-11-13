@@ -2,7 +2,7 @@
 // the bathrooms' stalls and basins, and the meeting room's board table. Rectangles ['r', x, y, w, h, colour]
 // in pixels, palette colours only, light from the top-left.
 import { RAMPS } from '../palette.js'
-import { hash } from '../pixel.js'
+import { ellipseOps, hash } from '../pixel.js'
 
 const TILE = 16
 const r = (x, y, w, h, color) => ['r', x, y, w, h, color]
@@ -63,25 +63,42 @@ const labBenchOps = ({ x }) => {
   return ops
 }
 
-// a server rack, one tile wide and two tall: rows of units with their lights
-const rackOps = ({ x }) => {
+// a server rack, one tile wide and two tall: rows of units with their lights, seen from the front; one with
+// `face: 'up'` (the back row of a pair, whose fronts face the aisle) shows its back, two fans and a loom of cables
+const rackOps = ({ x, y = 0, face }) => {
   const ops = [r(1, 0, 14, 32, metal[0]), r(1, 0, 14, 1, metal[2]), r(1, 0, 1, 32, metal[2]), r(14, 1, 1, 31, metal[1])]
+  if (face === 'up') {
+    ops.push(r(3, 2, 10, 28, metal[1]), r(3, 2, 10, 1, metal[2]))
+    for (const fy of [4, 14]) ops.push(...ellipseOps(8, fy + 4, 4, 4, metal[0]), ...ellipseOps(8, fy + 4, 3, 3, metal[1]), r(7, fy + 2, 2, 4, metal[0]), r(6, fy + 3, 4, 2, metal[0]), r(7, fy + 3, 2, 2, metal[2]))
+    for (const cx of [4, 6, 9, 11]) ops.push(r(cx, 24, 1, 6, [brick[2], glass[2], leaf[2], light[2]][cx % 4]), r(cx, 24, 1, 1, plaster[3]))
+    ops.push(r(1, 31, 14, 1, metal[1]))
+    return ops
+  }
   const leds = [leaf[3], light[3], leaf[3], brick[2]]
   for (let unit = 0; unit < 7; unit++) {
-    const y = 2 + unit * 4
-    ops.push(r(3, y, 10, 3, metal[1]), r(3, y, 10, 1, metal[2]), r(4, y + 1, 1, 1, leds[(unit + x) % leds.length]), r(6, y + 1, 5, 1, metal[0]))
+    const uy = 2 + unit * 4
+    ops.push(r(3, uy, 10, 3, metal[1]), r(3, uy, 10, 1, metal[2]), r(4, uy + 1, 1, 1, leds[(unit + x + y) % leds.length]), r(6, uy + 1, 5, 1, metal[0]), r(11, uy + 1, 1, 1, leds[(unit + x + y + 2) % leds.length]))
   }
   ops.push(r(1, 31, 14, 1, metal[1]))
   return ops
 }
 
+// a wall urinal, one tile: a ceramic bowl with a flush pipe and valve, and a privacy screen to each side
+const urinalOps = () => [
+  r(0, 2, 2, 11, frost[2]), r(0, 2, 2, 1, frost[3]), r(14, 2, 2, 11, frost[1]), r(15, 3, 1, 10, frost[0]), // the screens either side
+  r(7, 0, 2, 4, metal[2]), r(6, 3, 4, 2, metal[1]), r(6, 3, 4, 1, metal[3]), // the pipe and flush valve
+  ...ellipseOps(8, 9, 5, 6, plaster[1]), ...ellipseOps(8, 9, 4, 5, plaster[3]), ...ellipseOps(8, 11, 2, 3, slate[1]), r(5, 6, 2, 1, plaster[3]), // the bowl, its hollow and a highlight
+  r(7, 13, 2, 1, slate[0]), // the drain
+]
+
 // a bathroom stall, one tile wide and two tall: its top edge and its door, with a gap under it
-const stallOps = ({ x }) => {
+const stallOps = ({ x, tone }) => {
   const door = x % 2 === 0 ? leaf[2] : brick[2]
+  const [dark, mid, lit] = tone ? [RAMPS[tone][1], RAMPS[tone][2], RAMPS[tone][3]] : [frost[1], frost[2], frost[3]] // the door's own colour, if it has one
   return [
     r(0, 0, TILE, 3, frost[3]), r(0, 0, TILE, 1, plaster[3]), r(0, 2, TILE, 1, frost[1]), // the top edge
-    r(1, 3, 14, 23, frost[2]), r(1, 3, 1, 23, frost[3]), r(14, 4, 1, 22, frost[1]), // the door
-    r(3, 6, 10, 1, frost[1]), r(3, 20, 10, 1, frost[1]), r(11, 12, 2, 3, metal[2]), r(11, 10, 2, 1, door), // panels, the handle and the lock
+    r(1, 3, 14, 23, mid), r(1, 3, 1, 23, lit), r(14, 4, 1, 22, dark), // the door
+    r(3, 6, 10, 1, dark), r(3, 20, 10, 1, dark), r(11, 12, 2, 3, metal[2]), r(11, 10, 2, 1, door), // panels, the handle and the lock
     r(1, 26, 14, 6, slate[0]), r(3, 28, 3, 4, slate[1]), r(10, 28, 3, 4, slate[1]), // the gap under it, and feet
   ]
 }
@@ -113,6 +130,7 @@ export const backroomArts = {
   labbench: { under: false, ops: labBenchOps },
   rack: { under: false, ops: rackOps },
   stall: { under: false, ops: stallOps },
+  urinal: { under: false, ops: urinalOps },
   basin: { under: false, ops: basinOps },
   boardtable: { under: false, ops: boardTableOps },
 }

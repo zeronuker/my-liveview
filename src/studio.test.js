@@ -210,3 +210,15 @@ test('things hung on a wall are on bare wall cells, not on a window or a door, a
 test('the plan is the same every time', () => {
   assert.deepEqual(buildStudio(), buildStudio())
 })
+
+test('the men\'s bathroom has urinals, the women\'s only cubicles, and the server room has two rows of racks with an aisle', () => {
+  const inRoom = (name, kind) => layout.furniture.filter(f => f.kind === kind && f.x >= roomNamed(name).x && f.x < roomNamed(name).x + roomNamed(name).w && f.y >= roomNamed(name).y && f.y < roomNamed(name).y + roomNamed(name).h)
+  assert.ok(inRoom("Men's bathroom", 'urinal').length >= 2)
+  assert.equal(inRoom("Women's bathroom", 'urinal').length, 0)
+  assert.ok(inRoom("Women's bathroom", 'stall').length >= 3)
+  assert.ok(inRoom("Men's bathroom", 'stall').length >= 1)
+  const racks = inRoom('Server room', 'rack')
+  const rows = new Set(racks.map(rack => rack.y))
+  assert.ok(rows.size >= 2 && racks.length >= 5, 'two rows of racks')
+  assert.ok(racks.some(rack => rack.face === 'up'), 'the back row faces the aisle')
+})

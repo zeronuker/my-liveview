@@ -188,8 +188,13 @@ export const buildStudio = () => {
   block('umbrella', 21, 42)
 
   // other things that are in the way
-  for (const x of [16, 17, 18]) block('rack', x, 11, 1, 2) // the server room: three racks
-  for (const x of [20, 21, 23, 24]) block('stall', x, 11, 1, 2) // the bathrooms: two stalls each, and a basin or two by the door
+  // the server room: two rows of racks with an aisle between, the back row facing it, and a free column from the door
+  for (const x of [16, 17, 18]) block('rack', x, 11, 1, 2)
+  for (const x of [17, 18]) block('rack', x, 14, 1, 2, 'up')
+  // the men's: two urinals, a stall and two basins; the women's: three cubicles and two basins
+  for (const x of [20, 21]) block('urinal', x, 11)
+  block('stall', 21, 13, 1, 2, undefined, 'glass')
+  for (const [x, y] of [[23, 11], [24, 11], [23, 13]]) block('stall', x, y, 1, 2, undefined, 'lilac')
   for (const [x, y] of [[21, 15], [21, 16], [23, 15], [23, 16]]) block('basin', x, y)
   block('labbench', 11, 11, 2, 1) // the test lab: benches along the north wall
   block('labbench', 13, 11, 2, 1)
