@@ -191,8 +191,8 @@ export const buildStudio = () => {
 
   // other things that are in the way
   // the server room: two rows of racks with an aisle between, the back row facing it, and a free column from the door
-  for (const x of [14, 15, 16]) block('rack', x, 11, 1, 2)
-  for (const x of [15, 16]) block('rack', x, 14, 1, 2, 'up')
+  for (const x of [14, 15, 16]) block('rack', x, 11)
+  for (const x of [15, 16]) block('rack', x, 13, 1, 1, 'up')
   // the men's: four urinals along the west wall and a sink counter along the east one; the women's: three cubicles with
   // a toilet each along the west wall and the same counter on the east. The aisle between stays clear, and so does the way in.
   for (const y of [11, 12, 13, 14]) block('urinal', 18, y)

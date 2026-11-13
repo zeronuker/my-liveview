@@ -123,7 +123,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   // a desk has a second picture, for when someone is typing at it (its screen is lit)
   const items = itemsOf(layout).map(item => ({
     ...item,
-    image: smallCanvas(item.w * TILE, item.h * TILE, item.ops),
+    image: smallCanvas(item.w * TILE, item.h * TILE + item.rise, item.ops),
     ...(item.kind === 'desk' ? { imageOn: smallCanvas(item.w * TILE, item.h * TILE, [...item.ops, ...deskOnOps(item)]) } : {}),
   }))
   // the desk in front of each seat, so its screen can light up when someone is writing there
@@ -147,7 +147,8 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   const drawItem = (item, { tile, left, top }, open) => {
     ctx.imageSmoothingEnabled = false
     const lit = item.imageOn && open.has(`${item.x},${item.y}`)
-    ctx.drawImage(lit ? item.imageOn : item.image, left + item.x * tile, top + item.y * tile, item.w * tile, item.h * tile)
+    const rise = (item.rise * tile) / TILE // a tall piece stands above its tile
+    ctx.drawImage(lit ? item.imageOn : item.image, left + item.x * tile, top + item.y * tile - rise, item.w * tile, item.h * tile + rise)
   }
 
   const bubble = (value, kind, x, y, tile, ink) => {

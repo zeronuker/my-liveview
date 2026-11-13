@@ -63,23 +63,25 @@ const labBenchOps = ({ x }) => {
   return ops
 }
 
-// a server rack, one tile wide and two tall: rows of units with their lights, seen from the front; one with
-// `face: 'up'` (the back row of a pair, whose fronts face the aisle) shows its back, two fans and a loom of cables
+// A server rack, one tile with its picture rising 4 pixels above it (RACK_RISE): 20 pixels tall, a little taller than a
+// person, rows of units with their lights, seen from the front; one with `face: 'up'` (the back row of a pair, whose
+// fronts face the aisle) shows its back, a fan and a loom of cables
+const RACK_RISE = 4
 const rackOps = ({ x, y = 0, face }) => {
-  const ops = [r(1, 0, 14, 32, metal[0]), r(1, 0, 14, 1, metal[2]), r(1, 0, 1, 32, metal[2]), r(14, 1, 1, 31, metal[1])]
+  const ops = [r(1, 0, 14, 20, metal[0]), r(1, 0, 14, 1, metal[2]), r(1, 0, 1, 20, metal[2]), r(14, 1, 1, 19, metal[1])]
   if (face === 'up') {
-    ops.push(r(3, 2, 10, 28, metal[1]), r(3, 2, 10, 1, metal[2]))
-    for (const fy of [4, 14]) ops.push(...ellipseOps(8, fy + 4, 4, 4, metal[0]), ...ellipseOps(8, fy + 4, 3, 3, metal[1]), r(7, fy + 2, 2, 4, metal[0]), r(6, fy + 3, 4, 2, metal[0]), r(7, fy + 3, 2, 2, metal[2]))
-    for (const cx of [4, 6, 9, 11]) ops.push(r(cx, 24, 1, 6, [brick[2], glass[2], leaf[2], light[2]][cx % 4]), r(cx, 24, 1, 1, plaster[3]))
-    ops.push(r(1, 31, 14, 1, metal[1]))
+    ops.push(r(3, 2, 10, 16, metal[1]), r(3, 2, 10, 1, metal[2]))
+    ops.push(...ellipseOps(8, 7, 4, 4, metal[0]), ...ellipseOps(8, 7, 3, 3, metal[1]), r(7, 5, 2, 4, metal[0]), r(6, 6, 4, 2, metal[0]), r(7, 6, 2, 2, metal[2])) // the fan
+    for (const cx of [4, 6, 9, 11]) ops.push(r(cx, 12, 1, 6, [brick[2], glass[2], leaf[2], light[2]][cx % 4]), r(cx, 12, 1, 1, plaster[3]))
+    ops.push(r(1, 19, 14, 1, metal[1]))
     return ops
   }
   const leds = [leaf[3], light[3], leaf[3], brick[2]]
-  for (let unit = 0; unit < 7; unit++) {
+  for (let unit = 0; unit < 4; unit++) {
     const uy = 2 + unit * 4
     ops.push(r(3, uy, 10, 3, metal[1]), r(3, uy, 10, 1, metal[2]), r(4, uy + 1, 1, 1, leds[(unit + x + y) % leds.length]), r(6, uy + 1, 5, 1, metal[0]), r(11, uy + 1, 1, 1, leds[(unit + x + y + 2) % leds.length]))
   }
-  ops.push(r(1, 31, 14, 1, metal[1]))
+  ops.push(r(1, 19, 14, 1, metal[1]))
   return ops
 }
 
@@ -139,7 +141,7 @@ export const backroomArts = {
   shelf: { under: false, ops: shelfOps },
   machine: { under: false, ops: machineOps },
   labbench: { under: false, ops: labBenchOps },
-  rack: { under: false, ops: rackOps },
+  rack: { under: false, rise: RACK_RISE, ops: rackOps },
   cubicle: { under: false, ops: cubicleOps },
   urinal: { under: false, ops: urinalOps },
   vanity: { under: false, ops: vanityOps },

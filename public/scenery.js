@@ -61,7 +61,8 @@ const boxOps = ({ w, h }, color) => {
 }
 
 // what to draw for each kind of furniture; `under` things are drawn below the
-// people (a chair, a sofa sat on), the rest are in front of whoever is behind them
+// people (a chair, a sofa sat on), the rest are in front of whoever is behind them. A piece taller than its
+// tile has a `rise`: that many pixels of its picture stand above its box, so the picture is `rise` taller than the box.
 const ARTS = {
   rail: { under: false, ops: railOps },
   ...backroomArts,
@@ -76,7 +77,7 @@ const ARTS = {
 export const itemsOf = layout =>
   layout.furniture.map(item => {
     const art = ARTS[item.kind] ?? { under: false, ops: () => boxOps(item, '#888780') }
-    return { ...item, under: art.under, ops: art.ops(item) }
+    return { ...item, under: art.under, rise: art.rise ?? 0, ops: art.ops(item) }
   })
 
 // paints a list of rectangles with its corner at (x, y)

@@ -81,9 +81,9 @@ for (const item of itemsOf(layout)) {
   const key = `${item.kind} ${item.w}x${item.h}`
   if (seen.has(key)) continue
   seen.add(key)
-  PIECES.push({ label: key, ops: item.ops, w: item.w, h: item.h })
+  PIECES.push({ label: key, ops: item.ops, w: item.w, h: item.h, rise: item.rise })
 }
-for (const piece of PIECES) show(document.getElementById('pieces'), piece.label, piece.ops, piece.w * TILE, piece.h * TILE, [1, 8])
+for (const piece of PIECES) show(document.getElementById('pieces'), piece.label, piece.ops, piece.w * TILE, piece.h * TILE + piece.rise, [1, 8])
 
 const ground = document.getElementById('ground')
 ground.width = layout.width * TILE

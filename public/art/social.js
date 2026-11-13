@@ -34,14 +34,18 @@ const pingPongOps = () => [
 ]
 
 // A vending machine, one tile, seen from the front. Its colour is picked by where it stands: red, blue or yellow.
+// It stands 22 pixels tall, a person and a bit, so its picture rises 6 pixels above its tile (VENDING_RISE).
+const VENDING_RISE = 6
 const vendingOps = ({ x }) => {
   const body = [brick, glass, light][x % 3]
+  const y = VENDING_RISE
   return [
-    r(1, 1, 14, 15, body[1]), r(1, 1, 14, 1, body[3]), r(1, 1, 1, 15, body[2]), r(14, 2, 1, 14, body[0]), // the body, lit top-left
-    r(3, 3, 10, 7, metal[0]), r(3, 6, 10, 1, metal[1]), // the window, and its shelf
-    r(4, 4, 2, 2, brick[2]), r(7, 4, 2, 2, glass[2]), r(10, 4, 2, 2, light[2]), r(4, 7, 2, 2, leaf[2]), r(7, 7, 2, 2, light[2]), r(10, 7, 2, 2, brick[2]), // what is in it
-    r(4, 11, 3, 3, metal[2]), r(5, 12, 1, 1, light[3]), r(9, 11, 3, 1, metal[0]), // the buttons and the coin slot
-    r(4, 14, 8, 2, metal[0]), r(5, 14, 6, 1, metal[1]), // where it comes out
+    r(1, 1, 14, 21, body[1]), r(1, 1, 14, 1, body[3]), r(1, 1, 1, 21, body[2]), r(14, 2, 1, 20, body[0]), // the body, lit top-left
+    r(3, 2, 10, 3, metal[0]), r(4, 3, 8, 1, light[3]), r(4, 3, 3, 1, light[2]), // the lit sign on top
+    r(3, y + 3, 10, 7, metal[0]), r(3, y + 6, 10, 1, metal[1]), // the window, and its shelf
+    r(4, y + 4, 2, 2, brick[2]), r(7, y + 4, 2, 2, glass[2]), r(10, y + 4, 2, 2, light[2]), r(4, y + 7, 2, 2, leaf[2]), r(7, y + 7, 2, 2, light[2]), r(10, y + 7, 2, 2, brick[2]), // what is in it
+    r(4, y + 11, 3, 3, metal[2]), r(5, y + 12, 1, 1, light[3]), r(9, y + 11, 3, 1, metal[0]), // the buttons and the coin slot
+    r(4, y + 14, 8, 2, metal[0]), r(5, y + 14, 6, 1, metal[1]), // where it comes out
   ]
 }
 
@@ -127,7 +131,7 @@ const deckRailOps = ({ w, h }) => {
 export const socialArts = {
   tv: { under: false, ops: tvOps },
   pingpong: { under: false, ops: pingPongOps },
-  vending: { under: false, ops: vendingOps },
+  vending: { under: false, rise: VENDING_RISE, ops: vendingOps },
   cooler: { under: false, ops: coolerOps },
   bin: { under: false, ops: binOps },
   counter: { under: false, ops: counterOps },

@@ -24,7 +24,7 @@ test('the floor and walls are all inside the plan, in whole pixels and real colo
 })
 
 test('every piece of furniture has art that fits inside its own size', () => {
-  for (const item of itemsOf(layout)) checkOps(item.ops, item.w * TILE, item.h * TILE, `${item.kind} at ${item.x},${item.y}`)
+  for (const item of itemsOf(layout)) checkOps(item.ops, item.w * TILE, item.h * TILE + item.rise, `${item.kind} at ${item.x},${item.y}`)
 })
 
 test('chairs and sofas are under the people; desks, shelves and the rest are in front of those behind them', () => {
