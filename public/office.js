@@ -9,6 +9,7 @@ import { createSound, soundFor } from './sound.js'
 import { fit, keepInView, zoomAt } from './layout.js'
 import { createStage } from './stage.js'
 import { buildGarden, roamGrid } from './garden.js'
+import { shownNames } from './names.js'
 import { createPets } from './pets.js'
 import { buildStudio } from './studio.js'
 import { deskOnOps } from './art/office.js'
@@ -303,18 +304,25 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
 
     ctx.restore()
 
-    tags.push(() => {
+    // the name is shown if it is big enough to read and does not print over another (the picked chat's names, then
+    // those of whoever is busy, are the ones kept in a crowd); the rest of the tag is always drawn
+    const fontSize = Math.max(8, tile * 0.42)
+    const named = tile >= 11 // too small to read: no names
+    ctx.font = `500 ${fontSize}px ${fontFamily()}`
+    const busy = p.pose !== 'idle' && p.pose !== 'walk'
+    tags.push({
+      x: cx, y: cy + tile * 0.62, size: fontSize, width: named ? ctx.measureText(p.name).width : 0,
+      rank: selected && p.sessionId === selected ? 0 : busy ? 1 : 2,
+      run: showName => {
       ctx.save()
       if (dim) ctx.globalAlpha = 0.35
-      const fontSize = Math.max(8, tile * 0.42)
-      const named = tile >= 11 // too small to read: no names
-      if (named) label(p.name, cx, cy + tile * 0.62, fontSize)
+      if (showName) label(p.name, cx, cy + tile * 0.62, fontSize)
       if (multiChat && p.sessionId) {
         // a dot in the chat's colour, just before the name
         ctx.font = `500 ${fontSize}px ${fontFamily()}`
         const radius = Math.max(2, tile * 0.11)
         ctx.beginPath()
-        ctx.arc(named ? cx - ctx.measureText(p.name).width / 2 - radius - 2 : cx, cy + tile * 0.62, radius, 0, Math.PI * 2)
+        ctx.arc(showName ? cx - ctx.measureText(p.name).width / 2 - radius - 2 : cx, cy + tile * 0.62, radius, 0, Math.PI * 2)
         ctx.fillStyle = chatColor(p.sessionId)
         ctx.fill()
         ctx.strokeStyle = 'rgba(0,0,0,0.6)'
@@ -323,6 +331,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
       if (p.label && tile >= 14) text(p.label, cx, cy + tile * 0.62 + fontSize * 1.1, fontSize * 0.9, '#b9b4c8')
       if (p.bubble) bubble(p.bubble.text, p.bubble.kind, cx, headTop, tile, ink)
       ctx.restore()
+      },
     })
   }
 
@@ -440,7 +449,8 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     // the number of papers on the manager's tray, and then names, labels and bubbles
     const tray = layout.furniture.find(item => item.kind === 'tray')
     if (snap.stack > 0) label(`${snap.stack}`, view.left + (tray.x + 0.5) * view.tile, view.top + (tray.y + 0.5) * view.tile, Math.max(9, view.tile * 0.5))
-    for (const tag of tags) tag()
+    const named = shownNames(tags)
+    tags.forEach((tag, i) => tag.run(named.has(i)))
     if (multiChat) drawLegend(here)
 
     // effects: what the stage says happened, and code glyphs rising from whoever is writing

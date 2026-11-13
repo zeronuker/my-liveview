@@ -486,6 +486,28 @@ test('the first trip from the gate is quicker than the long way at walking pace:
   assert.ok(seconds < 12, `the first trip took ${seconds} seconds`)
 })
 
+test('a crowd handing in at once stands round the tray, each on a cell of their own, not all on one', () => {
+  const { hire, doStep, run, person } = setup()
+  const ids = ['w1', 'w2', 'w3', 'w4', 'w5']
+  for (const id of ids) {
+    hire(id)
+    doStep(id, 'handIn')
+  }
+  const where = new Map()
+  for (let i = 0; i < 600; i++) {
+    run(0.1)
+    for (const id of ids) if (person(id)?.pose === 'give' && !where.has(id)) where.set(id, `${Math.round(person(id).x)},${Math.round(person(id).y)}`)
+  }
+  const tray = layout.spots.handIn
+
+  assert.equal(where.size, 5)
+  assert.equal(new Set(where.values()).size, 5, [...where.values()].join(' '))
+  for (const cell of where.values()) {
+    const [x, y] = cell.split(',').map(Number)
+    assert.ok(Math.abs(x - tray.x) + Math.abs(y - tray.y) <= 2, `${cell} is far from the tray`)
+  }
+})
+
 test('ticked once a frame (sixty a second) a walker glides: small steps, none bigger than their speed allows, no standing still mid-walk', () => {
   const { hire, doStep, run, person } = setup()
   hire('w1')

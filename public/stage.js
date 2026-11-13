@@ -100,6 +100,26 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
   }
   const homeOf = worker => (worker.kind === 'manager' ? spots.managerSeat : seatOf(worker))
 
+  // A place at a spot that several people may come to at once (the tray, the CEO's door, the front door): the spot
+  // itself for the first, then the nearest free cell within two steps of it, so a crowd stands round it, not on it.
+  const placeAt = (spot, worker) => {
+    const taken = new Set([...workers.values()].filter(w => w !== worker && w.present && w.goal).map(w => `${w.goal[0]},${w.goal[1]}`))
+    const seen = new Set([`${spot.x},${spot.y}`])
+    const ring = [[spot.x, spot.y]]
+    for (let head = 0; head < ring.length; head++) {
+      const [x, y] = ring[head]
+      if (Math.abs(x - spot.x) + Math.abs(y - spot.y) >= 2) continue
+      for (const [dx, dy] of [[0, 1], [1, 0], [-1, 0], [0, -1]]) {
+        const [nx, ny] = [x + dx, y + dy]
+        if (seen.has(`${nx},${ny}`) || grid[ny]?.[nx] === undefined || grid[ny][nx] === '#') continue
+        seen.add(`${nx},${ny}`)
+        ring.push([nx, ny])
+      }
+    }
+    const [x, y] = ring.find(([cx, cy]) => !taken.has(`${cx},${cy}`)) ?? ring[0]
+    return { x, y }
+  }
+
   // at instant speed nothing is happening in view, so there is nothing to show
   const emit = (kind, x, y, extra) => {
     if (!isInstant()) effects.push({ kind, x, y, ...extra })
@@ -113,7 +133,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     const file = baseName(cmd.path ?? worker.path)
     const waitsForNext = { until: () => worker.queue.length > 0 }
     const handIn = [
-      { spot: () => spots.handIn, act: { pose: 'give', dur: 0.8, label: 'Handing in', carry: null, done: () => { handedIn.add(worker.id); stack++; emit('ring', spots.handIn.x, spots.handIn.y, { tone: 'ok' }) } } },
+      { spot: () => placeAt(spots.handIn, worker), act: { pose: 'give', dur: 0.8, label: 'Handing in', carry: null, done: () => { handedIn.add(worker.id); stack++; emit('ring', spots.handIn.x, spots.handIn.y, { tone: 'ok' }) } } },
       { spot: () => seatOf(worker), act: { pose: 'sit', dur: 0.4 } },
     ]
     switch (cmd.step) {
@@ -138,7 +158,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       case 'search':
         return [{ spot: () => shelfFor(null), act: { pose: 'scan', dur: 1.2, label: cmd.label ?? 'Searching', ...waitsForNext } }]
       case 'call': // an MCP tool: out by the front door, waiting for the answer
-        return [{ spot: () => spots.entrance, act: { pose: 'scan', dur: 1.2, label: cmd.label ?? (cmd.server ? `Calling ${cmd.server}` : 'Calling a tool'), ...waitsForNext } }]
+        return [{ spot: () => placeAt(spots.entrance, worker), act: { pose: 'scan', dur: 1.2, label: cmd.label ?? (cmd.server ? `Calling ${cmd.server}` : 'Calling a tool'), ...waitsForNext } }]
       case 'unavailable':
         return [{ spot: null, act: { pose: 'shake', dur: 1.5, label: 'Tool unavailable', bubble: bad('✗') } }]
       case 'pass':
@@ -205,6 +225,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       if (job.carryNow !== undefined) worker.carry = job.carryNow
       worker.pending = job.act
       const spot = typeof job.spot === 'function' ? job.spot() : job.spot
+      worker.goal = spot ? [spot.x, spot.y] : null // where they are going to be, which others choose round
       if (!spot) return begin(worker)
       const path = isInstant() ? null : findPath(grid, [Math.round(worker.x), Math.round(worker.y)], [spot.x, spot.y])
       if (path && path.length > 0) {
@@ -452,7 +473,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
           {
             skipIf: () => answered.has(cmd.sessionId),
             onStart: () => { started = true },
-            spot: () => spots.ceoDoor,
+            spot: () => placeAt(spots.ceoDoor, worker),
             act: { pose: 'ask', dur: 0.5, label: cmd.label ?? 'Needs approval', bubble: { text: '?', kind: 'ask' }, until: () => answered.has(cmd.sessionId) },
           },
           { skipIf: () => !started, spot: () => homeOf(worker), act: { pose: 'sit', dur: 0.3 } },
