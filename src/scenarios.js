@@ -33,6 +33,35 @@ const busyOffice = () => {
   return steps
 }
 
+// Ten minutes of four chats, for watching the Office go through its moods: each chat has turns that chat, research, plan,
+// write, test, commit and push, ask for a permission, use a helper, and then wait for the person. The chats overlap by
+// switching turns and by a helper (or a pause) carrying on while another chat has its turn. Always the same.
+const longSession = () => {
+  const names = ['a', 'b', 'c', 'd']
+  const turns = {
+    talk: n => [['prompt', `Quick question ${n}`], ['wait', 9000], ['stop'], ['wait', 5000]],
+    research: n => [['prompt', `Look into ${n}`], ['grep', 'price'], ['read', 'cart.js'], ['wait', 2500], ['read', 'receipt.js'], ['web', 'search'], ['lsp'], ['wait', 4000], ['stop'], ['wait', 5000]],
+    plan: n => [['prompt', `Plan ${n}`], ['read', 'cart.js'], ['plan', 'enter'], ['plan', 'todo'], ['wait', 9000], ['plan', 'exit'], ['wait', 4000], ['stop'], ['wait', 4000]],
+    build: n => [['prompt', `Build ${n}`], ['grep', 'discount'], ['read', 'cart.js'], ...files([`${n}-one.js`, `${n}-two.js`, `${n}-three.js`, `${n}-four.js`], 12), ['edit', `${n}-one.js`], ['bash', 'fail', 'npm test'], ['edit', `${n}-two.js`], ['bash', 'ok', 'npm test'], ['wait', 2500], ['stop'], ['wait', 5000]],
+    ship: n => [['prompt', `Ship ${n}`], ...files([`${n}-ship.js`, `${n}-ship2.js`], 10), ['bash', 'ok', '', 'git commit -m "Ship it"'], ['bash', 'ok', '', 'git push'], ['wait', 3000], ['stop'], ['wait', 6000]],
+    ask: n => [['prompt', `Clean up ${n}`], ['read', 'cart.js'], ['ask', 6000], ['bash', 'ok', 'npm run clean'], ['wait', 2000], ['stop'], ['wait', 4000]],
+    helper: n => [['prompt', `Dig into ${n}`], ['agentStart', `${n}-helper`, 'Explore'], ['read', 'cart.js'], ['wait', 12000]],
+    finish: n => [['agentStop', `${n}-helper`, 'Explore'], ['read', 'receipt.js'], ['wait', 1500], ['stop'], ['wait', 6000]],
+  }
+  const plan = [
+    ['a', 'talk'], ['b', 'research'], ['c', 'plan'], ['d', 'build'],
+    ['a', 'build'], ['b', 'ask'], ['c', 'build'], ['d', 'talk'],
+    ['a', 'helper'], ['b', 'plan'], ['c', 'research'], ['d', 'ship'], ['a', 'finish'],
+    ['b', 'build'], ['c', 'ship'], ['d', 'research'], ['a', 'ship'], ['b', 'ship'],
+    ['c', 'talk'], ['d', 'plan'], ['a', 'research'], ['b', 'talk'], ['c', 'ask'], ['d', 'build'],
+  ]
+  const steps = [['chat', 'a'], ['session', 'startup']]
+  for (const name of names.slice(1)) steps.push(['chat', name], ['session', 'startup'])
+  for (const [chat, kind] of plan) steps.push(['chat', chat], ...turns[kind](chat))
+  for (const chat of names) steps.push(['chat', chat], ['stop'])
+  return steps.map(step => (step[0] === 'wait' ? ['wait', Math.round(step[1] * 2.2)] : step)) // stretched to about ten minutes
+}
+
 export const SCENARIOS = {
   full: {
     about: 'a whole session: prompt, search, reads, a helper, a permission, a failing then passing test, nine new files, a failed edit',
@@ -166,6 +195,11 @@ export const SCENARIOS = {
     about: 'a dozen chats at once, at random but always the same: reads, writes, tests, helpers, searches, an API error',
     ends: 'stop',
     steps: busyOffice(),
+  },
+  'long-session': {
+    about: 'ten minutes of four chats: talking, research, plan mode, building, tests, commit and push, a permission, a helper, waiting',
+    ends: 'stop',
+    steps: longSession(),
   },
   lifecycle: {
     about: 'a session is resumed, memos load, the model and folder change, a folder is added, then the session ends',
