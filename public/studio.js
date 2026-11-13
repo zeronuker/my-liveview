@@ -17,7 +17,7 @@
 // wallArt: [{ kind, x, y, w, h }]             hung on a wall's face: a 'whiteboard' or a 'picture'
 // rugs: [{ kind, x, y, w, h }]                'rug' or 'mat' on the floor; lights: [{ x, y, rx, ry }] pools of light
 // furniture: [{ kind, x, y, w, h, solid }]    solid ones are '#' in the grid (a desk, a rail)
-// spots: where people stand for each kind of job. A seat also says which way it faces and,
+// spots (breaks too: where an idle worker goes): where people stand for each kind of job. A seat also says which way it faces and,
 //        for a desk seat, which desk cell is in front of it.
 
 export const buildStudio = () => {
@@ -222,7 +222,7 @@ export const buildStudio = () => {
   for (const [x, y] of [[40, 35], [27, 40]]) block('plant', x, y)
   // the terrace: two tables with chairs, plants, and a railing round the deck's edge
   for (const x of [34, 38]) block('cafetable', x, 44)
-  for (const [x, y, face] of [[32, 43, 'right'], [35, 44, 'left'], [36, 43, 'right'], [39, 44, 'left']]) lay('chair', x, y, 1, 1, face)
+  for (const [x, y, face] of [[33, 44, 'right'], [35, 44, 'left'], [37, 44, 'right'], [39, 44, 'left']]) lay('chair', x, y, 1, 1, face)
   for (const [x, y] of [[31, 42], [40, 42]]) block('plant', x, y)
   block('deckrail', 31, 47, 10, 1)
   block('deckrail', 41, 42, 1, 5)
@@ -282,6 +282,18 @@ export const buildStudio = () => {
   win(35, 41, 2)
 
   // things hung on the face of a wall (one cell high, like a window)
+  // where someone with nothing to do goes for a break: a cell to stand on and what to say they are doing
+  const breaks = [
+    { x: 29, y: 32, label: 'Snack' }, // the vending machines
+    { x: 28, y: 36, label: 'Snack' },
+    { x: 35, y: 39, label: 'Coffee' }, // the coffee bar
+    { x: 36, y: 39, label: 'Coffee' },
+    { x: 32, y: 39, label: 'Lunch' }, // the island
+    { x: 29, y: 24, label: 'Ping-pong' }, // the hub's table
+    { x: 38, y: 23, label: 'Chatting' },
+    { x: 36, y: 45, label: 'Fresh air' }, // the terrace
+  ]
+
   const wallArt = [
     { kind: 'whiteboard', x: 30, y: 10, w: 2, h: 1 }, // the meeting room, between its windows
     { kind: 'picture', x: 26, y: 1, w: 2, h: 1 }, // the CEO office, behind the chair
@@ -303,6 +315,7 @@ export const buildStudio = () => {
     spots: {
       entrance: { x: 24, y: 48 },
       files,
+      breaks,
       seats,
       desks,
       lab,

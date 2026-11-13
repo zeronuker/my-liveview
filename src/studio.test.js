@@ -232,3 +232,22 @@ test('the men\'s bathroom has urinals along one wall, the women\'s cubicles alon
   assert.ok(rows.size >= 2 && racks.length >= 5, 'two rows of racks')
   assert.ok(racks.some(rack => rack.face === 'up'), 'the back row faces the aisle')
 })
+
+test('every break spot is a free cell with a label, that someone can walk to from the front gate', () => {
+  assert.ok(layout.spots.breaks.length >= 6)
+  const reach = new Set([key(layout.spots.entrance.x, layout.spots.entrance.y)])
+  const queue = [[layout.spots.entrance.x, layout.spots.entrance.y]]
+  for (let head = 0; head < queue.length; head++)
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const [x, y] = [queue[head][0] + dx, queue[head][1] + dy]
+      if (isOpen(x, y) && !reach.has(key(x, y))) {
+        reach.add(key(x, y))
+        queue.push([x, y])
+      }
+    }
+  for (const b of layout.spots.breaks) {
+    assert.ok(b.label, 'a label')
+    assert.ok(isOpen(b.x, b.y), `${b.label} at ${b.x},${b.y} is in the way`)
+    assert.ok(reach.has(key(b.x, b.y)), `${b.label} at ${b.x},${b.y} cannot be reached`)
+  }
+})

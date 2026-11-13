@@ -41,7 +41,8 @@ export const personality = id => {
   return { speed: 0.85 + (h % 36) / 100, react: 0.15 + ((h >>> 8) % 41) / 100, settle: 0.2 + ((h >>> 16) % 26) / 100 }
 }
 
-export const createStage = ({ layout, getMult = () => 1 }) => {
+// `breaks: false` keeps idle workers where they are (the tests that are not about breaks use it)
+export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
   const { grid, spots } = layout
   const workers = new Map() // id -> worker (the manager too)
   // which way each seat faces, by place; a seat with no entry faces the room
@@ -74,6 +75,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     warm: false, // already busy, so the next job is started without hesitating
     v: 0, stall: 0, ghost: 0, rerouted: false, // walking: speed, time held up, time walking through people
     arriving: true, // the first trip, from the gate, is the long one: faster
+    quiet: 0, breakAfter: 10 + ((hashOf(info.id) >>> 20) % 11), onBreak: false, // idle: seconds with nothing to do, how many before a break
     ...personality(info.id), rank: hashOf(info.id), ...info, // the lower rank gives way (see walk)
   })
 
@@ -221,6 +223,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       }
       const job = worker.queue.shift()
       if (job.skipIf?.()) continue
+      if (!job.brk) worker.onBreak = false
       job.onStart?.()
       if (job.carryNow !== undefined) worker.carry = job.carryNow
       worker.pending = job.act
@@ -331,6 +334,35 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     if (worker.cells.length === 0) arrive(worker)
   }
 
+  // Real work, as against a break (a job with `brk`).
+  const hasWork = worker => worker.queue.some(job => !job.brk)
+
+  // A break: walk to a spot for a few seconds (a different one for each, in turn), then back to the desk or seat. Any
+  // work that arrives ends it, wherever the worker is.
+  let breakTurn = 0
+  const startBreak = worker => {
+    const spot = spots.breaks?.[(hashOf(worker.id) + breakTurn++) % spots.breaks.length]
+    worker.quiet = 0
+    if (!spot) return
+    const home = worker.desk >= 0 ? spots.desks[worker.desk] : worker.seat >= 0 ? spots.seats[worker.seat] : null
+    const duration = 6 + (hashOf(`${worker.id}${Math.floor(clock)}`) % 7)
+    worker.queue.push(
+      { brk: true, skipIf: () => hasWork(worker), onStart: () => { worker.onBreak = true }, spot: () => placeAt(spot, worker), act: { pose: 'idle', dur: duration, label: spot.label, brk: true } },
+      { brk: true, skipIf: () => !worker.onBreak || hasWork(worker), spot: () => home, act: { pose: 'idle', dur: 0.2, done: () => { worker.onBreak = false } } },
+    )
+  }
+
+  // work for someone on their way to a break: they turn round where they are
+  const interrupt = worker => {
+    if (worker.pending?.brk) {
+      worker.cells = []
+      worker.pending = null
+      worker.pose = 'idle'
+      worker.v = 0
+      worker.onBreak = false
+    }
+  }
+
   // at the spot: a moment to settle before the job begins
   const arrive = worker => {
     worker.v = 0
@@ -345,6 +377,10 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       if (clock < worker.enterAt) return
       worker.present = true
     }
+    // nothing to do for a while: a break, to the coffee bar or the vending machines, the hub or the terrace
+    const free = worker.queue.length === 0 && !worker.act && worker.cells.length === 0 && !worker.pending && !worker.wait
+    worker.quiet = free ? worker.quiet + dt : 0
+    if (free && breaks && !instant && worker.kind === 'worker' && worker.quiet >= worker.breakAfter) startBreak(worker)
     if (worker.wait) {
       worker.wait.left -= instant ? Infinity : dt
       if (worker.wait.left > 0) return
@@ -354,6 +390,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     }
     if (worker.cells.length > 0) return walk(worker, dt, occupied)
     if (worker.act) {
+      if (worker.act.brk && hasWork(worker)) return finish(worker) // a break ends the moment there is work
       worker.act.t += dt
       if (worker.act.t >= (instant ? 0 : worker.act.dur) && (!worker.act.until || worker.act.until())) finish(worker)
       return
@@ -363,7 +400,8 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
 
   const isInstant = () => skipping || getMult() === 0
 
-  const isIdle = () => [...workers.values()].every(w => w.queue.length === 0 && !w.act && w.cells.length === 0 && !w.pending && !w.wait && w.present)
+  // someone on a break is idle: a break never keeps the Office from being quiet
+  const isIdle = () => [...workers.values()].every(w => w.present && !hasWork(w) && (w.onBreak || (w.queue.length === 0 && !w.act && w.cells.length === 0 && !w.pending && !w.wait)))
 
   // a long line of work makes everyone hurry a little
   const rush = () => {
@@ -432,13 +470,17 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       case 'do': {
         const worker = workers.get(cmd.worker)
         if (!worker) return
+        interrupt(worker)
         worker.queue.push(...jobs(worker, cmd))
         lastOf.set(worker.sessionId, worker.id)
         return
       }
       case 'fire': {
         const worker = workers.get(cmd.worker)
-        if (worker) worker.queue.push({ spot: () => spots.entrance, act: { dur: 0, leave: true } })
+        if (worker) {
+          interrupt(worker)
+          worker.queue.push({ spot: () => spots.entrance, act: { dur: 0, leave: true } })
+        }
         return
       }
       case 'review': {

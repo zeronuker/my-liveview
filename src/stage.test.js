@@ -10,7 +10,7 @@ const at = (p, list) => list.some(s => s.x === Math.round(p.x) && s.y === Math.r
 // a stage with a clock the test moves by hand, in milliseconds
 const setup = (options = {}) => {
   let t = 0
-  const stage = createStage({ layout, ...options })
+  const stage = createStage({ layout, breaks: false, ...options })
   stage.tick(t)
   const run = (seconds, stepMs = 100) => {
     for (let spent = 0; spent < seconds * 1000; spent += stepMs) stage.tick((t += stepMs))
@@ -716,4 +716,53 @@ test('the snapshot says which chat each worker belongs to; the manager belongs t
 
   assert.equal(workers.find(w => w.id === 'w1').sessionId, 'chat-a')
   assert.equal(workers.find(w => w.kind === 'manager').sessionId, null)
+})
+
+test('a worker with nothing to do for a while goes on a break to one of the break spots, says what they are doing, and goes back to their desk', () => {
+  const { hire, doStep, run, person } = setup({ breaks: true })
+  hire('w1')
+  doStep('w1', 'write', { path: 'a.js', adds: 1 })
+  run(15) // to the desk, writes, and is done: well before the first break
+  const desk = { x: Math.round(person('w1').x), y: Math.round(person('w1').y) }
+  assert.ok(at(person('w1'), layout.spots.desks))
+  const labels = new Set()
+  let away = false
+  for (let i = 0; i < 1200; i++) {
+    run(0.1)
+    const p = person('w1')
+    if (p.label) labels.add(p.label)
+    if (labels.size > 0 && Math.round(p.x) === desk.x && Math.round(p.y) === desk.y && away) break
+    if (!(Math.round(p.x) === desk.x && Math.round(p.y) === desk.y)) away = true
+  }
+  assert.ok(away, 'left the desk')
+  assert.ok([...labels].every(label => layout.spots.breaks.some(b => b.label === label)), `a break label: ${[...labels]}`)
+  assert.ok(labels.size > 0, 'said what they were doing')
+  assert.deepEqual([Math.round(person('w1').x), Math.round(person('w1').y)], [desk.x, desk.y]) // and back
+})
+
+test('work that arrives on a break ends it: the worker turns to the job, and the Office still counts as idle while someone is on a break', () => {
+  const { stage, hire, doStep, run, person } = setup({ breaks: true })
+  hire('w1')
+  doStep('w1', 'write', { path: 'a.js', adds: 1 })
+  run(15)
+  let left = false
+  for (let i = 0; i < 1500 && !left; i++) {
+    run(0.1)
+    left = person('w1').pose === 'walk'
+  }
+  assert.ok(left, 'set off on a break')
+  assert.equal(stage.isIdle(), true)
+  doStep('w1', 'fetch', { path: 'b.js' })
+  run(40)
+  assert.ok(at(person('w1'), layout.spots.files) || person('w1').carry === 'book', 'went for the file')
+})
+
+test('breaks are for workers: the manager does not wander off, and none start at instant speed', () => {
+  const { stage, run, person, hire, doStep } = setup({ breaks: true, getMult: () => 0 })
+  hire('w1')
+  doStep('w1', 'write', { path: 'a.js', adds: 1 })
+  run(120)
+  assert.ok(at(person('w1'), layout.spots.desks))
+  const manager = stage.snapshot().workers.find(w => w.id === 'manager')
+  assert.deepEqual([manager.x, manager.y], [layout.spots.managerSeat.x, layout.spots.managerSeat.y])
 })
