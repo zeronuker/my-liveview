@@ -39,6 +39,17 @@ test('the floor is the same every time: nothing is random', () => {
   assert.deepEqual(groundOps(layout), groundOps(buildStudio()))
 })
 
+test('the ground has two frames that differ only in the pond, both inside the plan', () => {
+  const [a, b] = [groundOps(layout, 0), groundOps(layout, 1)]
+  checkOps(b, layout.width * TILE, layout.height * TILE, 'ground, frame 1')
+  assert.deepEqual(groundOps(layout), a)
+  assert.equal(a.length, b.length)
+  const differing = a.map((op, i) => i).filter(i => JSON.stringify(a[i]) !== JSON.stringify(b[i]))
+  assert.ok(differing.length > 0 && differing.length < 400, `${differing.length} rectangles differ`)
+  const pond = { x0: 24 * TILE, x1: 47 * TILE, y0: 40 * TILE, y1: 54 * TILE } // a box round the pond, its bank and its reeds
+  for (const i of differing) assert.ok(a[i][1] >= pond.x0 && a[i][1] <= pond.x1 && a[i][2] >= pond.y0 && a[i][2] <= pond.y1, `${a[i]} is not in the pond`)
+})
+
 test('paint draws each rectangle where it says, from a corner', () => {
   const calls = []
   const ctx = { fillRect: (...a) => calls.push(['rect', ...a]), set fillStyle(color) { calls.push(['color', color]) } }

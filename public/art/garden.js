@@ -130,10 +130,10 @@ export const pondOps = ({ pond }, frame = 0) => {
   return ops
 }
 
-// what lies on the ground: the pond, the shadow and posts of the terrace that floats over it, the end of the front
-// path and the flower beds. Plan pixels, drawn under the shell.
-export const gardenLowOps = garden => {
-  const ops = [...pondOps(garden)]
+// what lies on the ground: the pond (in frame 0 or 1), the shadow and posts of the terrace that floats over it, the
+// end of the front path and the flower beds. Plan pixels, drawn under the shell.
+export const gardenLowOps = (garden, frame = 0) => {
+  const ops = [...pondOps(garden, frame)]
   ops.push(r(31 * TILE, 48 * TILE, 10 * TILE, 5, glass[0]))
   for (const x of [31, 35, 39]) ops.push(r(x * TILE + 6, 48 * TILE, 4, 7, wood[0]), r(x * TILE + 6, 48 * TILE, 1, 7, wood[1]))
   const { path } = garden

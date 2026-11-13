@@ -20,6 +20,7 @@ const CHAT_COLORS = ['#ffd166', '#06d6a0', '#ef476f', '#118ab2', '#c77dff', '#f7
 const SEATED = new Set(['sit', 'type', 'read', 'review']) // behind a desk or on a seat: lower, so a desk hides the legs
 const QUIET_MS = 45 * 1000 // nothing heard, and nothing running: the turn is taken to be over
 const STALE_MS = 10 * 60 * 1000 // nothing heard for this long: over, whatever seems to be running
+const WATER_MS = 700 // how long the pond stays in one of its two pictures
 
 const hash = text => [...text].reduce((total, ch) => (total * 31 + ch.charCodeAt(0)) % 1000, 7)
 
@@ -109,7 +110,8 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     paint(small.getContext('2d'), ops)
     return small
   }
-  const ground = smallCanvas(layout.width * TILE, layout.height * TILE, groundOps(layout))
+  // two pictures of the ground, which differ only in the pond's water; shown in turn they make it move
+  const grounds = [0, 1].map(frame => smallCanvas(layout.width * TILE, layout.height * TILE, groundOps(layout, frame)))
   // a desk has a second picture, for when someone is typing at it (its screen is lit)
   const items = itemsOf(layout).map(item => ({
     ...item,
@@ -130,7 +132,8 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
 
   const drawPlan = ({ tile, left, top }) => {
     ctx.imageSmoothingEnabled = false
-    ctx.drawImage(ground, left, top, layout.width * tile, layout.height * tile)
+    const water = reduced ? 0 : Math.floor(performance.now() / WATER_MS) % 2
+    ctx.drawImage(grounds[water], left, top, layout.width * tile, layout.height * tile)
   }
 
   // a room's name goes in its top-left corner, over the furniture; small rooms and stairs have none

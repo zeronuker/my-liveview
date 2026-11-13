@@ -31,13 +31,13 @@ const grassTile = (x, y) => {
 }
 
 // the grass, the garden's pond, path and beds, the shell of the plan, then what stands up in the garden: ops in
-// plan pixels (tile * 16)
-export const groundOps = layout => {
+// plan pixels (tile * 16). The pond has two frames, 0 and 1; everything else is the same in both.
+export const groundOps = (layout, frame = 0) => {
   const garden = buildGarden(layout)
   const ops = [r(0, 0, layout.width * TILE, layout.height * TILE, shade('grass', 2))]
   for (let ty = 0; ty < layout.height; ty++)
     for (let tx = 0; tx < layout.width; tx++) for (const [, x, y, w, h, color] of grassTile(tx, ty)) ops.push(r(tx * TILE + x, ty * TILE + y, w, h, color))
-  return [...ops, ...gardenLowOps(garden), ...shellOps(layout), ...decalOps(layout), ...gardenHighOps(garden)]
+  return [...ops, ...gardenLowOps(garden, frame), ...shellOps(layout), ...decalOps(layout), ...gardenHighOps(garden)]
 }
 
 // a guardrail: a thin rail along the way it runs, with a post every tile
