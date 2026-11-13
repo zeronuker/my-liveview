@@ -468,7 +468,22 @@ test('walking starts slowly and never goes faster than that person\'s own top sp
   }
 
   assert.ok(steps[0] < 0.25, `first step ${steps[0]}`)
-  assert.ok(Math.max(...steps) <= 4 * personality('w1').speed * 0.1 + 0.001)
+  assert.ok(Math.max(...steps) <= 4 * personality('w1').speed * 1.5 * 0.1 + 0.001) // on the first trip, which is faster
+})
+
+test('the first trip from the gate is quicker than the long way at walking pace: it takes under 12 seconds', () => {
+  const { hire, doStep, run, person } = setup()
+  hire('w1')
+  run(1)
+  doStep('w1', 'write', { path: 'a.js', adds: 1 })
+  const desk = layout.spots.desks[0]
+  let seconds = 0
+  while (!(Math.round(person('w1').x) === desk.x && Math.round(person('w1').y) === desk.y) && seconds < 60) {
+    run(0.1)
+    seconds += 0.1
+  }
+
+  assert.ok(seconds < 12, `the first trip took ${seconds} seconds`)
 })
 
 test('ticked once a frame (sixty a second) a walker glides: small steps, none bigger than their speed allows, no standing still mid-walk', () => {
@@ -492,7 +507,7 @@ test('ticked once a frame (sixty a second) a walker glides: small steps, none bi
     last = now
   }
 
-  assert.ok(biggest <= 4 * personality('w1').speed * 0.016 + 0.001, `a step of ${biggest}`)
+  assert.ok(biggest <= 4 * personality('w1').speed * 1.5 * 0.016 + 0.001, `a step of ${biggest}`)
   assert.ok(longestStill <= 1, `stood still for ${longestStill} frames while walking`)
 })
 

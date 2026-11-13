@@ -15,6 +15,7 @@ const WALK = 4 // tiles a second
 const ACCEL = 14 // tiles a second, each second: people do not start at full speed
 const DECEL = 6 // and slow down for the last stretch
 const MIN_SPEED = 0.7
+const ARRIVING = 1.5 // how much faster someone new walks on the long first trip, from the gate to where they work
 const REROUTE = 0.5 // seconds waiting for someone in the way before going round
 const STUCK = 4 // seconds before someone who cannot get round is walked through
 const GHOST = 2 // seconds of walking through people, once stuck
@@ -72,6 +73,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     wait: null, // { left, then }: a moment of hesitating or settling, then carry on
     warm: false, // already busy, so the next job is started without hesitating
     v: 0, stall: 0, ghost: 0, rerouted: false, // walking: speed, time held up, time walking through people
+    arriving: true, // the first trip, from the gate, is the long one: faster
     ...personality(info.id), rank: hashOf(info.id), ...info, // the lower rank gives way (see walk)
   })
 
@@ -283,7 +285,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
       left += Math.abs(cx - px) + Math.abs(cy - py)
       ;[px, py] = [cx, cy]
     }
-    const target = Math.min(WALK * worker.speed, MIN_SPEED + Math.sqrt(2 * DECEL * left))
+    const target = Math.min(WALK * worker.speed * (worker.arriving ? ARRIVING : 1), MIN_SPEED + Math.sqrt(2 * DECEL * left))
     worker.v = Math.max(MIN_SPEED, worker.v < target ? Math.min(target, worker.v + ACCEL * dt) : Math.max(target, worker.v - DECEL * 2 * dt))
 
     let distance = worker.v * dt
@@ -311,6 +313,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
   // at the spot: a moment to settle before the job begins
   const arrive = worker => {
     worker.v = 0
+    worker.arriving = false
     if (isInstant()) return begin(worker)
     worker.pose = 'idle'
     worker.wait = { left: worker.settle, then: () => begin(worker) }
