@@ -6,6 +6,23 @@ One row per situation. Keep this up to date as animations are built.
 
 Hook facts come from the Claude Code hooks reference (checked 2026-11-12). Fields marked (?) came from a summary and must be seen in a real session before relying on them.
 
+## Teams (revamp step 2, built 2026-11-13; seen in mock sessions)
+
+Every chat has a team that lives in the Office: the first event from a chat brings in its own manager (with a desk and a tray of their own; a fourth chat shares the first) and 5 to 8 workers, already at their desks. A `hire` from the director is now a lane of work given to whoever on the team has been free longest. When all are busy, up to as many again walk in (and go home after 30 seconds with nothing to do). Beyond that, and for a helper (the "expert"), a new person walks in as before. Free people keep busy: they type at their own desk (no label, no sound) or go on a break (coffee, snack, lunch, ping-pong, TV, reading, fresh air). A chat's whole team goes home when its session ends or after 10 minutes with no event. `/clear` keeps the team. Names are Malay, English, Indian and Chinese (two words), in `public/names.js`.
+
+## Phases (revamp step 3, built 2026-11-13; seen only in mock sessions and tests)
+
+The director tells the stage what each chat is doing (`phase` command): `chat` (a prompt, no work yet), `working` (tools running), `planning` (plan mode: from `EnterPlanMode` until `ExitPlanMode` is done) or `waiting` (the turn is over). The stage uses it:
+
+- **Working:** free workers type at their desks and make trips to the file room (Filing), the server room (Checking servers) and the test lab (Testing).
+- **Waiting:** free workers linger; many take breaks, and about two in five go out of the building (the front path and boardwalk: Outside, Phone call, Fresh air).
+- **Planning:** the manager, up to four free workers and the CEO sit at the meeting room table (Planning) until plan mode ends, then go back.
+- **The CEO** is a walking person. After 20 to 50 seconds with nothing to do (and only while a team is in the office) he calls a short meeting about a chat that is talking or waiting (Meeting: the manager and some of the team come), walks round checking on the team (Checking in), or stays at his desk. Plain planning talk cannot be told apart from other talk by the events, so a meeting he calls himself is his own choice.
+
+## Commit and push (revamp step 4, built 2026-11-13; seen only in tests and the `ship` mock session)
+
+A shell command that makes a git commit or a git push carries one extra word on its tool event, `git: 'commit'` or `git: 'push'` (the push wins when a command does both); nothing else about the command is added (`gitKind` in `src/summary.js`). When that command is done and went through, the director says `celebrate` for the chat: whoever of the team is free (and the manager) cheers with "Committed!" or "Pushed!", the CEO's bubble says so, and confetti falls (one burst for a commit, up to six for a push). People who are working carry on. A failed command is not celebrated. The check is a simple pattern, so `echo git push` is celebrated too.
+
 ## The first set (Phases 1 to 4)
 
 | Situation | Trigger | What the Office does | Status |

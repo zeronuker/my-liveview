@@ -51,6 +51,7 @@ const prefs = {
   awake: store.get('awake', false) === true,
   office: store.get('office', false) === true,
   sound: store.get('sound', false) === true,
+  folded: store.get('folded', false) === true,
 }
 
 const collapsed = new Set(store.get('collapsed', [])) // folders the person closed
@@ -113,7 +114,16 @@ const panes = [0, 1, 2, 3].map(index =>
 )
 $('panes').append(...panes.map(pane => pane.root))
 
-const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[prefs.speed - 1].mult, getChatName: id => nameOfChat(id), onView: zoomed => ($('b-fit').disabled = !zoomed) })
+// the card of the worker clicked in the Office
+function showInspector(who) {
+  const box = $('inspector')
+  box.hidden = !who
+  if (!who) return
+  const dot = span('swatch-dot')
+  dot.style.background = who.color
+  box.replaceChildren(item('div', 'who', dot, who.name), ...[who.chat, who.job].filter(Boolean).map(text => span('line', text)).map(line => item('div', '', line)))
+}
+const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[prefs.speed - 1].mult, getChatName: id => nameOfChat(id), onView: zoomed => ($('z-fit').disabled = !zoomed), onInspect: showInspector })
 
 // the recording is a download, named after the day and time
 const download = (blob, name) => {
@@ -464,6 +474,13 @@ const node = ({ key, iconName, label, title, badge, right, kids = [], isSelected
   return li
 }
 
+const PHASES = { chat: 'Chatting', working: 'Working', planning: 'Planning', waiting: 'Waiting for you' }
+// in the Office a chat's row says what its team is doing: the phase, and how many are on work
+const phasePill = chat => {
+  const { phase, busy, size } = office.chatInfo(chat.id)
+  const pill = span(`phase ${phase ?? ''}`, `${PHASES[phase] ?? 'Quiet'}${phase === 'working' && size ? ` ${busy}/${size}` : ''}`)
+  return pill
+}
 const plainCount = n => span('counts', String(n))
 const changeCount = file => item('span', 'counts', span('pos', `+${file.adds}`), ' ', span('neg', `−${file.dels}`))
 
@@ -529,7 +546,7 @@ const chatTree = () => {
         iconName: 'chat',
         label: labelOf(chat),
         title: `${baseName(chat.cwd)} · ${chat.id.slice(0, 6)}\n${chat.cwd}\nDouble-click to rename`,
-        right: plainCount(chat.count),
+        right: prefs.office ? phasePill(chat) : plainCount(chat.count),
         isSelected: selected === chat.id,
         activity: state,
         onPress: () => pickChat(chat.id),
@@ -591,6 +608,18 @@ const renderLists = () => {
         return item('li', entry.status, span('tool', STATUS_MARK[entry.status]), text)
       }),
   )
+
+  // the Office's strip of the latest events, and a notice when a chat is waiting on a permission
+  $('ticker').replaceChildren(
+    ...feed
+      .filter(entry => isShown(entry.sessionId))
+      .slice(-6)
+      .reverse()
+      .map(entry => item('li', entry.status, span('tool', STATUS_MARK[entry.status]), span('', entry.summary))),
+  )
+  const asking = [...chats.keys()].filter(id => office.chatInfo(id).asking)
+  $('banner').hidden = asking.length === 0
+  if (asking.length > 0) $('banner').textContent = `${nameOfChat(asking[0])} is waiting for you${asking.length > 1 ? ` (+${asking.length - 1} more)` : ''}`
 
   // each pane says which chat its file is from when every chat is in view
   for (const pane of panes) {
@@ -674,9 +703,14 @@ const apply = () => {
   document.body.classList.toggle('focus', prefs.focus)
   document.body.classList.toggle('office', prefs.office)
   office.setVisible(prefs.office)
+  if (prefs.office) $('files').append($('feed'))
+  else $('rz-aside').after($('feed'))
   office.setSound(prefs.sound)
-  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake'], ['b-office', 'office'], ['b-sound', 'sound']])
+  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake'], ['b-sound', 'sound'], ['b-folded', 'folded']])
     $(id).setAttribute('aria-pressed', String(prefs[key]))
+  // the button names the view it switches to
+  $('b-office').textContent = prefs.office ? 'Code' : 'Office'
+  $('b-office').title = prefs.office ? 'Back to the code view' : 'Watch the session as an office'
   for (const swatch of document.querySelectorAll('.swatch'))
     swatch.setAttribute('aria-pressed', String(swatch.dataset.theme === prefs.theme))
   $('speed').value = String(prefs.speed)
@@ -715,7 +749,27 @@ $('b-office').onclick = () => {
   save('office', !prefs.office)
 }
 $('b-sound').onclick = () => save('sound', !prefs.sound)
-$('b-fit').onclick = () => office.resetView()
+$('b-folded').onclick = () => {
+  save('folded', !prefs.folded)
+  $('feed').classList.toggle('shut', prefs.folded)
+}
+$('feed').classList.toggle('shut', prefs.folded)
+// the settings panel: the gear opens it, and a click anywhere else, or Escape, closes it
+const setSettings = on => {
+  $('settings').hidden = !on
+  $('b-gear').setAttribute('aria-expanded', String(on))
+}
+$('b-gear').onclick = () => setSettings($('settings').hidden)
+document.addEventListener('click', event => {
+  if (!$('settings').hidden && !event.target.closest('#settings, #b-gear')) setSettings(false)
+})
+document.addEventListener('keydown', event => event.key === 'Escape' && setSettings(false))
+$('z-fit').onclick = () => office.resetView()
+$('z-in').onclick = () => office.zoomBy(1.4)
+$('z-out').onclick = () => office.zoomBy(1 / 1.4)
+// in the Office the activity list sits under the chats, and can be folded away
+$('feed').querySelector('h2').onclick = () => $('feed').classList.toggle('shut')
+setInterval(() => prefs.office && scheduleLists(), 2000)
 $('b-record').disabled = !recorder.isSupported()
 if (!recorder.isSupported()) $('b-record').title = "This browser can't record mp4 (Chrome or Edge 126 or later can)"
 $('b-record').onclick = () => (recorder.isRecording ? recorder.stop() : recorder.start())

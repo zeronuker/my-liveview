@@ -23,6 +23,8 @@ const ENTER_GAP = 0.4 // seconds between two arrivals
 const STEP = 0.1 // simulated seconds per step; longer gaps use fewer, bigger steps
 const MAX_CATCH_UP = 120 // simulated seconds a long gap is allowed to cover
 const INSTANT_STEPS = 200 // at instant speed: how many steps a tick may take
+const STAIR_SIDE = 8 // extra cost of a step on the side of a stair, beside its handrail: people keep to the middle
+const EXTRA_STAYS = 30 // seconds someone brought in for a busy spell is kept with nothing to do before going home
 
 // poses at a desk or a seat: the person faces the viewer
 const FACES_YOU = new Set(['sit', 'type', 'read', 'review'])
@@ -41,20 +43,32 @@ export const personality = id => {
   return { speed: 0.85 + (h % 36) / 100, react: 0.15 + ((h >>> 8) % 41) / 100, settle: 0.2 + ((h >>> 16) % 26) / 100 }
 }
 
-// `breaks: false` keeps idle workers where they are (the tests that are not about breaks use it)
+// `breaks: false` keeps free workers where they are (the tests that are not about their daily life use it)
 export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
   const { grid, spots } = layout
-  const workers = new Map() // id -> worker (the manager too)
+  // the sides of each stair (the first and last column of a flight three wide or more) cost more to walk on
+  const stairSides = new Set()
+  for (const room of layout.rooms ?? [])
+    if (room.level === 'stairs' && room.w >= 3) for (let y = room.y; y < room.y + room.h; y++) for (const x of [room.x, room.x + room.w - 1]) stairSides.add(`${x},${y}`)
+  // each trip is a little different from the shortest way (and the same one for the same worker and trip), and keeps off the sides of the stairs
+  const routeOptions = worker => ({ cost: (x, y) => (stairSides.has(`${x},${y}`) ? STAIR_SIDE : 0), seed: hashOf(`${worker.id}|${worker.trips++}`) })
+  const workers = new Map() // id -> worker (the managers too)
   // which way each seat faces, by place; a seat with no entry faces the room
-  const faceAt = new Map([...spots.desks, ...spots.seats, ...(spots.huddle ?? []), spots.managerSeat].filter(s => s.face).map(s => [`${s.x},${s.y}`, s.face]))
-  const handedIn = new Set() // workers whose work is on the manager's tray
+  const faceAt = new Map([...spots.desks, ...spots.seats, ...(spots.huddle ?? []), ...spots.managers.map(m => m.seat), spots.ceoSeat].filter(s => s.face).map(s => [`${s.x},${s.y}`, s.face]))
+  // The people of each chat: a manager (with a desk and a tray of their own) and a team who live in the office.
+  // A lane of work (the director's `hire`) is given to one of the team, who has it until the lane is ended.
+  const managers = new Map() // chat -> its manager
+  const teams = new Map() // chat -> { residents: the team, spare: who can still be brought in when it is busy }
+  const lanes = new Map() // lane id -> the person doing it
+  const handedIn = new Map() // lane id -> chat, for work that is on a manager's tray
+  const phases = new Map() // chat -> what it is doing: 'chat', 'working', 'planning' or 'waiting' (see director.js)
+  const meetingEnd = new Map() // chat -> when a meeting the CEO called is over (a chat that is planning has one until it stops)
   const answered = new Set() // chats whose permission has been answered
   const compacted = new Set() // chats whose memory has been compacted
   const lastOf = new Map() // chat -> the worker last given something to do
   const deskOwner = Array(spots.desks.length).fill(null)
   const seatOwner = Array(spots.seats.length).fill(null)
   const ceo = { bubble: null, papers: 0 }
-  let stack = 0 // work on the manager's tray
   let clock = 0 // simulated seconds
   let lastTick = null
   let lastArrival = -Infinity
@@ -75,12 +89,47 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
     warm: false, // already busy, so the next job is started without hesitating
     v: 0, stall: 0, ghost: 0, rerouted: false, // walking: speed, time held up, time walking through people
     arriving: true, // the first trip, from the gate, is the long one: faster
-    quiet: 0, breakAfter: 10 + ((hashOf(info.id) >>> 20) % 11), onBreak: false, // idle: seconds with nothing to do, how many before a break
-    ...personality(info.id), rank: hashOf(info.id), ...info, // the lower rank gives way (see walk)
+    quiet: 0, breakAfter: 0.5 + ((hashOf(info.id) >>> 20) % 25) / 10, turns: 0, trips: 0, // free: seconds with nothing to do, how many before the next thing to do
+    lane: null, unboundFor: 0, resident: false, extra: false, retiring: false, stack: 0, // work: which lane they hold, for how long they have had none, whether they live here or came in for a busy spell
+    ...personality(info.id), rank: hashOf(info.id), ...info, info, // the lower rank gives way (see walk)
   })
 
-  const manager = makeWorker({ id: 'manager', name: 'Manager', color: '#8d6e63', kind: 'manager', sessionId: null }, spots.managerSeat.x, spots.managerSeat.y, true)
-  workers.set(manager.id, manager)
+  // the manager of a chat sits at a desk of their own, with a tray (a fourth chat shares the first desk)
+  const managerOf = sessionId => managers.get(sessionId)
+  const addManager = (info, sessionId) => {
+    const post = spots.managers[managers.size % spots.managers.length]
+    const manager = makeWorker(info, post.seat.x, post.seat.y, true)
+    manager.post = post
+    workers.set(manager.id, manager)
+    managers.set(sessionId, manager)
+  }
+
+  // the CEO is a person like the rest: at his desk at first, and then (see ceoAmbient) now and then up and about
+  const ceoPerson = makeWorker({ id: 'ceo', name: 'CEO', color: '#264653', kind: 'manager', sessionId: null }, spots.ceoSeat.x, spots.ceoSeat.y, true)
+  ceoPerson.breakAfter = 20
+  workers.set(ceoPerson.id, ceoPerson)
+  const ceoSeatJob = () => ({ brk: true, spot: () => spots.ceoSeat, act: { pose: 'sit', dur: 1, brk: true, rest: 'sit' } })
+  ceoPerson.queue.push(ceoSeatJob())
+
+  // someone who lives in the office: at their desk at once, or (when brought in for a busy spell) walking in
+  const addResident = (team, info, arriving) => {
+    const worker = makeWorker(info, spots.entrance.x, spots.entrance.y, !arriving)
+    worker.resident = true
+    worker.extra = arriving
+    if (arriving) {
+      worker.enterAt = Math.max(clock, lastArrival + ENTER_GAP)
+      lastArrival = worker.enterAt
+    } else {
+      const desk = deskOf(worker)
+      worker.x = desk.x
+      worker.y = desk.y
+      worker.arriving = false
+    }
+    workers.set(worker.id, worker)
+    team.residents.add(worker)
+    startAmbient(worker)
+    return worker
+  }
 
   // a free desk or seat first; when all are taken, one is shared
   const claim = (owners, sharers, worker, key) => {
@@ -100,7 +149,9 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
     const sum = [...path].reduce((total, ch) => total + ch.charCodeAt(0), 0)
     return spots.files[sum % spots.files.length]
   }
-  const homeOf = worker => (worker.kind === 'manager' ? spots.managerSeat : seatOf(worker))
+  const homeOf = worker => (worker.kind === 'manager' ? worker.post.seat : seatOf(worker))
+  // where a worker hands work in: the tray of their chat's manager
+  const trayOf = worker => managerOf(worker.sessionId)?.post ?? spots.managers[0]
 
   // a chair at the meeting room's table that nobody else is heading for (or the first, when all are taken)
   const huddleSpot = worker => {
@@ -141,7 +192,18 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
     const file = baseName(cmd.path ?? worker.path)
     const waitsForNext = { until: () => worker.queue.length > 0 }
     const handIn = [
-      { spot: () => placeAt(spots.handIn, worker), act: { pose: 'give', dur: 0.8, label: 'Handing in', carry: null, done: () => { handedIn.add(worker.id); stack++; emit('ring', spots.handIn.x, spots.handIn.y, { tone: 'ok' }) } } },
+      {
+        spot: () => placeAt(trayOf(worker).handIn, worker),
+        act: {
+          pose: 'give', dur: 0.8, label: 'Handing in', carry: null,
+          done: () => {
+            handedIn.set(worker.lane ?? worker.id, worker.sessionId)
+            const manager = managerOf(worker.sessionId)
+            if (manager) manager.stack++
+            emit('ring', trayOf(worker).handIn.x, trayOf(worker).handIn.y, { tone: 'ok' })
+          },
+        },
+      },
       { spot: () => seatOf(worker), act: { pose: 'sit', dur: 0.4 } },
     ]
     switch (cmd.step) {
@@ -187,6 +249,21 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
     worker.wait = null
     workers.delete(worker.id)
     for (const owners of [deskOwner, seatOwner]) owners.forEach((id, i) => id === worker.id && (owners[i] = null))
+    if (worker.lane) lanes.delete(worker.lane)
+    if (worker.kind === 'manager' && managers.get(worker.sessionId) === worker) managers.delete(worker.sessionId)
+    const team = teams.get(worker.sessionId)
+    if (worker.extra && team) {
+      team.residents.delete(worker) // someone brought in for a busy spell can be brought in again
+      team.spare.push(worker.info)
+    }
+  }
+
+  // the lane's work is done: its worker is free again
+  const release = worker => {
+    lanes.delete(worker.lane)
+    worker.lane = null
+    worker.carry = null
+    worker.unboundFor = 0
   }
 
   // a job's act begins: the worker is where it should be
@@ -210,7 +287,8 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
     worker.act = null
     worker.bubble = null
     worker.label = ''
-    worker.pose = 'idle'
+    worker.rest = act.rest ?? null
+    worker.pose = worker.rest ?? 'idle'
     act.done?.()
     if (act.leave) remove(worker)
   }
@@ -218,14 +296,14 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
   const startNext = worker => {
     for (;;) {
       if (worker.queue.length === 0) {
-        worker.pose = 'idle'
+        worker.pose = worker.rest ?? 'idle'
         worker.warm = false
         return
       }
       // a new job after a quiet moment: a short pause to take it in, first
       if (!worker.warm) {
         worker.warm = true
-        if (!isInstant()) {
+        if (!isInstant() && !worker.queue[0].brk) {
           worker.pose = 'idle'
           worker.wait = { left: worker.react, then: () => startNext(worker) }
           return
@@ -233,14 +311,14 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
       }
       const job = worker.queue.shift()
       if (job.skipIf?.()) continue
-      if (!job.brk) worker.onBreak = false
       job.onStart?.()
+      worker.rest = null
       if (job.carryNow !== undefined) worker.carry = job.carryNow
       worker.pending = job.act
       const spot = typeof job.spot === 'function' ? job.spot() : job.spot
       worker.goal = spot ? [spot.x, spot.y] : null // where they are going to be, which others choose round
       if (!spot) return begin(worker)
-      const path = isInstant() ? null : findPath(grid, [Math.round(worker.x), Math.round(worker.y)], [spot.x, spot.y])
+      const path = isInstant() ? null : findPath(grid, [Math.round(worker.x), Math.round(worker.y)], [spot.x, spot.y], undefined, routeOptions(worker))
       if (path && path.length > 0) {
         worker.cells = path
         worker.pose = 'walk'
@@ -273,7 +351,7 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
     for (const other of held) for (const [x, y] of other.cells.slice(0, 3)) avoid.add(`${x},${y}`)
     avoid.delete(`${here[0]},${here[1]}`)
     avoid.delete(`${goal[0]},${goal[1]}`)
-    const path = findPath(grid, here, goal, avoid)
+    const path = findPath(grid, here, goal, avoid, routeOptions(worker))
     if (path && path.length > 0) worker.cells = path
   }
 
@@ -344,32 +422,115 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
     if (worker.cells.length === 0) arrive(worker)
   }
 
-  // Real work, as against a break (a job with `brk`).
+  // Real work, as against what someone does when they are free (a job with `brk`).
   const hasWork = worker => worker.queue.some(job => !job.brk)
+  const isBusy = worker => hasWork(worker) || (worker.act && !worker.act.brk) || (worker.pending && !worker.pending.brk)
 
-  // A break: walk to a spot for a few seconds (a different one for each, in turn), then back to the desk or seat. Any
-  // work that arrives ends it, wherever the worker is.
+  // What someone does when they are free, one thing after another. How it goes depends on what their chat is doing: while
+  // it is working they are mostly at their desks and on trips to the file room, the server room and the test lab; while it
+  // waits for the person they linger, and many go out of the building. Each is [desk, trip, break] as a share of 100, and
+  // the rest go outside. Any work that arrives ends it at once, wherever the worker is.
+  const MIX = { chat: [60, 65, 90], working: [35, 75, 90], planning: [60, 65, 90], waiting: [20, 25, 60] }
+  const phaseOf = sessionId => phases.get(sessionId) ?? 'chat'
+  const choose = (list, n) => (list?.length ? list[n % list.length] : null)
   let breakTurn = 0
-  const startBreak = worker => {
-    const spot = spots.breaks?.[(hashOf(worker.id) + breakTurn++) % spots.breaks.length]
+  const startAmbient = worker => {
+    const roll = hashOf(`${worker.id}|${worker.turns++}`)
+    const [desk, trip, rest] = MIX[phaseOf(worker.sessionId)] ?? MIX.chat
+    const share = (roll >>> 4) % 100
+    const more = roll >>> 12
     worker.quiet = 0
-    if (!spot) return
-    const home = worker.desk >= 0 ? spots.desks[worker.desk] : worker.seat >= 0 ? spots.seats[worker.seat] : null
-    const duration = 6 + (hashOf(`${worker.id}${Math.floor(clock)}`) % 7)
-    worker.queue.push(
-      { brk: true, skipIf: () => hasWork(worker), onStart: () => { worker.onBreak = true }, spot: () => placeAt(spot, worker), act: { pose: 'idle', dur: duration, label: spot.label, brk: true } },
-      { brk: true, skipIf: () => !worker.onBreak || hasWork(worker), spot: () => home, act: { pose: 'idle', dur: 0.2, done: () => { worker.onBreak = false } } },
-    )
+    const job = { brk: true, skipIf: () => hasWork(worker) }
+    const go = (spot, act) => worker.queue.push({ ...job, spot: () => placeAt(spot, worker), act: { ...act, brk: true } })
+    const outside = choose(spots.outside, more)
+    const abroad = [
+      [choose(spots.files, more), { pose: 'grab', dur: 2 + (more % 3), label: 'Filing' }],
+      [choose(spots.server, more), { pose: 'scan', dur: 3 + (more % 3), label: 'Checking servers' }],
+      [choose(spots.lab, more), { pose: 'machine', dur: 3 + (more % 3), label: 'Testing' }],
+    ].filter(([spot]) => spot)
+    if (share < desk || !spots.breaks?.length) {
+      worker.queue.push({ ...job, spot: () => deskOf(worker), act: { pose: 'type', dur: 8 + (more % 13), brk: true, rest: 'sit' } }) // and sits at the desk until the next thing
+    } else if (share < trip && abroad.length > 0) {
+      const [spot, act] = abroad[more % abroad.length]
+      go(spot, act)
+    } else if (share < rest || !outside) {
+      const spot = spots.breaks[(hashOf(worker.id) + breakTurn++) % spots.breaks.length]
+      go(spot, { pose: 'idle', dur: 6 + (more % 7), label: spot.label })
+    } else {
+      go(outside, { pose: 'idle', dur: 8 + (more % 7), label: outside.label })
+    }
   }
 
-  // work for someone on their way to a break: they turn round where they are
+  // work for someone on their way to something of their own: they turn round where they are
   const interrupt = worker => {
     if (worker.pending?.brk) {
       worker.cells = []
       worker.pending = null
       worker.pose = 'idle'
+      worker.rest = null
       worker.v = 0
-      worker.onBreak = false
+    }
+  }
+
+  // sends someone out through the front door, once what they have to do is done
+  const sendOut = worker => {
+    worker.retiring = true
+    interrupt(worker)
+    worker.queue.push({ spot: () => spots.entrance, act: { dur: 0, leave: true } })
+  }
+
+  // Someone drops what they are doing (their own things, not real work) and goes to the meeting room's table, and stays
+  // until the meeting is over. A manager, or the CEO, goes back to their desk after.
+  const redirect = worker => {
+    worker.queue = worker.queue.filter(job => !job.brk)
+    interrupt(worker)
+    if (worker.act?.brk && !worker.act.until) worker.act.dur = 0
+  }
+  const inMeeting = sessionId => phaseOf(sessionId) === 'planning' || (meetingEnd.get(sessionId) ?? -1) > clock
+  const joinMeeting = (worker, sessionId) => {
+    worker.meeting = sessionId
+    redirect(worker)
+    worker.queue.push({
+      brk: true,
+      skipIf: () => {
+        const over = !inMeeting(sessionId)
+        if (over) worker.meeting = null
+        return over
+      },
+      spot: () => huddleSpot(worker),
+      act: { pose: 'sit', dur: 1, label: phaseOf(sessionId) === 'planning' ? 'Planning' : 'Meeting', brk: true, until: () => !inMeeting(sessionId), done: () => { worker.meeting = null } },
+    })
+    if (worker === ceoPerson) worker.queue.push(ceoSeatJob())
+    else if (worker.kind === 'manager') worker.queue.push({ brk: true, skipIf: () => hasWork(worker), spot: () => worker.post.seat, act: { pose: 'sit', dur: 0.3, brk: true } })
+  }
+  // the manager and up to four of the team who are free sit down at the table
+  const gather = sessionId => {
+    const team = teams.get(sessionId)
+    const free = team ? [...team.residents].filter(w => !w.lane && !w.retiring && !w.meeting).slice(0, 4) : []
+    for (const worker of [managers.get(sessionId), ...free]) if (worker && !worker.meeting) joinMeeting(worker, sessionId)
+  }
+
+  // The CEO, now and then, when he has had nothing to do for a while: calls a short meeting about a chat that is talking or
+  // waiting (and the manager and some of the team come), walks round checking on the team, or stays at his desk.
+  const ceoAmbient = () => {
+    ceoPerson.quiet = 0
+    ceoPerson.breakAfter = 20 + (hashOf(`ceo|${ceoPerson.turns++}`) % 30)
+    const sessions = [...teams.keys()]
+    if (sessions.length === 0) return
+    const roll = hashOf(`ceo|${ceoPerson.turns}|roll`) % 100
+    const talking = sessions.filter(id => ['chat', 'waiting'].includes(phaseOf(id)) && !inMeeting(id))
+    if (roll < 30 && talking.length > 0) {
+      const sessionId = talking[hashOf(`ceo|${ceoPerson.turns}|chat`) % talking.length]
+      meetingEnd.set(sessionId, clock + 20 + (hashOf(`ceo|${ceoPerson.turns}|long`) % 16))
+      gather(sessionId)
+      joinMeeting(ceoPerson, sessionId)
+    } else if (roll < 75) {
+      const stops = [...(spots.rounds ?? []), ...[...managers.values()].map(m => ({ ...m.post.handIn, label: 'Checking in' }))]
+      if (stops.length === 0) return
+      const h = hashOf(`ceo|${ceoPerson.turns}|stops`)
+      const two = [stops[h % stops.length], stops[(h >>> 8) % stops.length]]
+      for (const stop of new Set(two)) ceoPerson.queue.push({ brk: true, spot: () => placeAt(stop, ceoPerson), act: { pose: 'idle', dur: 3 + (h % 3), label: stop.label, brk: true } })
+      ceoPerson.queue.push(ceoSeatJob())
     }
   }
 
@@ -387,10 +548,16 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
       if (clock < worker.enterAt) return
       worker.present = true
     }
-    // nothing to do for a while: a break, to the coffee bar or the vending machines, the hub or the terrace
+    // nothing to do for a moment: something of their own (see startAmbient)
     const free = worker.queue.length === 0 && !worker.act && worker.cells.length === 0 && !worker.pending && !worker.wait
     worker.quiet = free ? worker.quiet + dt : 0
-    if (free && breaks && !instant && worker.kind === 'worker' && worker.quiet >= worker.breakAfter) startBreak(worker)
+    if (free && breaks && !instant && !worker.retiring && worker.quiet >= worker.breakAfter) {
+      if (worker.kind === 'worker') startAmbient(worker)
+      else if (worker === ceoPerson) ceoAmbient()
+    }
+    // someone brought in for a busy spell goes home once there has been nothing for them for a while
+    worker.unboundFor = worker.lane ? 0 : worker.unboundFor + dt
+    if (worker.extra && !worker.retiring && !instant && worker.unboundFor >= EXTRA_STAYS) sendOut(worker)
     if (worker.wait) {
       worker.wait.left -= instant ? Infinity : dt
       if (worker.wait.left > 0) return
@@ -410,13 +577,13 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
 
   const isInstant = () => skipping || getMult() === 0
 
-  // someone on a break is idle: a break never keeps the Office from being quiet
-  const isIdle = () => [...workers.values()].every(w => w.present && !hasWork(w) && (w.onBreak || (w.queue.length === 0 && !w.act && w.cells.length === 0 && !w.pending && !w.wait)))
+  // someone busy with their own things is idle: that never keeps the Office from being quiet
+  const isIdle = () => [...workers.values()].every(w => w.present && !isBusy(w))
 
   // a long line of work makes everyone hurry a little
   const rush = () => {
     let waiting = 0
-    for (const w of workers.values()) waiting += w.queue.length
+    for (const w of workers.values()) waiting += w.queue.filter(job => !job.brk).length
     return Math.min(4, 1 + Math.max(0, waiting - 6) * 0.15)
   }
 
@@ -466,19 +633,57 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
   const apply = (cmd, now) => {
     tick(now)
     switch (cmd.cmd) {
+      case 'team': {
+        // a chat is here: its manager and team are in the office already, at their desks
+        if (teams.has(cmd.sessionId)) return
+        addManager(cmd.manager, cmd.sessionId)
+        const team = { residents: new Set(), spare: [...cmd.reserve] }
+        teams.set(cmd.sessionId, team)
+        for (const info of cmd.workers) addResident(team, info, false)
+        return
+      }
+      case 'phase': {
+        // what the chat is doing now: plan mode brings the manager, some of the team and the CEO to the meeting table
+        phases.set(cmd.sessionId, cmd.phase)
+        if (cmd.phase === 'planning') {
+          gather(cmd.sessionId)
+          joinMeeting(ceoPerson, cmd.sessionId)
+        }
+        return
+      }
+      case 'leave': {
+        // the chat has gone for good: its manager, team and helpers all walk out
+        teams.delete(cmd.sessionId)
+        phases.delete(cmd.sessionId)
+        meetingEnd.delete(cmd.sessionId)
+        for (const worker of [...workers.values()]) if (worker.sessionId === cmd.sessionId) sendOut(worker)
+        return
+      }
       case 'hire': {
         const { worker: info } = cmd
-        if (workers.has(info.id)) return
-        const enterAt = Math.max(clock, lastArrival + ENTER_GAP)
-        lastArrival = enterAt
-        const worker = makeWorker(info, spots.entrance.x, spots.entrance.y, false)
-        worker.enterAt = enterAt
-        workers.set(worker.id, worker)
+        if (lanes.has(info.id) || workers.has(info.id)) return
+        const team = teams.get(info.sessionId)
+        let worker = null
+        if (info.kind === 'worker' && team) {
+          // the one who has been free longest; if all are busy, someone more is brought in for the busy spell
+          const free = [...team.residents].filter(w => !w.lane && !w.retiring).sort((a, b) => (a.meeting ? 1 : 0) - (b.meeting ? 1 : 0) || b.unboundFor - a.unboundFor)
+          worker = free[0] ?? (team.spare.length > 0 ? addResident(team, team.spare.pop(), true) : null)
+        }
+        if (!worker) {
+          // a helper, or more work than the whole team can take: a new person walks in for it
+          worker = makeWorker(info, spots.entrance.x, spots.entrance.y, false)
+          worker.enterAt = Math.max(clock, lastArrival + ENTER_GAP)
+          lastArrival = worker.enterAt
+          workers.set(worker.id, worker)
+        }
+        worker.lane = info.id
+        worker.unboundFor = 0
+        lanes.set(info.id, worker)
         lastOf.set(worker.sessionId, worker.id)
         return
       }
       case 'do': {
-        const worker = workers.get(cmd.worker)
+        const worker = lanes.get(cmd.worker)
         if (!worker) return
         interrupt(worker)
         worker.queue.push(...jobs(worker, cmd))
@@ -486,19 +691,24 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
         return
       }
       case 'fire': {
-        const worker = workers.get(cmd.worker)
-        if (worker) {
-          interrupt(worker)
-          worker.queue.push({ spot: () => spots.entrance, act: { dur: 0, leave: true } })
-        }
+        // a lane is over: whoever did it is free again (but a helper or someone only taken on for it goes home)
+        const worker = lanes.get(cmd.worker)
+        if (!worker) return
+        interrupt(worker)
+        if (worker.resident) worker.queue.push({ spot: null, act: { dur: 0, done: () => release(worker) } })
+        else sendOut(worker)
         return
       }
       case 'review': {
-        const delivered = () => cmd.workers.every(id => handedIn.has(id) || !workers.has(id))
-        manager.queue.push({ spot: () => spots.managerSeat, act: { pose: 'review', dur: 2.5, label: 'Reviewing', until: delivered } })
+        const manager = managerOf(cmd.sessionId)
+        if (!manager) return
+        const delivered = () => cmd.workers.every(id => handedIn.has(id) || !lanes.has(id))
+        manager.queue.push({ spot: () => manager.post.seat, act: { pose: 'review', dur: 2.5, label: 'Reviewing', until: delivered } })
         return
       }
-      case 'submit':
+      case 'submit': {
+        const manager = managerOf(cmd.sessionId)
+        if (!manager) return
         manager.queue.push(
           {
             carryNow: 'papers',
@@ -506,20 +716,22 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
             act: {
               pose: 'give', dur: 1.2, label: 'Submitting', carry: null, bubble: ok('✓'),
               done: () => {
-                ceo.papers += stack
+                ceo.papers += manager.stack
                 emit('confetti', spots.ceoSeat.x, spots.ceoSeat.y)
-                stack = 0
+                manager.stack = 0
                 ceo.bubble = { text: 'Received', kind: 'ok', until: clock + 2.5 }
               },
             },
           },
-          { spot: () => spots.managerSeat, act: { pose: 'idle', dur: 0.4 } },
+          { spot: () => manager.post.seat, act: { pose: 'idle', dur: 0.4 } },
         )
         return
+      }
       case 'ask': {
         answered.delete(cmd.sessionId)
         const asker = workers.get(lastOf.get(cmd.sessionId))
-        const worker = asker?.present && !asker.queue.some(job => job.act?.leave) ? asker : manager
+        const worker = asker?.present && !asker.retiring ? asker : managerOf(cmd.sessionId)
+        if (!worker) return
         let started = false
         worker.queue.push(
           {
@@ -535,11 +747,15 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
       case 'answered':
         answered.add(cmd.sessionId)
         return
-      case 'fail':
-        manager.queue.push({ spot: () => spots.managerSeat, act: { pose: 'shake', dur: 2.5, label: cmd.label, bubble: bad('!') } })
+      case 'fail': {
+        const manager = managerOf(cmd.sessionId)
+        manager?.queue.push({ spot: () => manager.post.seat, act: { pose: 'shake', dur: 2.5, label: cmd.label, bubble: bad('!') } })
         return
+      }
       case 'compact': {
         // the manager tidies the notes in the file room until the compaction is over
+        const manager = managerOf(cmd.sessionId)
+        if (!manager) return
         compacted.delete(cmd.sessionId)
         let started = false
         manager.queue.push(
@@ -549,7 +765,7 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
             spot: () => shelfFor(null),
             act: { pose: 'scan', dur: 1.5, label: 'Compacting memory', bubble: { text: '…', kind: 'info' }, until: () => compacted.has(cmd.sessionId) },
           },
-          { skipIf: () => !started, spot: () => spots.managerSeat, act: { pose: 'sit', dur: 0.3 } },
+          { skipIf: () => !started, spot: () => manager.post.seat, act: { pose: 'sit', dur: 0.3 } },
         )
         return
       }
@@ -558,32 +774,49 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
         return
       case 'note': // a few words over the CEO or the manager
         if (cmd.who === 'ceo') ceo.bubble = { text: cmd.text, kind: cmd.kind, until: clock + 2.5 }
-        else manager.queue.push({ spot: null, act: { pose: 'idle', dur: 1.6, label: cmd.text, bubble: { text: '•', kind: cmd.kind } } })
+        else managerOf(cmd.sessionId)?.queue.push({ spot: null, act: { pose: 'idle', dur: 1.6, label: cmd.text, bubble: { text: '•', kind: cmd.kind } } })
         return
       case 'memo':
-        manager.queue.push({ spot: null, act: { pose: 'read', dur: 1.2, label: 'Reading a memo' } })
+        managerOf(cmd.sessionId)?.queue.push({ spot: null, act: { pose: 'read', dur: 1.2, label: 'Reading a memo' } })
         return
       case 'clear': {
-        // /clear: once everyone who was here has gone home, what is on the tray is swept away
-        const there = [...workers.keys()].filter(id => id !== manager.id)
+        // /clear: once everyone who was working has stopped, what is on the tray is swept away
+        const manager = managerOf(cmd.sessionId)
+        if (!manager) return
         manager.queue.push({
           spot: null,
           act: {
-            pose: 'idle', dur: 1, label: 'Fresh start', until: () => there.every(id => !workers.has(id)),
-            done: () => { stack = 0; handedIn.clear() },
+            pose: 'idle', dur: 1, label: 'Fresh start', until: () => [...lanes.values()].every(w => w.sessionId !== cmd.sessionId),
+            done: () => {
+              manager.stack = 0
+              for (const [id, session] of handedIn) if (session === cmd.sessionId) handedIn.delete(id)
+            },
           },
         })
         return
       }
       case 'denied': {
         const last = workers.get(lastOf.get(cmd.sessionId))
-        const worker = last?.present && !last.queue.some(job => job.act?.leave) ? last : manager
-        worker.queue.push({ spot: null, act: { pose: 'shake', dur: 1.4, label: 'Blocked', bubble: bad('✗') } })
+        const worker = last?.present && !last.retiring ? last : managerOf(cmd.sessionId)
+        worker?.queue.push({ spot: null, act: { pose: 'shake', dur: 1.4, label: 'Blocked', bubble: bad('✗') } })
+        return
+      }
+      case 'celebrate': {
+        // a commit or a push went through: whoever of the team is free cheers, the CEO says so, and there is confetti (more for a push)
+        const label = cmd.what === 'push' ? 'Pushed!' : 'Committed!'
+        const team = teams.get(cmd.sessionId)
+        const cheering = [managerOf(cmd.sessionId), ...(team ? team.residents : [])].filter(w => w?.present && !w.retiring && !isBusy(w))
+        for (const worker of cheering) {
+          redirect(worker)
+          worker.queue.push({ brk: true, spot: null, act: { pose: 'cheer', dur: 2.5, label, bubble: ok('✓'), brk: true } })
+        }
+        ceo.bubble = { text: label, kind: 'ok', until: clock + 3 }
+        for (const worker of cheering.slice(0, cmd.what === 'push' ? 6 : 1)) emit('confetti', worker.x, worker.y)
         return
       }
       case 'prompt':
         ceo.bubble = { text: 'New request', kind: 'info', until: clock + 2.5 }
-        emit('ring', spots.ceoSeat.x, spots.ceoSeat.y, { tone: 'info' })
+        emit('ring', ceoPerson.x, ceoPerson.y, { tone: 'info' })
         return
     }
   }
@@ -596,20 +829,28 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
     return OFFSETS[slot % OFFSETS.length]
   }
 
+  const personOf = w => {
+    const [dx, dy] = shift(w)
+    return { id: w.id, name: w.name, color: w.color, kind: w.kind, x: w.x + dx, y: w.y + dy, pose: w.pose, facing: w.facing, dir: w.dir, sessionId: w.sessionId, bubble: w.bubble, label: w.label, carry: w.carry }
+  }
+
+  // the CEO is told apart from the rest: he is one person, whose bubble is what the Office says to him
   const snapshot = () => ({
     clock,
-    stack,
-    ceo: { papers: ceo.papers, bubble: ceo.bubble && { text: ceo.bubble.text, kind: ceo.bubble.kind } },
-    workers: [...workers.values()]
-      .filter(w => w.present)
-      .map(w => {
-        const [dx, dy] = shift(w)
-        return { id: w.id, name: w.name, color: w.color, kind: w.kind, x: w.x + dx, y: w.y + dy, pose: w.pose, facing: w.facing, dir: w.dir, sessionId: w.sessionId, bubble: w.bubble, label: w.label, carry: w.carry }
-      }),
+    stack: [...managers.values()].reduce((total, m) => total + m.stack, 0),
+    trays: [...managers.values()].map(m => ({ x: m.post.tray.x, y: m.post.tray.y, count: m.stack })),
+    ceo: { ...personOf(ceoPerson), papers: ceo.papers, bubble: ceo.bubble && { text: ceo.bubble.text, kind: ceo.bubble.kind }, label: ceoPerson.label || (ceo.papers > 0 ? `${ceo.papers} approved` : '') },
+    workers: [...workers.values()].filter(w => w.present && w !== ceoPerson).map(personOf),
   })
 
   // what has happened since the last call, for the Office to show
   const takeEffects = () => effects.splice(0)
 
-  return { apply, tick, snapshot, isIdle, skip, setPaused, takeEffects }
+  // how many of a chat's team are on a lane of work, and how many there are (not counting the manager)
+  const teamOf = sessionId => {
+    const people = [...workers.values()].filter(w => w.sessionId === sessionId && w.kind !== 'manager' && w.present)
+    return { busy: people.filter(w => w.lane).length, size: people.length }
+  }
+
+  return { apply, tick, snapshot, isIdle, skip, setPaused, takeEffects, teamOf }
 }

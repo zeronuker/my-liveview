@@ -17,12 +17,16 @@ npm run stop       # stops the server and closes its windows
 
 ## The file view
 
-The files Claude edits are typed out live, up to four at a time, with the changed lines marked. The left list holds every chat and the files each touched (double-click a chat to rename it); the right panel is a feed of what Claude is doing. The toolbar has Pause, Skip, Follow, speed, text size, Wrap, Whole file, Side by side, Focus, Stay awake, a window size menu and five themes.
+The files Claude edits are typed out live, up to four at a time, with the changed lines marked. The left list holds every chat and the files each touched (double-click a chat to rename it); the right panel is a feed of what Claude is doing. The toolbar has Pause, Skip, speed, Office and Record; everything else (five themes, text size, Wrap, Whole file, Side by side, Follow, Focus, window size, Stay awake, and in the Office sound and starting with the activity list folded) is in the Settings panel, opened by the gear at the right.
 
 ## The Office
 
 Press **Office** in the toolbar. The repo becomes an office: Claude is the manager, and every file read, written or searched, every command and every helper (subagent) is a worker with a name and a colour. It tells a story rather than mirroring each event: a worker fetches a file from the file room, reads it in the lounge, writes it at a desk, tests it in the lab and hands it to the manager. When Claude finishes its turn, the manager reviews the batch and takes it upstairs to the CEO (you). A permission request sends a worker to the CEO's door with a "?".
 
+- **Teams:** each chat has its own manager and a team of 5 to 8 workers who are in the office as soon as the chat is seen; more come in when it is busy, and they all go home after the session ends or 10 minutes of quiet.
+- **Phases:** the office follows what the chat is doing. While Claude works, people make trips to the file room, server room and test lab; while it waits for you, they linger and some step outside; in plan mode the team and the CEO meet at the table. The CEO also walks round and calls meetings on his own.
+- **Commit and push:** when Claude's shell command makes a git commit or push (and it goes through), the team cheers and confetti falls. The server sends only the word "commit" or "push", never the command.
+- **The Office screen:** in the Office the toolbar shows only what applies to it, each chat's row says what its team is doing (Working 2/7, Planning, Waiting for you), the activity list sits under the chats (click its title to fold it; picking a chat shows only that chat's activity), a strip along the bottom shows the latest events, a banner says when a chat is waiting for you, there are +, - and Fit buttons on the picture, and clicking a worker shows their card.
 - **Many chats:** all chats share one office. With more than one at work, each name gets a dot in its chat's colour and a legend lists the chats. Pick a chat in the left list to make its workers stand out.
 - **Zoom and pan:** mouse wheel zooms, drag pans, **Fit** (or a double-click) shows the whole office again.
 - **Record:** saves the picture as an `.mp4` in your Downloads folder (Chrome or Edge 126 or later). It asks before you leave the Office while recording, and pauses while the window is hidden.

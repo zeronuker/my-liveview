@@ -160,8 +160,8 @@ export const backroomArts = {
   machine: { under: false, ops: machineOps, lights: machineLights },
   labbench: { under: false, ops: labBenchOps },
   rack: { under: false, rise: RACK_RISE, ops: rackOps, lights: rackLights },
-  cubicle: { under: false, ops: cubicleOps },
-  urinal: { under: false, ops: urinalOps },
-  vanity: { under: false, ops: vanityOps },
+  cubicle: { under: false, bleed: { left: 5 }, ops: cubicleOps }, // cubicles and urinals stand on a west wall, sink counters on an east one
+  urinal: { under: false, bleed: { left: 5 }, ops: urinalOps },
+  vanity: { under: false, bleed: { right: 5 }, ops: vanityOps },
   boardtable: { under: false, ops: boardTableOps },
 }

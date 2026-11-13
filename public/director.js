@@ -25,13 +25,18 @@
 //   { cmd: 'memo', sessionId }         the manager reads a memo (instructions or settings loaded)
 //   { cmd: 'clear', sessionId }        /clear: the manager's tray is emptied
 // An MCP tool is an errand outside the office: steps call (with `server`) and unavailable.
+//
+// Every chat has a team that lives in the office: the first event from a chat says so
+//   { cmd: 'team', sessionId, manager, workers, reserve }  the chat's manager, 5 to 8 workers who are already at their
+//                                      desks, and as many again in reserve for when it gets busy
+//   { cmd: 'leave', sessionId }        the chat has gone quiet for good: its whole team goes home
+//   { cmd: 'celebrate', sessionId, what } a git commit or push went through ('commit' or 'push'): the team cheers
+//   { cmd: 'phase', sessionId, phase } what the chat is doing now, so the office can match it: 'chat' (a prompt, no work
+//                                      yet), 'working' (tools running), 'planning' (plan mode: from EnterPlanMode until
+//                                      ExitPlanMode is done) or 'waiting' (the turn is over, it is for the person to answer)
+// A `hire` then asks the team for someone to do a job (a lane of work, which `fire` ends); only a helper is a new person.
 
-// a mix of English and Malay, women and men
-export const NAMES = [
-  'Alice', 'Aisyah', 'Daniel', 'Farid', 'Chloe', 'Nurul', 'Henry', 'Hafiz',
-  'Grace', 'Siti', 'Ben', 'Zul', 'Emily', 'Aminah', 'James', 'Irfan',
-  'Sophie', 'Hana', 'Tom', 'Amir', 'Olivia', 'Liyana', 'Frank', 'Haziq',
-]
+import { NAMES } from './names.js'
 
 export const COLORS = [
   '#e76f51', '#2a9d8f', '#e9c46a', '#457b9d', '#9b5de5', '#f15bb5',
@@ -89,10 +94,16 @@ export const createDirector = ({ random = Math.random } = {}) => {
     return from[Math.floor(random() * from.length)]
   }
 
-  const hire = (sessionId, kind, extra = {}) => {
+  const identity = (sessionId, kind, extra = {}) => {
     const worker = { id: `w${++count}`, sessionId, kind, name: pickFree(NAMES, names), color: pickFree(COLORS, colors), ...extra }
     names.add(worker.name)
     colors.add(worker.color)
+    return worker
+  }
+
+  // someone for a job: a lane of work, ended by `fire`
+  const hire = (sessionId, kind, extra = {}) => {
+    const worker = identity(sessionId, kind, extra)
     if (!staff.has(sessionId)) staff.set(sessionId, new Set())
     staff.get(sessionId).add(worker)
     return worker
@@ -103,6 +114,18 @@ export const createDirector = ({ random = Math.random } = {}) => {
     names.delete(worker.name)
     colors.delete(worker.color)
     staff.get(worker.sessionId)?.delete(worker)
+  }
+
+  // a chat's team: a manager, 5 to 8 workers, and as many again who come in when it is busy
+  const teams = new Map() // session -> everyone in its team, so their names are free again when they go
+  const phases = new Map() // session -> what the chat is doing (see the `phase` command)
+  const makeTeam = sessionId => {
+    const size = 5 + Math.floor(random() * 4)
+    const people = Array.from({ length: size * 2 }, () => identity(sessionId, 'worker'))
+    const manager = { id: `m-${sessionId}`, name: 'Manager', color: '#8d6e63', kind: 'manager', sessionId }
+    teams.set(sessionId, people)
+    phases.set(sessionId, 'chat')
+    return { cmd: 'team', sessionId, manager, workers: people.slice(0, size), reserve: people.slice(size) }
   }
 
   const act = (worker, step, extra) => ({ cmd: 'do', worker: worker.id, step, ...extra })
@@ -125,7 +148,7 @@ export const createDirector = ({ random = Math.random } = {}) => {
   }
 
   const onTool = e => {
-    if (e.tool === 'SendMessage') return [note('manager', 'Message sent')]
+    if (e.tool === 'SendMessage') return [note(e.sessionId, 'manager', 'Message sent')]
     if (e.tool === 'AskUserQuestion') {
       // Claude asks the person something: someone waits at the CEO's door until it is answered
       asking.add(e.sessionId)
@@ -136,7 +159,7 @@ export const createDirector = ({ random = Math.random } = {}) => {
     const errand = ERRANDS[e.tool] ?? (server && MCP_ERRAND)
     if (errand) {
       const worker = hire(e.sessionId, 'worker')
-      calls.set(e.id, { worker, errand })
+      calls.set(e.id, { worker, errand, tool: e.tool, git: e.git })
       return [{ cmd: 'hire', worker }, act(worker, errand.start, { server, label: errand.label })]
     }
     if (!FILE_TOOLS.has(e.tool) || !e.path) return []
@@ -170,7 +193,8 @@ export const createDirector = ({ random = Math.random } = {}) => {
 
     if (call.errand) {
       release(worker)
-      return [act(worker, e.ok ? call.errand.ok : call.errand.fail), send(worker)]
+      const celebrate = e.ok && call.git ? [{ cmd: 'celebrate', sessionId: worker.sessionId, what: call.git }] : []
+      return [act(worker, e.ok ? call.errand.ok : call.errand.fail), send(worker), ...celebrate]
     }
     if (!e.ok) return [act(worker, call.tool === 'Read' ? 'fail' : 'reject')]
     if (call.tool === 'Read') return call.study ? [act(worker, 'study')] : []
@@ -196,6 +220,20 @@ export const createDirector = ({ random = Math.random } = {}) => {
     return out
   }
 
+  // the chat's team goes home for good: after the session ended, or after a long quiet. The names are free again.
+  const leave = sessionId => {
+    const out = sendHome(sessionId)
+    const team = teams.get(sessionId)
+    if (!team) return out
+    for (const person of team) {
+      names.delete(person.name)
+      colors.delete(person.color)
+    }
+    teams.delete(sessionId)
+    phases.delete(sessionId)
+    return [...out, { cmd: 'leave', sessionId }]
+  }
+
   // Claude finished: the manager checks what was handed in and takes it upstairs
   const onTurnEnd = sessionId => {
     const delivered = (handedIn.get(sessionId) ?? []).map(worker => worker.id)
@@ -204,7 +242,7 @@ export const createDirector = ({ random = Math.random } = {}) => {
   }
 
   // the life of the session: a note over the CEO or the manager
-  const note = (who, text, kind = 'info') => ({ cmd: 'note', who, text, kind })
+  const note = (sessionId, who, text, kind = 'info') => ({ cmd: 'note', sessionId, who, text, kind })
   const onLife = e => {
     const out = []
     const { sessionId, detail } = e
@@ -212,29 +250,30 @@ export const createDirector = ({ random = Math.random } = {}) => {
       case 'start':
         if (detail === 'compact') return [] // compaction has its own scene
         if (detail === 'clear') out.push({ cmd: 'clear', sessionId })
-        return [...out, note('ceo', { resume: 'Resumed', clear: 'Fresh start' }[detail] ?? 'New session')]
+        return [...out, note(sessionId, 'ceo', { resume: 'Resumed', clear: 'Fresh start' }[detail] ?? 'New session')]
       case 'end':
         answered(sessionId, out)
-        // /clear ends the session and starts another at once: only the second is announced
-        return [...out, ...(detail === 'clear' ? [] : [note('ceo', 'Session ended')]), ...sendHome(sessionId)]
+        // /clear ends the session and starts another at once: only the second is announced, and the team stays
+        if (detail === 'clear') return [...out, ...sendHome(sessionId)]
+        return [...out, note(sessionId, 'ceo', 'Session ended'), ...leave(sessionId)]
       case 'model':
-        return [note('manager', detail ? `Model: ${detail}` : 'Model changed')]
+        return [note(sessionId, 'manager', detail ? `Model: ${detail}` : 'Model changed')]
       case 'cwd':
-        return [note('manager', detail ? `Now in ${detail}` : 'Folder changed')]
+        return [note(sessionId, 'manager', detail ? `Now in ${detail}` : 'Folder changed')]
       case 'folder':
-        return [note('manager', detail ? `Added ${detail}` : 'Folder added')]
+        return [note(sessionId, 'manager', detail ? `Added ${detail}` : 'Folder added')]
       case 'batch':
-        return [note('manager', 'Batch finished', 'ok')]
+        return [note(sessionId, 'manager', 'Batch finished', 'ok')]
       case 'task-new':
-        return [note('manager', 'New task')]
+        return [note(sessionId, 'manager', 'New task')]
       case 'task-done':
-        return [note('manager', 'Task done', 'ok')]
+        return [note(sessionId, 'manager', 'Task done', 'ok')]
       case 'teammate':
-        return [note('manager', 'Teammate idle')]
+        return [note(sessionId, 'manager', 'Teammate idle')]
       case 'idle':
-        return [note('manager', 'Waiting for you')]
+        return [note(sessionId, 'manager', 'Waiting for you')]
       case 'command':
-        return [note('ceo', detail ? `/${detail}` : 'Command')]
+        return [note(sessionId, 'ceo', detail ? `/${detail}` : 'Command')]
       case 'memo':
         // several in a row are one memo
         if (memoed.has(sessionId)) return []
@@ -245,12 +284,14 @@ export const createDirector = ({ random = Math.random } = {}) => {
     }
   }
 
-  const feed = e => {
+  const play = e => {
     const out = []
     if (!(e.type === 'life' && e.what === 'memo')) memoed.delete(e.sessionId)
     switch (e.type) {
       case 'life':
         return onLife(e)
+      case 'team-leave':
+        return leave(e.sessionId)
       case 'tool':
         answered(e.sessionId, out)
         return [...out, ...onTool(e)]
@@ -297,6 +338,42 @@ export const createDirector = ({ random = Math.random } = {}) => {
     }
   }
 
+  // what an event says the chat is doing now, or null if it says nothing new: plan mode is left by ExitPlanMode being done,
+  // and the work that goes on inside it is still planning
+  const nextPhase = (e, was, exitedPlan) => {
+    switch (e.type) {
+      case 'prompt':
+        return 'chat'
+      case 'tool':
+        if (e.tool === 'EnterPlanMode') return 'planning'
+        return was === 'planning' || e.tool === 'AskUserQuestion' ? null : 'working'
+      case 'edit':
+        return was === 'planning' ? null : 'working'
+      case 'done':
+        return exitedPlan ? 'working' : null
+      case 'turn-end':
+      case 'turn-fail':
+        return 'waiting'
+      case 'life':
+        return e.what === 'start' ? 'chat' : e.what === 'idle' ? 'waiting' : null
+      default:
+        return null
+    }
+  }
+
+  // the first event from a chat brings its team into the office; a chat that has ended or left does not
+  const feed = e => {
+    const ending = e.type === 'team-leave' || (e.type === 'life' && e.what === 'end')
+    const call = e.type === 'done' ? calls.get(e.id) : null // a tool that is done does not say which chat it was in
+    const sessionId = e.sessionId ?? call?.worker?.sessionId
+    const out = e.sessionId && !teams.has(e.sessionId) && !ending ? [makeTeam(e.sessionId), ...play(e)] : play(e)
+    const was = phases.get(sessionId)
+    const next = was && !ending ? nextPhase(e, was, call?.tool === 'ExitPlanMode') : null
+    if (!next || next === was) return out
+    phases.set(sessionId, next)
+    return [...out, { cmd: 'phase', sessionId, phase: next }]
+  }
+
   // Has the turn gone quiet? People are in the office, but nothing is running,
   // no helper is working and no permission is waiting. Stop does not fire when
   // Claude is interrupted, so the Office uses this to end such a turn itself.
@@ -307,5 +384,5 @@ export const createDirector = ({ random = Math.random } = {}) => {
     ![...calls.values()].some(call => call.worker.sessionId === sessionId) &&
     ![...agents.values()].some(worker => worker.sessionId === sessionId)
 
-  return { feed, isQuiet }
+  return { feed, isQuiet, phaseOf: sessionId => phases.get(sessionId) ?? null, isAsking: sessionId => asking.has(sessionId) }
 }

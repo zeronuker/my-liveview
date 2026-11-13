@@ -54,6 +54,19 @@ export const SCENARIOS = {
       ['stop'],
     ],
   },
+  ship: {
+    about: 'the work is tested, committed and pushed: the team cheers at the commit and again, bigger, at the push',
+    ends: 'stop',
+    steps: [
+      ['prompt', 'Commit and push it'],
+      ...files(['ship.js']),
+      ['bash', 'ok', '', 'git commit -m "Add ship"'],
+      ['bash', 'fail', '', 'git push'],
+      ['bash', 'ok', '', 'git push'],
+      ['wait', 3000],
+      ['stop'],
+    ],
+  },
   'reading-only': {
     about: 'files are read and searched, nothing is changed: nothing is handed in, nobody goes upstairs',
     ends: 'stop',

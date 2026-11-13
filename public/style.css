@@ -178,6 +178,7 @@ body {
 
 /* controls */
 #toolbar {
+  position: relative;
   display: flex;
   flex-wrap: wrap;
   gap: 8px 10px;
@@ -552,15 +553,11 @@ body.office #rz-split {
 }
 
 /* Record is only for the Office, and shows a red dot while it records */
-#b-record,
-#b-fit,
-#b-sound {
+#b-record {
   display: none;
 }
 
-body.office #b-record,
-body.office #b-fit,
-body.office #b-sound {
+body.office #b-record {
   display: inline-block;
 }
 
@@ -1074,4 +1071,188 @@ body.resizing:has(#panes.stacked #rz-split.dragging) {
   #rz-aside {
     display: none;
   }
+}
+
+/* the Office view: only the controls that are for it, the chats with their activity under them, a bigger picture */
+body.office #rz-aside {
+  display: none;
+}
+
+body.office nav {
+  display: flex;
+  flex-direction: column;
+  flex-basis: var(--nav-w, 300px);
+}
+
+body.office nav {
+  overflow: hidden;
+}
+
+body.office nav #chat-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+body.office nav #feed {
+  display: block;
+  flex: none;
+  max-height: 45%;
+  margin-top: 8px;
+  border: 0;
+  border-top: 1px solid var(--line);
+  padding: 0;
+  overflow: auto;
+}
+
+body.office nav #feed h2 {
+  cursor: pointer;
+  padding-top: 8px;
+}
+
+body.office nav #feed h2::before {
+  content: '▾ ';
+}
+
+body.office nav #feed.shut h2::before {
+  content: '▸ ';
+}
+
+body.office nav #feed.shut ul {
+  display: none;
+}
+
+/* the chat's phase, at the right of its row */
+.phase {
+  margin-right: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--dim) 20%, transparent);
+  color: var(--fg);
+}
+
+.phase.working { background: var(--nbg); color: var(--nfg); }
+.phase.planning { background: color-mix(in srgb, var(--acc) 22%, transparent); color: var(--acc); }
+.phase.waiting { background: var(--abg); color: var(--afg); }
+
+/* on top of the office: zoom, the latest events, a notice and a worker's card */
+#zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 44px;
+  display: none;
+  flex-direction: column;
+  gap: 4px;
+}
+
+#zoom button {
+  min-width: 34px;
+  height: 34px;
+  padding: 0 6px;
+}
+
+#ticker {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: none;
+  gap: 16px;
+  padding: 6px 12px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 12px;
+  background: color-mix(in srgb, var(--bg) 82%, transparent);
+  border-top: 1px solid var(--line);
+}
+
+#ticker li { flex: none; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; }
+#ticker li.done .tool { color: var(--afg); }
+#ticker li.failed .tool { color: var(--dfg); }
+#ticker .tool { margin-right: 6px; color: var(--dim); font-family: ui-monospace, Consolas, monospace; }
+
+body.office #zoom,
+body.office #ticker { display: flex; }
+
+#banner {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 2;
+  padding: 6px 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--panel);
+  border: 1px solid var(--acc);
+}
+
+#inspector {
+  position: absolute;
+  left: 12px;
+  top: 12px;
+  z-index: 2;
+  min-width: 180px;
+  padding: 8px 12px;
+  font-size: 13px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+#inspector .who { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+#inspector .swatch-dot { width: 10px; height: 10px; border-radius: 50%; }
+#inspector .line { color: var(--dim); margin-top: 2px; }
+
+/* the settings panel, opened from the gear at the right of the toolbar */
+#b-gear {
+  margin-left: auto;
+}
+
+#settings {
+  position: absolute;
+  top: 100%;
+  right: 8px;
+  z-index: 20;
+  width: 300px;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 4px 14px 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+
+#settings[hidden] {
+  display: none;
+}
+
+#settings h3 {
+  margin: 12px 0 2px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.srow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+#settings .swatches {
+  margin-left: 0;
+}
+
+body.office #set-file,
+body:not(.office) #set-office {
+  display: none;
 }

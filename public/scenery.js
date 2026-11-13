@@ -41,18 +41,28 @@ export const groundOps = (layout, frame = 0) => {
   return [...ops, ...gardenLowOps(garden, frame), ...shellOps(layout), ...decalOps(layout), ...gardenHighOps(garden)]
 }
 
-// a guardrail: a thin rail along the way it runs, with a post every tile
+// a guardrail: a thin rail along the way it runs, a thick post every tile and a thin one every four pixels between
 const railOps = ({ w, h }) => {
   const [dark, , base] = ramp('#6b6f7a')
   const ops = []
   if (w >= h) {
+    for (let x = 1; x < w * TILE; x += 4) ops.push(r(x, 5, 1, 7, dark))
     ops.push(r(0, 6, w * TILE, 2, base), r(0, 8, w * TILE, 1, dark))
     for (let i = 0; i < w; i++) ops.push(r(i * TILE + 7, 3, 3, 9, dark))
   } else {
+    for (let y = 1; y < h * TILE; y += 4) ops.push(r(5, y, 7, 1, dark))
     ops.push(r(6, 0, 2, h * TILE, base), r(8, 0, 1, h * TILE, dark))
     for (let i = 0; i < h; i++) ops.push(r(3, i * TILE + 7, 9, 3, dark))
   }
   return ops
+}
+
+// A fixture against a thin wall: the wall's cap is in the middle of its cell, so five pixels of floor show between the
+// cap and the fixture's tile. `bleed` ({ left } or { right }, in pixels) says how far the picture reaches into the wall
+// cell to close that gap: what touches the wall's edge of the tile is stretched, the rest keeps its place.
+export const withBleed = ({ ops, bleed = {}, w }) => {
+  const [left, right, width] = [bleed.left ?? 0, bleed.right ?? 0, w * TILE]
+  return ops.map(([kind, x, y, ow, oh, color]) => [kind, x === 0 && left ? 0 : x + left, y, ow + (x === 0 ? left : 0) + (x + ow === width ? right : 0), oh, color])
 }
 
 // plain placeholder: a box of one colour, lighter on top and darker at the foot
@@ -80,7 +90,7 @@ const ARTS = {
 export const itemsOf = layout =>
   layout.furniture.map(item => {
     const art = ARTS[item.kind] ?? { under: false, ops: () => boxOps(item, '#888780') }
-    return { ...item, under: art.under, over: art.over ?? false, rise: art.rise ?? 0, ops: art.ops(item), lights: art.lights?.(item) ?? [] }
+    return { ...item, under: art.under, over: art.over ?? false, rise: art.rise ?? 0, bleed: art.bleed ?? {}, ops: art.ops(item), lights: art.lights?.(item) ?? [] }
   })
 
 // the lights that are not on a piece of furniture: a blinking sensor over each sliding door, in plan pixels

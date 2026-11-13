@@ -5,7 +5,7 @@ import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import { applyEdit, makeRows } from './diff.js'
-import { summarize, titleOf } from './summary.js'
+import { gitKind, summarize, titleOf } from './summary.js'
 import { readStatuses } from './sessions.js'
 import { readAppTitle } from './titles.js'
 
@@ -162,7 +162,8 @@ const onHook = p => {
     // inside a subagent the hook says which one, so the Office can tell its workers apart
     const agent = p.agent_id ? { agentId: p.agent_id, agentType: p.agent_type } : {}
     const path = typeof input?.file_path === 'string' ? { path: input.file_path } : {}
-    publish({ type: 'tool', id, sessionId, cwd, tool, summary: summarize(tool, input), ...path, ...agent, at })
+    const git = gitKind(tool, input) // only whether it is a commit or a push, for the Office to celebrate
+    publish({ type: 'tool', id, sessionId, cwd, tool, summary: summarize(tool, input), ...path, ...agent, ...(git ? { git } : {}), at })
     if (tool === 'Edit' || tool === 'Write') publishEdit({ tool, input, id, sessionId, cwd })
   } else if (kind === 'PostToolUse' || kind === 'PostToolUseFailure') {
     publish({ type: 'done', id, ok: kind === 'PostToolUse' })
@@ -189,6 +190,8 @@ const files = {
   '/garden.js': ['garden.js', 'text/javascript; charset=utf-8'],
   '/pets.js': ['pets.js', 'text/javascript; charset=utf-8'],
   '/names.js': ['names.js', 'text/javascript; charset=utf-8'],
+  '/glide.js': ['glide.js', 'text/javascript; charset=utf-8'],
+  '/fish.js': ['fish.js', 'text/javascript; charset=utf-8'],
   '/lights.js': ['lights.js', 'text/javascript; charset=utf-8'],
   '/walk.js': ['walk.js', 'text/javascript; charset=utf-8'],
   '/recorder.js': ['recorder.js', 'text/javascript; charset=utf-8'],

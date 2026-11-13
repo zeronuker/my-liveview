@@ -72,8 +72,14 @@ const stageIt = (name, events) => {
   if (SCENARIOS[name].ends === 'quiet')
     for (const sessionId of sessions) for (const cmd of director.feed({ type: 'turn-end', sessionId })) stage.apply(cmd, 0)
   stage.skip()
-  const left = stage.snapshot().workers.filter(w => w.kind !== 'manager')
-  return { commands, wasQuiet, left, idle: stage.isIdle(), papers: stage.snapshot().ceo.papers, stack: stage.snapshot().stack }
+  const { papers, stack } = { papers: stage.snapshot().ceo.papers, stack: stage.snapshot().stack }
+  // the chats go quiet for good: every team goes home, and the Office has to be empty
+  for (const sessionId of sessions) for (const cmd of director.feed({ type: 'team-leave', sessionId })) {
+    commands.push(cmd)
+    stage.apply(cmd, 0)
+  }
+  stage.skip()
+  return { commands, wasQuiet, left: stage.snapshot().workers, idle: stage.isIdle(), papers, stack }
 }
 
 before(async () => {
@@ -174,7 +180,7 @@ test('coverage: every kind of session life the Office knows is in some scenario'
 
 test('coverage: every command the director gives and every step the stage plays is in some scenario', () => {
   const commands = all(r => r.commands.map(c => c.cmd))
-  for (const cmd of ['hire', 'do', 'fire', 'review', 'submit', 'ask', 'answered', 'prompt', 'fail', 'compact', 'compacted', 'denied', 'note', 'memo', 'clear'])
+  for (const cmd of ['team', 'leave', 'celebrate', 'hire', 'do', 'fire', 'review', 'submit', 'ask', 'answered', 'prompt', 'fail', 'compact', 'compacted', 'denied', 'note', 'memo', 'clear'])
     assert.ok(commands.has(cmd), cmd)
   const steps = all(r => r.commands.filter(c => c.cmd === 'do').map(c => c.step))
   for (const step of ['arrive', 'fetch', 'study', 'write', 'handIn', 'report', 'reject', 'test', 'search', 'pass', 'fail', 'call', 'unavailable', 'huddle', 'planned'])

@@ -270,6 +270,23 @@ test('an API error, a compaction and a refused tool reach the page; no answer de
     assert.equal(page.text.includes('secret'), false) // what Claude said or why is not passed on
   }))
 
+test('a shell command that commits or pushes says so, and one that does not says nothing; the command itself is not added', () =>
+  withServer(async ({ token }) => {
+    const page = await listen()
+    const run = (id, command) => hook(token, { hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_use_id: id, tool_input: { command } })
+    await run('g1', 'git commit -m "secret words"')
+    await run('g2', 'git push origin main')
+    await run('g3', 'npm test')
+
+    assert.ok(await page.until('"id":"g1"'))
+    assert.ok(await page.until('"id":"g3"'))
+    const tools = page.text.split('\n').filter(line => line.startsWith('data: ')).map(line => JSON.parse(line.slice(6))).filter(e => e.type === 'tool')
+    assert.equal(tools.find(e => e.id === 'g1').git, 'commit')
+    assert.equal(tools.find(e => e.id === 'g2').git, 'push')
+    assert.equal('git' in tools.find(e => e.id === 'g3'), false)
+    assert.equal(Object.keys(tools[0]).some(key => JSON.stringify(tools[0][key]).includes('secret') && key !== 'summary'), false) // only the summary line carries any of it, as before
+  }))
+
 test('a tool used inside a subagent says which subagent', () =>
   withServer(async ({ token }) => {
     const page = await listen()

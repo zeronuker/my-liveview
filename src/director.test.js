@@ -1,17 +1,25 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { createDirector, NAMES } from '../public/director.js'
+import { createDirector } from '../public/director.js'
+import { NAMES } from '../public/names.js'
 
 const S = 'chat1'
 const tool = (id, name, path) => ({ type: 'tool', id, sessionId: S, tool: name, path })
 const done = (id, ok = true) => ({ type: 'done', id, ok })
 const edit = (id, path, isNew = false) => ({ type: 'edit', id, sessionId: S, path, adds: 2, dels: 1, isNew })
 
-// every command the director gives for these events, in order
+// every command the director gives for these events, in order, leaving out the ones that bring the chat's team in and
+// say what the chat is doing (they have tests of their own, further down)
 const run = (events, options) => {
   const director = createDirector({ random: () => 0, ...options })
-  return events.flatMap(event => director.feed(event))
+  return events.flatMap(event => director.feed(event)).filter(c => c.cmd !== 'team' && c.cmd !== 'phase')
+}
+// a director whose chat's team is already in
+const warm = () => {
+  const director = createDirector({ random: () => 0 })
+  director.feed({ type: 'prompt', sessionId: S })
+  return director
 }
 const steps = commands => commands.filter(c => c.cmd === 'do').map(c => c.step)
 const hired = commands => commands.filter(c => c.cmd === 'hire')
@@ -98,7 +106,7 @@ test('a subagent that was never seen starting changes nothing', () => {
 })
 
 test('a permission asked is answered by the next thing that happens', () => {
-  const director = createDirector({ random: () => 0 })
+  const director = warm()
 
   assert.equal(director.feed({ type: 'permission', sessionId: S, tool: 'Bash', summary: 'Ran: rm x' })[0].cmd, 'ask')
   assert.equal(director.feed(tool('t1', 'Bash'))[0].cmd, 'answered')
@@ -138,18 +146,78 @@ test('a chat does not hand in, or send home, another chat\'s workers', () => {
   assert.equal(commands.find(c => c.cmd === 'submit').workers.length, 1)
 })
 
-test('names are a mix of English and Malay, no two alike while there are enough', () => {
-  const events = Array.from({ length: NAMES.length }, (_, i) => tool(`t${i}`, 'Edit', `f${i}.js`))
-  const names = hired(run(events)).map(c => c.worker.name)
+// --- the team: each chat has a manager and a team who live in the office ---
 
-  assert.equal(new Set(names).size, NAMES.length)
-  assert.ok(names.includes('Aisyah') && names.includes('Daniel'))
+const teamOf = (events, options) => {
+  const director = createDirector({ random: () => 0, ...options })
+  return events.flatMap(event => director.feed(event)).filter(c => c.cmd === 'team')
+}
+
+test('the first event from a chat brings its team in, once: a manager, 5 to 8 workers, and as many again in reserve', () => {
+  const [first, ...rest] = teamOf([{ type: 'prompt', sessionId: S }, tool('t1', 'Read', 'a.js'), done('t1')])
+
+  assert.equal(rest.length, 0)
+  assert.equal(first.sessionId, S)
+  assert.equal(first.manager.kind, 'manager')
+  assert.equal(first.workers.length, 5) // a random of 0 is the smallest team
+  assert.equal(first.reserve.length, 5)
+  assert.ok(first.workers.every(w => w.kind === 'worker' && w.sessionId === S))
+  assert.equal(teamOf([{ type: 'prompt', sessionId: S }], { random: () => 0.99 })[0].workers.length, 8)
 })
 
-test('more workers than names still works: names repeat', () => {
-  const events = Array.from({ length: NAMES.length + 5 }, (_, i) => tool(`t${i}`, 'Edit', `f${i}.js`))
+test('the first event of any kind starts the team, even one nobody draws', () => {
+  assert.equal(teamOf([{ type: 'title', sessionId: S, title: 'x' }]).length, 1)
+  assert.equal(teamOf([{ type: 'ready' }]).length, 0) // no chat
+})
 
-  assert.equal(hired(run(events)).length, NAMES.length + 5)
+test('every chat has a team of its own', () => {
+  const teams = teamOf([{ type: 'prompt', sessionId: 'a' }, { type: 'prompt', sessionId: 'b' }])
+
+  assert.deepEqual(teams.map(t => t.sessionId), ['a', 'b'])
+  assert.notEqual(teams[0].manager.id, teams[1].manager.id)
+})
+
+test('names come from Malay, English, Indian and Chinese: a Chinese name is two words, the others one; nobody in a team shares a name', () => {
+  const words = name => name.split(' ').length
+  assert.ok(NAMES.includes('Aisyah') && NAMES.includes('Daniel') && NAMES.includes('Priya') && NAMES.includes('Wen Shen') && NAMES.includes('Wai Kit') && NAMES.includes('Kim Wui'))
+  assert.ok(NAMES.every(name => words(name) <= 2))
+  assert.ok(NAMES.filter(name => words(name) === 2).length >= 20)
+  assert.equal(new Set(NAMES).size, NAMES.length)
+
+  const [team] = teamOf([{ type: 'prompt', sessionId: S }], { random: () => 0.99 })
+  const names = [...team.workers, ...team.reserve].map(w => w.name)
+  assert.equal(new Set(names).size, 16)
+})
+
+test('a chat that has been quiet for good sends its lanes home and then its team, and the names are free for the next chat', () => {
+  const director = createDirector({ random: () => 0 })
+  const [{ workers }] = director.feed({ type: 'prompt', sessionId: 'a' }).filter(c => c.cmd === 'team')
+  director.feed({ ...tool('t1', 'Read', 'a.js'), sessionId: 'a' })
+  const out = director.feed({ type: 'team-leave', sessionId: 'a' })
+
+  assert.deepEqual(out.map(c => c.cmd), ['fire', 'leave'])
+  assert.deepEqual(director.feed({ type: 'team-leave', sessionId: 'a' }), []) // nothing left to send
+  const [second] = director.feed({ type: 'prompt', sessionId: 'b' }).filter(c => c.cmd === 'team')
+  assert.deepEqual(second.workers.map(w => w.name).sort(), workers.map(w => w.name).sort()) // with a random of 0 the first free names are taken again
+})
+
+test('a chat that is heard from again after its team left gets a new team', () => {
+  const director = createDirector({ random: () => 0 })
+  director.feed({ type: 'prompt', sessionId: 'a' })
+  director.feed({ type: 'team-leave', sessionId: 'a' })
+
+  assert.equal(director.feed({ type: 'prompt', sessionId: 'a' })[0].cmd, 'team')
+})
+
+test('a session that ends sends the team home; /clear does not', () => {
+  assert.ok(run([{ type: 'prompt', sessionId: S }, life('end', 'other')]).some(c => c.cmd === 'leave'))
+  assert.equal(run([{ type: 'prompt', sessionId: S }, life('end', 'clear')]).some(c => c.cmd === 'leave'), false)
+})
+
+test('the end of a turn sends the lanes home but keeps the team', () => {
+  const commands = run([tool('t1', 'Read', 'a.js'), done('t1'), { type: 'turn-end', sessionId: S }])
+
+  assert.equal(commands.some(c => c.cmd === 'leave'), false)
 })
 
 test('every worker has a colour', () => {
@@ -164,7 +232,7 @@ test('a prompt is announced, and events of no interest do nothing', () => {
 })
 
 test('a turn is quiet when people are in the office, nothing is running and no permission is waiting', () => {
-  const director = createDirector({ random: () => 0 })
+  const director = warm()
   assert.equal(director.isQuiet(S), false) // an empty office is not waiting on anything
 
   for (const e of [tool('t1', 'Edit', 'a.js'), edit('t1', 'a.js'), done('t1')]) director.feed(e)
@@ -176,15 +244,15 @@ test('a turn is quiet when people are in the office, nothing is running and no p
 })
 
 test('a tool still running, a subagent still working or a permission still waiting is not quiet', () => {
-  const running = createDirector({ random: () => 0 })
+  const running = warm()
   running.feed(tool('t1', 'Bash'))
   assert.equal(running.isQuiet(S), false)
 
-  const helper = createDirector({ random: () => 0 })
+  const helper = warm()
   helper.feed({ type: 'agent-start', sessionId: S, agentId: 'a1', agentType: 'Explore' })
   assert.equal(helper.isQuiet(S), false)
 
-  const asked = createDirector({ random: () => 0 })
+  const asked = warm()
   for (const e of [tool('t1', 'Read', 'a.js'), done('t1'), { type: 'permission', sessionId: S, tool: 'Bash' }]) asked.feed(e)
   assert.equal(asked.isQuiet(S), false)
   asked.feed({ type: 'prompt', sessionId: S }) // answered
@@ -216,7 +284,7 @@ test('an API error of a kind nobody planned for is just an API error', () => {
 })
 
 test('a compaction starts and ends; anything else that happens ends it too; it is not a quiet turn', () => {
-  const director = createDirector({ random: () => 0 })
+  const director = warm()
   director.feed(tool('t1', 'Read', 'a.js'))
   director.feed(done('t1'))
   assert.deepEqual(director.feed({ type: 'compact', sessionId: S, phase: 'start' }), [{ cmd: 'compact', sessionId: S }])
@@ -283,7 +351,7 @@ test('the code check is a trip to the shelves, with its own words', () => {
 })
 
 test("a question from Claude waits at the CEO's door until the tool is over", () => {
-  const director = createDirector({ random: () => 0 })
+  const director = warm()
   const asked = director.feed(tool('q1', 'AskUserQuestion'))
 
   assert.deepEqual(asked, [{ cmd: 'ask', sessionId: S, tool: 'AskUserQuestion', label: 'Has a question' }])
@@ -299,4 +367,64 @@ test('a message to a helper, a batch, a task, a waiting notice and a command are
     texts(run([life('batch'), life('task-new'), life('task-done'), life('teammate'), life('idle'), life('command', 'review'), life('command')])),
     ['manager: Batch finished', 'manager: New task', 'manager: Task done', 'manager: Teammate idle', 'manager: Waiting for you', 'ceo: /review', 'ceo: Command'],
   )
+})
+
+// --- phases: what the chat is doing, so the office can match it ---
+
+const phasesOf = events => {
+  const director = createDirector({ random: () => 0 })
+  return events.flatMap(event => director.feed(event)).filter(c => c.cmd === 'phase').map(c => c.phase)
+}
+
+test('a prompt is a chat; the first tool is work; the end of the turn is waiting for the person', () => {
+  assert.deepEqual(phasesOf([{ type: 'prompt', sessionId: S }]), []) // a new chat starts as a chat
+  assert.deepEqual(phasesOf([{ type: 'prompt', sessionId: S }, tool('t1', 'Read', 'a.js'), done('t1'), tool('t2', 'Grep'), done('t2'), { type: 'turn-end', sessionId: S }, { type: 'prompt', sessionId: S }]), ['working', 'waiting', 'chat'])
+})
+
+test('a chat that starts with a tool, or ends in an error or a long wait, has the phase to match', () => {
+  assert.deepEqual(phasesOf([tool('t1', 'Bash')]), ['working'])
+  assert.deepEqual(phasesOf([tool('t1', 'Bash'), { type: 'turn-fail', sessionId: S, reason: 'rate_limit' }]), ['working', 'waiting'])
+  assert.deepEqual(phasesOf([tool('t1', 'Bash'), life('idle')]), ['working', 'waiting'])
+})
+
+test('plan mode is planning from EnterPlanMode until ExitPlanMode is done, work inside it included', () => {
+  const events = [tool('p1', 'EnterPlanMode'), done('p1'), tool('t1', 'Read', 'a.js'), done('t1'), tool('p2', 'ExitPlanMode'), done('p2'), tool('t2', 'Edit', 'a.js'), edit('t2', 'a.js'), done('t2')]
+
+  assert.deepEqual(phasesOf(events), ['planning', 'working'])
+})
+
+test('a question from Claude is not work, and a phase is only said when it changes', () => {
+  assert.deepEqual(phasesOf([tool('q1', 'AskUserQuestion'), done('q1')]), [])
+  assert.deepEqual(phasesOf([tool('t1', 'Read', 'a.js'), tool('t2', 'Read', 'b.js'), tool('t3', 'Bash')]), ['working'])
+})
+
+test('a chat that has left has no phase, and a new one starts as a chat again', () => {
+  const director = createDirector({ random: () => 0 })
+  director.feed(tool('t1', 'Bash'))
+  director.feed({ type: 'team-leave', sessionId: S })
+
+  assert.deepEqual(director.feed({ type: 'prompt', sessionId: S }).filter(c => c.cmd === 'phase'), [])
+})
+
+test('a commit or push that went through is celebrated for the chat; one that failed, and a plain command, are not', () => {
+  const git = (id, kind) => ({ ...tool(id, 'Bash'), git: kind })
+  const celebrations = events => run(events).filter(c => c.cmd === 'celebrate')
+
+  assert.deepEqual(celebrations([git('t1', 'commit'), done('t1')]), [{ cmd: 'celebrate', sessionId: S, what: 'commit' }])
+  assert.deepEqual(celebrations([git('t1', 'push'), done('t1')]), [{ cmd: 'celebrate', sessionId: S, what: 'push' }])
+  assert.deepEqual(celebrations([git('t1', 'push'), done('t1', false)]), [])
+  assert.deepEqual(celebrations([tool('t1', 'Bash'), done('t1')]), [])
+  assert.deepEqual(celebrations([git('t1', 'commit')]), []) // not until it is done
+})
+
+test('the director can say what a chat is doing and whether it is waiting on a permission, for the chat\'s card', () => {
+  const director = createDirector({ random: () => 0 })
+  assert.equal(director.phaseOf(S), null)
+  director.feed(tool('t1', 'Bash'))
+  assert.equal(director.phaseOf(S), 'working')
+  assert.equal(director.isAsking(S), false)
+  director.feed({ type: 'permission', sessionId: S, tool: 'Bash' })
+  assert.equal(director.isAsking(S), true)
+  director.feed({ type: 'turn-end', sessionId: S })
+  assert.equal(director.phaseOf(S), 'waiting')
 })

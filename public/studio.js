@@ -73,10 +73,10 @@ export const buildStudio = () => {
   // ground floor: the main street, the social wing
   room('Main street', 6, 18, 35, 2, 'street')
   room('Corridor', 23, 20, 4, 8, 'street')
-  room('Social hub', 27, 20, 14, 12, 'honey')
-  room('Vending area', 27, 32, 14, 2, 'honey')
-  room('Lounge and pantry', 27, 35, 14, 6, 'honey')
-  door('arch', 38, 34, 3, 1) // vending area to the lounge
+  room('Social hub', 27, 20, 14, 7, 'honey')
+  room('Vending area', 27, 27, 14, 2, 'honey')
+  room('Lounge and pantry', 27, 30, 14, 11, 'honey')
+  door('arch', 38, 29, 3, 1) // vending area to the lounge
   door('sliding', 38, 41, 3, 1) // lounge to the terrace
 
   // mezzanine: the open office (no walls, guardrails) and the lobby
@@ -125,10 +125,15 @@ export const buildStudio = () => {
   // plants in the open office: the corners, by the rail and between the islands
   for (const [x, y] of [[6, 21], [17, 21], [6, 32], [11, 27], [16, 32], [21, 32]]) block('plant', x, y)
 
-  // the manager's desk at the lower east edge of the open office, with the tray
-  block('desk', 19, 29, 1, 2, 'left')
-  lay('chair', 20, 29, 1, 1, 'left')
-  block('tray', 18, 29)
+  // the managers' desks at the east edge of the open office, one for each of the first three chats, each with a tray
+  // (a fourth chat's manager shares one) and a place to stand to hand work in
+  const managers = []
+  for (const y of [29, 26, 31]) {
+    block('desk', 19, y, 1, 2, 'left')
+    lay('chair', 20, y, 1, 1, 'left')
+    block('tray', 18, y)
+    managers.push({ seat: { x: 20, y, face: 'left', desk: { x: 19, y } }, tray: { x: 18, y }, handIn: { x: 18, y: y - 1 } })
+  }
 
   // the CEO's desk, and the leather chair behind it
   block('ceodesk', 26, 4, 3, 1, 'down')
@@ -171,13 +176,17 @@ export const buildStudio = () => {
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) seats.push({ x: i, y: j, face })
   }
   // the social hub: a sofa and two armchairs round a coffee table, facing the TV on the east wall
-  sofa(34, 24, 1, 3, 'right', 'sofa', 'terracotta')
-  sofa(36, 24, 1, 1, 'down', 'armchair', 'sage')
-  sofa(36, 26, 1, 1, 'up', 'armchair', 'slate')
-  block('coffeetable', 36, 25)
-  block('tv', 40, 25, 1, 2)
+  sofa(34, 22, 1, 3, 'right', 'sofa', 'terracotta')
+  sofa(36, 22, 1, 1, 'down', 'armchair', 'sage')
+  sofa(36, 24, 1, 1, 'up', 'armchair', 'slate')
+  block('coffeetable', 36, 23)
+  block('tv', 40, 23, 1, 2)
   block('pingpong', 28, 21, 3, 2)
-  for (const [x, y] of [[40, 20], [40, 31], [27, 31]]) block('plant', x, y)
+  for (const [x, y] of [[40, 20], [40, 26], [27, 26]]) block('plant', x, y)
+  // the lounge's TV corner, in the north-east: a sofa facing a TV on the east wall, with a coffee table between
+  sofa(36, 31, 1, 3, 'right', 'sofa', 'sage')
+  block('coffeetable', 38, 32)
+  block('tv', 40, 32, 1, 2)
   sofa(36, 37, 3, 1, 'up', 'sofa', 'fabricWarm') // the lounge
   sofa(6, 36, 1, 2, 'right')
   sofa(9, 38, 2, 1, 'up', 'sofa', 'slate')
@@ -193,6 +202,7 @@ export const buildStudio = () => {
   // the server room: two rows of racks with an aisle between, the back row facing it, and a free column from the door
   for (const x of [14, 15, 16]) block('rack', x, 11)
   for (const x of [15, 16]) block('rack', x, 13, 1, 1, 'up')
+  const server = [{ x: 14, y: 12 }, { x: 14, y: 13 }, { x: 14, y: 14 }, { x: 14, y: 15 }] // the free column from the door, where someone checks the racks
   // the men's: four urinals along the west wall and a sink counter along the east one; the women's: three cubicles with
   // a toilet each along the west wall and the same counter on the east. The aisle between stays clear, and so does the way in.
   for (const y of [11, 12, 13, 14]) block('urinal', 18, y)
@@ -211,9 +221,9 @@ export const buildStudio = () => {
   block('tv', 35, 14, 1, 2)
   for (const [x, y] of [[26, 11], [35, 11]]) block('plant', x, y)
   // the vending area: three machines, a water cooler and a bin
-  for (const x of [28, 29, 30]) block('vending', x, 33)
-  block('cooler', 33, 33)
-  block('bin', 35, 33)
+  for (const x of [28, 29, 30]) block('vending', x, 28)
+  block('cooler', 33, 28)
+  block('bin', 35, 28)
   // hanging lamps over the island, the reception counter, the meeting table and the CEO's rug (where the floor has its pool of light)
   for (const [x, y] of [[31, 37], [32, 37], [33, 37], [18, 42], [19, 40], [29, 13], [31, 13], [27, 7]]) lay('pendant', x, y)
   // the lounge and pantry: two more machines, an island with stools, the counter along the south wall, a fridge
@@ -225,7 +235,15 @@ export const buildStudio = () => {
   block('counter', 33, 40, 2, 1)
   block('coffeebar', 35, 40, 2, 1)
   block('fridge', 37, 39, 1, 2)
-  for (const [x, y] of [[40, 35], [27, 40]]) block('plant', x, y)
+  for (const [x, y] of [[40, 35], [27, 40], [27, 30], [36, 35]]) block('plant', x, y)
+  // the dining corner, in the north-west: four café tables, a chair each side, under two pendant lamps
+  for (const [x, y] of [[29, 31], [33, 31], [29, 33], [33, 33]]) {
+    block('cafetable', x, y)
+    lay('chair', x - 1, y, 1, 1, 'right')
+    lay('chair', x + 1, y, 1, 1, 'left')
+  }
+  for (const [x, y] of [[29, 32], [33, 32]]) lay('pendant', x, y)
+  block('shelf', 27, 36, 1, 3) // a bookshelf on the west wall, by the reading corner
   // the terrace: two tables with chairs, plants, and a railing round the deck's edge
   for (const x of [34, 38]) block('cafetable', x, 44)
   for (const x of [34, 38]) lay('parasol', x - 1, 44, 3, 1) // a parasol over each table, over the heads of whoever sits there
@@ -242,7 +260,8 @@ export const buildStudio = () => {
   // pools of light, in tiles from the middle (a lamp lights the floor round it)
   const rugs = [
     { kind: 'rug', shape: 'rect', pattern: 'diamond', x: 7, y: 35, w: 7, h: 4 },
-    { kind: 'rug', tone: 'periwinkle', x: 33, y: 23, w: 7, h: 6 },
+    { kind: 'rug', tone: 'periwinkle', x: 33, y: 21, w: 7, h: 5 },
+    { kind: 'rug', tone: 'terracotta', shape: 'rect', pattern: 'check', x: 27, y: 30, w: 8, h: 5 }, // the dining corner's
     { kind: 'rug', tone: 'sage', shape: 'rect', pattern: 'stripes', x: 34, y: 36, w: 6, h: 3 },
     { kind: 'mat', x: 24, y: 42, w: 2, h: 1 },
     { kind: 'rug', tone: 'carpet', shape: 'rect', pattern: 'diamond', x: 24, y: 5, w: 6, h: 4 }, // the CEO's, under the visitor chairs
@@ -253,6 +272,7 @@ export const buildStudio = () => {
     { x: 14.5, y: 36.5, rx: 1.6, ry: 1.6 },
     { x: 29.5, y: 22, rx: 2.6, ry: 2 }, // over the ping-pong table
     { x: 32.5, y: 37.5, rx: 2.8, ry: 1.8 }, // over the island
+    { x: 31.5, y: 32.5, rx: 4.2, ry: 2.6 }, // over the dining corner
     { x: 27, y: 7, rx: 3.4, ry: 2.2 }, // over the CEO's rug
     { x: 38.5, y: 3.3, rx: 1.6, ry: 1.3 }, // the foyer lamp
   ]
@@ -283,7 +303,7 @@ export const buildStudio = () => {
   win(12, 40, 3)
   win(16, 43, 8, 1, 'glass') // the glass front of the entrance
   win(41, 21, 1, 4) // the social hub, east wall
-  win(41, 27, 1, 4)
+  win(41, 27, 1, 2)
   win(41, 36, 1, 3) // the lounge, east wall
   win(31, 41, 3) // and its south wall, over the pantry counter
   win(35, 41, 2)
@@ -291,7 +311,10 @@ export const buildStudio = () => {
   // things hung on the face of a wall (one cell high, like a window)
   // where someone with nothing to do goes for a break: a cell to stand on and what to say they are doing
   const breaks = [
-    { x: 29, y: 32, label: 'Snack' }, // the vending machines
+    { x: 29, y: 27, label: 'Snack' }, // the vending machines
+    { x: 31, y: 32, label: 'Lunch' }, // the dining corner
+    { x: 37, y: 32, label: 'Watching TV' },
+    { x: 28, y: 37, label: 'Reading' }, // by the bookshelf
     { x: 28, y: 36, label: 'Snack' },
     { x: 35, y: 39, label: 'Coffee' }, // the coffee bar
     { x: 36, y: 39, label: 'Coffee' },
@@ -299,6 +322,23 @@ export const buildStudio = () => {
     { x: 29, y: 24, label: 'Ping-pong' }, // the hub's table
     { x: 38, y: 23, label: 'Chatting' },
     { x: 36, y: 45, label: 'Fresh air' }, // the terrace
+  ]
+
+  // out of the building, on the front path and the boardwalk: where someone goes for a few minutes with nothing to do
+  const outside = [
+    { x: 24, y: 45, label: 'Outside' },
+    { x: 25, y: 46, label: 'Phone call' },
+    { x: 24, y: 47, label: 'Outside' },
+    { x: 28, y: 45, label: 'Fresh air' },
+  ]
+  // where the CEO stops when he walks round, checking on the team
+  const rounds = [
+    { x: 20, y: 19, label: 'Checking in' }, // the main street
+    { x: 31, y: 24, label: 'Checking in' }, // the hub
+    { x: 31, y: 34, label: 'Checking in' }, // the lounge
+    { x: 14, y: 13, label: 'Checking in' }, // the server room
+    { x: 11, y: 12, label: 'Checking in' }, // the test lab
+    { x: 5, y: 13, label: 'Checking in' }, // the file room
   ]
 
   const wallArt = [
@@ -327,8 +367,12 @@ export const buildStudio = () => {
       seats,
       desks,
       lab,
-      handIn: { x: 18, y: 28 },
-      managerSeat: { x: 20, y: 29, face: 'left', desk: { x: 19, y: 29 } },
+      server,
+      outside,
+      rounds,
+      managers,
+      handIn: managers[0].handIn,
+      managerSeat: managers[0].seat,
       ceoSeat: { x: 27, y: 3, face: 'down', desk: { x: 27, y: 4 } },
       ceoDelivery: { x: 27, y: 5 },
       ceoDoor: { x: 34, y: 8 },

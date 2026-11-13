@@ -12,6 +12,8 @@ const setup = (options = {}) => {
   let t = 0
   const stage = createStage({ layout, breaks: false, ...options })
   stage.tick(t)
+  // chat 's' has its manager and no team of its own, so a hire is a new person (the tests of teams are further down)
+  stage.apply({ cmd: 'team', sessionId: 's', manager: { id: 'manager', name: 'Manager', color: '#8d6e63', kind: 'manager', sessionId: 's' }, workers: [], reserve: [] }, t)
   const run = (seconds, stepMs = 100) => {
     for (let spent = 0; spent < seconds * 1000; spent += stepMs) stage.tick((t += stepMs))
   }
@@ -389,7 +391,7 @@ test('a note shows over the CEO for a moment, or over the manager', () => {
   run(0.5)
   assert.equal(stage.snapshot().ceo.bubble.text, 'Resumed')
 
-  stage.apply({ cmd: 'note', who: 'manager', text: 'Model: opus', kind: 'info' }, 0)
+  stage.apply({ cmd: 'note', sessionId: 's', who: 'manager', text: 'Model: opus', kind: 'info' }, 0)
   for (let i = 0; i < 40 && person('manager').label !== 'Model: opus'; i++) run(0.1)
   assert.equal(person('manager').label, 'Model: opus')
 })
@@ -413,7 +415,7 @@ const corridor = (rows, spots) => {
   const spot = { x: 0, y: 0 }
   return {
     grid: rows,
-    spots: { entrance: spot, managerSeat: spot, handIn: spot, ceoSeat: spot, ceoDelivery: spot, ceoDoor: spot, desks: [spot], seats: [spot], files: [spot], lab: [spot], ...spots },
+    spots: { entrance: spot, managerSeat: spot, handIn: spot, managers: [{ seat: spot, tray: spot, handIn: spot }], ceoSeat: spot, ceoDelivery: spot, ceoDoor: spot, desks: [spot], seats: [spot], files: [spot], lab: [spot], ...spots },
   }
 }
 
@@ -708,36 +710,42 @@ test('a seat that faces left or right turns the person that way, so the side vie
   }
 })
 
-test('the snapshot says which chat each worker belongs to; the manager belongs to none', () => {
+test('the snapshot says which chat each worker belongs to, the manager too', () => {
   const { stage, hire, run } = setup()
   hire('w1', { sessionId: 'chat-a' })
   run(1)
   const workers = stage.snapshot().workers
 
   assert.equal(workers.find(w => w.id === 'w1').sessionId, 'chat-a')
-  assert.equal(workers.find(w => w.kind === 'manager').sessionId, null)
+  assert.equal(workers.find(w => w.kind === 'manager').sessionId, 's')
 })
 
-test('a worker with nothing to do for a while goes on a break to one of the break spots, says what they are doing, and goes back to their desk', () => {
+test('someone with nothing to do keeps busy: they type at their desk, and now and then go on a break, a trip or a visit outside, say what they are doing, and come back', () => {
   const { hire, doStep, run, person } = setup({ breaks: true })
   hire('w1')
   doStep('w1', 'write', { path: 'a.js', adds: 1 })
-  run(15) // to the desk, writes, and is done: well before the first break
+  for (let i = 0; i < 300 && !person('w1').label?.startsWith('Writing'); i++) run(0.1) // to the desk, to write
   const desk = { x: Math.round(person('w1').x), y: Math.round(person('w1').y) }
   assert.ok(at(person('w1'), layout.spots.desks))
   const labels = new Set()
   let away = false
-  for (let i = 0; i < 1200; i++) {
+  let typed = false
+  let back = false
+  for (let i = 0; i < 6000 && !(back && typed); i++) {
     run(0.1)
     const p = person('w1')
-    if (p.label) labels.add(p.label)
-    if (labels.size > 0 && Math.round(p.x) === desk.x && Math.round(p.y) === desk.y && away) break
-    if (!(Math.round(p.x) === desk.x && Math.round(p.y) === desk.y)) away = true
+    if (p.label && !p.label.startsWith('Writing')) labels.add(p.label)
+    if (p.pose === 'type' && !p.label) typed = true // at the desk with nothing to write: just working
+    const home = Math.round(p.x) === desk.x && Math.round(p.y) === desk.y
+    if (!home) away = true
+    else if (away && labels.size > 0) back = true
   }
+  assert.ok(typed, 'typed at the desk')
   assert.ok(away, 'left the desk')
-  assert.ok([...labels].every(label => layout.spots.breaks.some(b => b.label === label)), `a break label: ${[...labels]}`)
+  const known = new Set([...layout.spots.breaks, ...layout.spots.outside].map(b => b.label).concat(['Filing', 'Checking servers', 'Testing']))
+  assert.ok([...labels].every(label => known.has(label)), `a break, a trip or a visit outside: ${[...labels]}`)
   assert.ok(labels.size > 0, 'said what they were doing')
-  assert.deepEqual([Math.round(person('w1').x), Math.round(person('w1').y)], [desk.x, desk.y]) // and back
+  assert.ok(back, 'and came back')
 })
 
 test('work that arrives on a break ends it: the worker turns to the job, and the Office still counts as idle while someone is on a break', () => {

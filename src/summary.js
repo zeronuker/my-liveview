@@ -17,6 +17,15 @@ export const titleOf = prompt => {
   return line.length > TITLE_MAX ? `${line.slice(0, TITLE_MAX - 1)}…` : line
 }
 
+// Whether a shell command makes a git commit or a git push, and nothing else about it: 'push' if it does both, 'commit',
+// or null. Only this word goes to the Office, never the command.
+const GIT_STEP = /(?:^|[\s;&|(])git(?:\s+-[Cc]\s+\S+|\s+--[\w-]+(?:=\S+)?)*\s+(commit|push)\b/g
+export const gitKind = (tool, input = {}) => {
+  if (tool !== 'Bash') return null
+  const kinds = [...String(input.command ?? '').matchAll(GIT_STEP)].map(match => match[1])
+  return kinds.includes('push') ? 'push' : kinds.includes('commit') ? 'commit' : null
+}
+
 // One short line for the activity feed. Nothing here is kept on disk.
 export const summarize = (tool, input = {}) => {
   switch (tool) {

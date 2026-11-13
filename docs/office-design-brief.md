@@ -109,6 +109,24 @@ Flat (top-down, 3/4) first, because it reads clearly and is quicker to finish. A
 2. First version of the angled view: floors as diamonds, walls as tall blocks with a cutaway at the front, the existing people standing upright.
 3. Later: redraw the props and people at the angled style, room by room. A static concept picture comes before this, for the user to approve.
 
+## Resized hub and lounge (2026-11-13)
+
+The social hub was too dominant. It is now 7 rows (y 20 to 26), the vending area y 27 to 28 (arch to the lounge at row 29), and the lounge and pantry 11 rows (y 30 to 40). The lounge gained a dining corner (four café tables under two pendant lamps on a check rug), a TV corner (a sofa facing a TV on the east wall), a bookshelf with a reading spot, and three new break spots (Lunch, Watching TV, Reading). Bathroom fixtures (urinals, cubicles, sink counters) now reach into the thin wall beside them (`bleed` on an art entry, `withBleed` in `scenery.js`), so no floor shows between them and the wall. Guardrails have a thin post every four pixels between the thick ones.
+
+## Routes (2026-11-13)
+
+`findPath` (`public/walk.js`) is now a weighted search. With a seed, every cell costs up to 0.3 more or less (a hash of the seed and the cell), so each worker and each trip takes a slightly different way of nearly the same length (at most a couple of steps longer). With a `cost` function, the first and last column of every stair three tiles wide or more (the sides, beside the handrails) cost 8 extra (`STAIR_SIDE` in `stage.js`), so people use the middle of a flight: one lane on the 3-wide stairs, two on the CEO's 4-wide ones. A side is still walked on if there is no other way.
+
+## Pets roam further (2026-11-13)
+
+The pets used to set off only to a spot within six tiles, so they hovered round one corner (the dog and chickens covered about half of their part of the garden in ten minutes, and never went up the west strip). Now a pet mostly sets off for anywhere in its part of the garden, at least six tiles away, by a route with a seed of its own (a cat or dog 70 to 75 times in 100, a chicken 35); the rest of the time it takes a short stroll. The roam grid (`roamGrid`) also lets pets onto the front path, the boardwalk and the terrace wherever nothing stands, which joins the lawn to the terrace over the pond. The east strip stays a part of its own (the building, the pond and the deck's rail cut it off), so pets on it keep to it. The pets are shared out: the cat and two chickens start on the west lawn, the dog and a chicken on the east strip. Measured over ten minutes: the cat covers about 80 percent of the east strip, the dog about 70 percent and a chicken about 55 percent of the west side, which is now 370 cells.
+
+## Smooth movement and koi (2026-11-13)
+
+What is drawn glides after what is true (`public/glide.js`): each person and pet keeps a drawn place that follows the true one through a critically damped spring (about a tenth of a second behind), so starts and stops ease, corners round off and nothing jumps from pixel to pixel. It also says how fast the thing is going and how far it has gone: the walking bounce and the walking frames go with the distance gone (a bounce every 0.6 of a tile for people, every half tile for pets), so a step is the same size at any pace. Something that is moving is drawn between screen pixels (with smoothing on); something still is drawn on them, so it stays crisp. A place that is more than two tiles off (a new arrival, instant speed) is a jump and goes there at once. With less motion the glide is off.
+
+Five koi (orange, white and gold) swim in the pond (`public/fish.js`): each picks a place in the water that it can reach in a straight line, turns towards it at no more than 2.2 radians a second, swims at its own pace (slower in a tight turn and on arriving), and now and then rests a few seconds. The water they use (`waterGrid` in `garden.js`) is the pond's water a little in from its bank and not under the terrace or the boardwalk, 80 cells. They are drawn as shapes (a body, a wagging tail, a fin and an eye), turned to their heading, and stand still with less motion or when paused, like the pets.
+
 ## Build steps
 
 1. This brief. (Done.)

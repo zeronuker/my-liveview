@@ -33,8 +33,9 @@ export const buildGarden = layout => {
     trees: TREES.map(([kind, x, y]) => ({ kind, x, y })),
     bushes: [[6, 41], [10, 41], [11, 41], [14, 43], [22, 53], [27, 53], [44, 22], [43, 31]].map(([x, y]) => ({ x, y })),
     rocks: [[27, 50], [29, 52], [43, 51], [45, 45], [44, 42]].map(([x, y]) => ({ x, y })),
-    // the pets, where each starts: the cat on the east strip, the dog and the chickens on the lawn at the front left
-    pets: [['cat', 42, 26], ['dog', 13, 45], ['chicken', 6, 45], ['chicken', 7, 44], ['chicken', 6, 47]].map(([kind, x, y]) => ({ kind, x, y })),
+    // the pets, where each starts: the cat and two chickens on the lawn at the front left, the dog and a chicken on the east
+    // strip, which is a part of the garden of its own (the building and the pond cut it off)
+    pets: [['cat', 13, 45], ['dog', 42, 26], ['chicken', 6, 45], ['chicken', 7, 44], ['chicken', 42, 12]].map(([kind, x, y]) => ({ kind, x, y })),
   }
 }
 
@@ -51,16 +52,32 @@ export const treeCells = tree => {
 }
 
 // where the pets may walk, as a grid like the studio's ('#' is in the way): the grass inside the fence that is
-// not the building, the pond, a tree, a bush, a rock or a flower bed
+// not the building, the pond, a tree, a bush, a rock or a flower bed, and the front path, the boardwalk and the
+// terrace (the rooms that are outside) wherever nothing stands. That joins the lawn to the terrace over the pond.
 export const roamGrid = (layout, garden) => {
   const blocked = new Set()
   const block = (x, y) => blocked.add(`${x},${y}`)
   for (const tree of garden.trees) for (const [x, y] of treeCells(tree)) block(x, y)
   for (const thing of [...garden.bushes, ...garden.rocks]) block(thing.x, thing.y)
   for (const bed of garden.beds) for (let y = bed.y; y < bed.y + bed.h; y++) for (let x = bed.x; x < bed.x + bed.w; x++) block(x, y)
+  const within = (room, x, y, margin = 0) => x >= room.x - margin && x < room.x + room.w + margin && y >= room.y - margin && y < room.y + room.h + margin
+  const outdoors = layout.rooms.filter(room => room.level === 'outside')
+  const indoors = layout.rooms.filter(room => room.level !== 'outside')
   return Array.from({ length: layout.height }, (_, y) =>
-    Array.from({ length: layout.width }, (_, x) => (x < 1 || y < 1 || x >= layout.width - 1 || y >= layout.height - 1 || nearBuilding(layout, x, y) || blocked.has(`${x},${y}`) || inPond(garden, x, y, 1.12) ? '#' : '.')).join(''),
+    Array.from({ length: layout.width }, (_, x) => {
+      if (outdoors.some(room => within(room, x, y))) return layout.grid[y][x] === '#' ? '#' : '.'
+      const edge = x < 1 || y < 1 || x >= layout.width - 1 || y >= layout.height - 1
+      return edge || indoors.some(room => within(room, x, y, 1)) || blocked.has(`${x},${y}`) || inPond(garden, x, y, 1.12) ? '#' : '.'
+    }).join(''),
   )
+}
+
+// where the fish may swim, as a grid like roamGrid's ('.' is open water): the pond's water, a little in from its bank, and
+// not under the terrace or the boardwalk, which hide it
+export const waterGrid = (layout, garden) => {
+  const hidden = layout.rooms.filter(room => room.level === 'outside' && (room.name === 'Terrace' || room.name === 'Boardwalk'))
+  const under = (x, y) => hidden.some(room => x >= room.x && x < room.x + room.w && y >= room.y - 1 && y < room.y + room.h + 1)
+  return Array.from({ length: layout.height }, (_, y) => Array.from({ length: layout.width }, (_, x) => (inPond(garden, x, y, 0.92) && !under(x, y) ? '.' : '#')).join(''))
 }
 
 // whether the middle of a cell is in the pond, which is made `scale` times bigger about its middle

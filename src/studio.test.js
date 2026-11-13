@@ -250,6 +250,17 @@ test('every break spot is a free cell with a label, that someone can walk to fro
     assert.ok(isOpen(b.x, b.y), `${b.label} at ${b.x},${b.y} is in the way`)
     assert.ok(reach.has(key(b.x, b.y)), `${b.label} at ${b.x},${b.y} cannot be reached`)
   }
+  // and so is every place for a trip to the server room, a break out of the building, and a stop on the CEO's rounds
+  for (const [name, list] of [['server', layout.spots.server], ['outside', layout.spots.outside], ['rounds', layout.spots.rounds]]) {
+    assert.ok(list.length >= 4, `${name} has places`)
+    for (const s of list) {
+      assert.ok(isOpen(s.x, s.y), `${name} at ${s.x},${s.y} is in the way`)
+      assert.ok(reach.has(key(s.x, s.y)), `${name} at ${s.x},${s.y} cannot be reached`)
+    }
+  }
+  const outside = layout.spots.outside.every(s => levelAt(layout, s.x, s.y) === 'outside')
+  assert.ok(outside, 'every outside place is out of the building')
+  assert.ok(layout.spots.server.every(s => inside(roomNamed('Server room'), s.x, s.y)))
 })
 
 test('the huddle places are the meeting room\'s chairs, facing the table, and can be walked to from the front gate', () => {
@@ -263,7 +274,8 @@ test('the huddle places are the meeting room\'s chairs, facing the table, and ca
 })
 
 test('a parasol stands over each cafe table of the terrace, centred on it, and over nothing solid', () => {
-  const tables = layout.furniture.filter(f => f.kind === 'cafetable')
+  const terrace = roomNamed('Terrace')
+  const tables = layout.furniture.filter(f => f.kind === 'cafetable' && inside(terrace, f.x, f.y))
   const parasols = layout.furniture.filter(f => f.kind === 'parasol')
   assert.ok(tables.length >= 2)
   for (const table of tables) assert.ok(parasols.some(p => p.y === table.y && p.x + 1 === table.x && p.w === 3), `a parasol over the table at ${table.x},${table.y}`)

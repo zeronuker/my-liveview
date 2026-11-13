@@ -105,7 +105,7 @@ test('every pet starts on free grass, there is plenty of grass, and trees, water
   assert.ok(grid.join('').split('.').length > 400, 'there is grass to wander on')
   for (const tree of garden.trees) for (const [x, y] of treeCells(tree)) assert.equal(grid[y][x], '#', `a tree at ${x},${y}`)
   assert.ok(garden.trees.some(tree => treeSize(tree) === 5) && garden.trees.some(tree => treeSize(tree) === 3), 'big trees and small ones')
-  for (const [x, y] of [[26, 45], [36, 47], [30, 10]]) assert.equal(grid[y][x], '#', `water or building at ${x},${y}`)
+  for (const [x, y] of [[27, 47], [36, 50], [30, 10]]) assert.equal(grid[y][x], '#', `water or building at ${x},${y}`)
 })
 
 test('pets wander over free grass only, rest between walks, face the way they go, and do the same again with the same numbers', () => {
@@ -150,4 +150,61 @@ test('each pet has a picture for each of its states, whole, in palette colours, 
       assert.equal(frames.size, state === 'walk' ? 2 : 1, `${kind} ${state}`)
     }
   assert.notDeepEqual(petSprite('cat', 'rest').cells, petSprite('dog', 'rest').cells.map(row => row.slice(0, 12)).slice(0, 9))
+})
+
+test('the front path, the boardwalk and the terrace are walkable, so the lawn and the terrace are one part of the garden; the east strip is another, with pets of its own', () => {
+  const grid = roamGrid(layout, garden)
+  const regions = createPets(grid, garden.pets)
+  const cat = regions.region('cat0')
+  const dog = regions.region('dog1')
+  const has = (region, x, y) => region.some(([cx, cy]) => cx === x && cy === y)
+
+  for (const [x, y] of [[24, 46], [28, 45], [33, 43]]) assert.equal(grid[y][x], '.', `${x},${y} is walkable`)
+  for (const [x, y] of [[34, 44], [38, 44]]) assert.equal(grid[y][x], '#', `a table at ${x},${y}`)
+  assert.ok(has(cat, 24, 46) && has(cat, 28, 45) && has(cat, 33, 43), 'the cat can get to the path, the boardwalk and the terrace')
+  assert.ok(has(cat, 5, 2), 'and the north-west garden')
+  assert.equal(has(cat, 49, 20), false) // the building and the pond keep the east strip apart
+  assert.equal(has(dog, 49, 20), true)
+  assert.equal(has(dog, 24, 46), false)
+  // the pets are shared out: the east strip has the dog and a chicken, the lawn the cat and two chickens
+  const east = garden.pets.filter(p => has(dog, p.x, p.y)).map(p => p.kind).sort()
+  const west = garden.pets.filter(p => has(cat, p.x, p.y)).map(p => p.kind).sort()
+  assert.deepEqual(east, ['chicken', 'dog'])
+  assert.deepEqual(west, ['cat', 'chicken', 'chicken'])
+})
+
+test('over ten minutes a pet goes over most of its part of the garden, end to end, not round one spot', () => {
+  const grid = roamGrid(layout, garden)
+  const pets = createPets(grid, garden.pets, seeded(5))
+  const visited = new Map(pets.snapshot().map(pet => [pet.id, new Set()]))
+  for (let i = 0; i < 6000; i++) {
+    pets.tick(0.1)
+    for (const pet of pets.snapshot()) visited.get(pet.id).add(`${Math.round(pet.x)},${Math.round(pet.y)}`)
+  }
+
+  for (const pet of pets.snapshot()) {
+    const region = pets.region(pet.id)
+    const cells = [...visited.get(pet.id)].map(key => key.split(',').map(Number))
+    const span = pick => Math.max(...cells.map(pick)) - Math.min(...cells.map(pick))
+    const full = pick => Math.max(...region.map(pick)) - Math.min(...region.map(pick))
+    const reach = pet.kind === 'chicken' ? 0.5 : 0.7 // a chicken is slow and sets off for far places less often
+    assert.ok(cells.length > region.length * 0.35, `${pet.id} went over ${cells.length} of ${region.length} cells`)
+    assert.ok(span(c => c[0]) >= full(c => c[0]) * reach && span(c => c[1]) >= full(c => c[1]) * reach, `${pet.id} stayed in one part`)
+  }
+})
+
+test('pets never overlap: for ten minutes no two are closer than 0.7 of a tile, and they still get about', () => {
+  const grid = roamGrid(layout, garden)
+  for (const seed of [5, 33, 77]) {
+    const pets = createPets(grid, garden.pets, seeded(seed))
+    let walked = 0
+    for (let i = 0; i < 6000; i++) {
+      pets.tick(0.1)
+      const all = pets.snapshot()
+      walked += all.filter(p => p.state === 'walk').length
+      for (let a = 0; a < all.length; a++)
+        for (let b = a + 1; b < all.length; b++) assert.ok(Math.hypot(all[a].x - all[b].x, all[a].y - all[b].y) >= 0.7, `${all[a].id} and ${all[b].id} overlap at ${i / 10}s (seed ${seed})`)
+    }
+    assert.ok(walked > 6000, 'they walk')
+  }
 })

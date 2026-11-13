@@ -24,38 +24,53 @@
     <div id="toolbar" role="toolbar" aria-label="View controls">
       <button id="b-pause" type="button" aria-pressed="false">Pause</button>
       <button id="b-skip" type="button" disabled>Skip</button>
-      <button id="b-follow" type="button" aria-pressed="true">Follow</button>
       <label class="speed">Speed
         <input id="speed" type="range" min="1" max="4" step="1" value="2" />
         <output id="speed-out" for="speed">normal</output>
       </label>
-      <span class="group">
-        <button id="b-smaller" type="button" aria-label="Smaller text">A&minus;</button>
-        <button id="b-larger" type="button" aria-label="Larger text">A+</button>
-      </span>
-      <button id="b-wrap" type="button" aria-pressed="false">Wrap</button>
-      <button id="b-whole" type="button" aria-pressed="true">Whole file</button>
-      <button id="b-side" type="button" aria-pressed="false">Side by side</button>
-      <button id="b-focus" type="button" aria-pressed="false">Focus</button>
-      <button id="b-office" type="button" aria-pressed="false" title="Watch the session as an office">Office</button>
+      <button id="b-office" type="button" title="Watch the session as an office">Office</button>
       <button id="b-record" type="button" aria-pressed="false" title="Record the Office to an mp4 file">Record</button>
-      <button id="b-sound" type="button" aria-pressed="false" title="Sounds in the Office: off until you turn them on">Sound</button>
-      <button id="b-fit" type="button" title="Show the whole office again (or double-click it). Wheel zooms, drag pans." disabled>Fit</button>
-      <button id="b-awake" type="button" aria-pressed="false" title="Keep the screen on while this window is visible">Stay awake</button>
-      <select id="win-size" aria-label="Window size">
-        <option value="" selected>Window size</option>
-        <option value="small">Small 1000 &times; 700</option>
-        <option value="medium">Medium 1200 &times; 800</option>
-        <option value="large">Large 1600 &times; 1000</option>
-        <option value="half">Half screen, full height</option>
-      </select>
-      <span class="swatches" role="group" aria-label="Theme">
-        <button class="swatch" type="button" data-theme="dark" aria-label="Dark theme" title="Dark"></button>
-        <button class="swatch" type="button" data-theme="light" aria-label="Light theme" title="Light"></button>
-        <button class="swatch" type="button" data-theme="midnight" aria-label="Midnight theme" title="Midnight"></button>
-        <button class="swatch" type="button" data-theme="terminal" aria-label="Terminal theme" title="Terminal"></button>
-        <button class="swatch" type="button" data-theme="contrast" aria-label="High contrast theme" title="High contrast"></button>
-      </span>
+      <button id="b-gear" type="button" class="gear" aria-label="Settings" aria-expanded="false" aria-controls="settings">&#9881; Settings</button>
+      <div id="settings" hidden>
+        <h3>Display</h3>
+        <div class="srow"><span>Theme</span>
+          <span class="swatches" role="group" aria-label="Theme">
+            <button class="swatch" type="button" data-theme="dark" aria-label="Dark theme" title="Dark"></button>
+            <button class="swatch" type="button" data-theme="light" aria-label="Light theme" title="Light"></button>
+            <button class="swatch" type="button" data-theme="midnight" aria-label="Midnight theme" title="Midnight"></button>
+            <button class="swatch" type="button" data-theme="terminal" aria-label="Terminal theme" title="Terminal"></button>
+            <button class="swatch" type="button" data-theme="contrast" aria-label="High contrast theme" title="High contrast"></button>
+          </span>
+        </div>
+        <div id="set-file">
+          <h3>File view</h3>
+          <div class="srow"><span>Text size</span><span class="group">
+            <button id="b-smaller" type="button" aria-label="Smaller text">A&minus;</button>
+            <button id="b-larger" type="button" aria-label="Larger text">A+</button>
+          </span></div>
+          <div class="srow"><span>Wrap long lines</span><button id="b-wrap" type="button" aria-pressed="false">Wrap</button></div>
+          <div class="srow"><span>Show the whole file</span><button id="b-whole" type="button" aria-pressed="true">Whole file</button></div>
+          <div class="srow"><span>Old and new side by side</span><button id="b-side" type="button" aria-pressed="false">Side by side</button></div>
+          <div class="srow"><span>Follow the newest edit</span><button id="b-follow" type="button" aria-pressed="true">Follow</button></div>
+          <div class="srow"><span>Hide the side lists</span><button id="b-focus" type="button" aria-pressed="false">Focus</button></div>
+        </div>
+        <h3>Window</h3>
+        <div class="srow"><span>Window size</span>
+          <select id="win-size" aria-label="Window size">
+            <option value="" selected>Keep as is</option>
+            <option value="small">Small 1000 &times; 700</option>
+            <option value="medium">Medium 1200 &times; 800</option>
+            <option value="large">Large 1600 &times; 1000</option>
+            <option value="half">Half screen, full height</option>
+          </select>
+        </div>
+        <div class="srow"><span>Keep the screen on</span><button id="b-awake" type="button" aria-pressed="false" title="Keep the screen on while this window is visible">Stay awake</button></div>
+        <div id="set-office">
+          <h3>Office</h3>
+          <div class="srow"><span>Sounds</span><button id="b-sound" type="button" aria-pressed="false" title="Sounds in the Office: off until you turn them on">Sound</button></div>
+          <div class="srow"><span>Start with activity folded</span><button id="b-folded" type="button" aria-pressed="false">Folded</button></div>
+        </div>
+      </div>
     </div>
     <div class="layout">
       <nav id="files" aria-label="Chats and the files each touched">
@@ -68,6 +83,14 @@
       </section>
       <section id="office" aria-label="The session as an office">
         <canvas id="office-canvas"></canvas>
+        <div id="banner" role="status" hidden></div>
+        <div id="inspector" hidden></div>
+        <div id="zoom" role="group" aria-label="Zoom">
+          <button id="z-in" type="button" aria-label="Zoom in">+</button>
+          <button id="z-out" type="button" aria-label="Zoom out">&minus;</button>
+          <button id="z-fit" type="button" aria-label="Show the whole office" title="Show the whole office (or double-click it)">Fit</button>
+        </div>
+        <ul id="ticker" aria-label="Latest events"></ul>
       </section>
       <div class="resizer" id="rz-aside"></div>
       <aside id="feed" aria-label="Activity">
