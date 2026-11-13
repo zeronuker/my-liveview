@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { doorOps, FLOOR_TONES, floorTileOps, shellOps, stairOps, thinWallOps, wallArtOps, wallOps, windowOps } from '../public/art/shell.js'
+import { doorOps, FLOOR_TONES, floorTileOps, shellOps, stairsOps, thinWallOps, wallArtOps, wallOps, windowOps } from '../public/art/shell.js'
 import { inPalette, RAMPS } from '../public/palette.js'
 import { buildStudio } from '../public/studio.js'
 
@@ -66,7 +66,6 @@ test('a window, a tall window and a glass wall fit their cells and use only the 
   checkOps(windowOps({ kind: 'window', x: 0, y: 0, w: 3, h: 1 }), 3 * TILE, TILE, 'window')
   checkOps(windowOps({ kind: 'window', x: 0, y: 0, w: 1, h: 4 }), TILE, 4 * TILE, 'tall window')
   checkOps(windowOps({ kind: 'glass', x: 0, y: 0, w: 9, h: 1 }), 9 * TILE, TILE, 'glass wall')
-  checkOps(stairOps(), TILE, TILE, 'stairs')
 })
 
 test('a thin wall is six pixels of cap in the middle of its cell, with the rooms\' floors either side', () => {
@@ -96,4 +95,31 @@ test('the whole shell of the plan is inside the plan, in whole pixels and palett
   const ops = shellOps(layout)
   checkOps(ops, layout.width * TILE, layout.height * TILE, 'shell')
   assert.deepEqual(ops, shellOps(buildStudio()))
+})
+
+test('each flight of stairs fits its room, is drawn for the way it rises, and the CEO flight has a carpet runner with brass rods', () => {
+  const flights = layout.rooms.filter(room => room.level === 'stairs')
+  assert.equal(flights.length, 3)
+  for (const room of flights) {
+    assert.ok(room.high === 'north' || room.high === 'south', `${room.name} says which end is high`)
+    checkOps(stairsOps(room), room.w * TILE, room.h * TILE, room.name)
+  }
+  const flight = high => JSON.stringify(stairsOps({ w: 3, h: 6, high }))
+  assert.notEqual(flight('north'), flight('south'))
+  const ceo = layout.rooms.find(room => room.name === 'CEO stairs')
+  assert.ok(ceo.runner)
+  assert.ok(stairsOps(ceo).some(([, , , , , color]) => RAMPS[ceo.runner].includes(color)))
+  for (const room of flights.filter(f => f !== ceo)) assert.ok(!stairsOps(room).some(([, , , , , color]) => RAMPS.carpet.includes(color)))
+})
+
+test('every kind of door is drawn the whole width of its tiles: a frame, a shadow under the beam and a threshold, so it does not read as wall', () => {
+  for (const kind of ['swing', 'sliding', 'double'])
+    for (const x of [5, 6]) {
+      const door = { kind, x, y: 5, w: kind === 'swing' ? 1 : 4, h: 1 }
+      const ops = doorOps(door, (cx, cy) => cy === 5 && (cx < x || cx > x + door.w - 1))
+      checkOps(ops, door.w * TILE, TILE, `${kind} door at ${x}`)
+      assert.ok(ops.some(([, ox, oy, ow, oh, color]) => ox === 1 && oy === 15 && oh === 1 && ow === door.w * TILE - 2 && RAMPS.metal.includes(color)), 'a threshold')
+      assert.ok(ops.some(([, ox, oy, ow, , color]) => ox === 1 && oy === 7 && ow === door.w * TILE - 2 && RAMPS.wallcap.includes(color)), 'a shadow under the beam')
+    }
+  assert.notDeepEqual(doorOps({ kind: 'swing', x: 5, y: 5, w: 1, h: 1 }, (x, y) => y === 5 && x !== 5), doorOps({ kind: 'swing', x: 6, y: 5, w: 1, h: 1 }, (x, y) => y === 5 && x !== 6)) // the leaf opens either way
 })

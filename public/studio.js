@@ -10,7 +10,8 @@
 // the open office), 'outside' (the gate path, the boardwalk, the terrace) and 'stairs'. A person
 // may change level only on a stair cell or when going out of or into the building.
 //
-// rooms: [{ name, x, y, w, h, tone, level }]  the floor to draw (inside the walls)
+// rooms: [{ name, x, y, w, h, tone, level }]  the floor to draw (inside the walls); a stairs room also says which end
+//        is `high` ('north' or 'south') and may have a `runner` (a carpet)
 // doors: [{ kind, x, y, w, h, level }]        open cells in a wall: swing, double, sliding, arch
 // windows: [{ kind, x, y, w, h }]             on solid wall cells: 'window' or a 'glass' wall
 // wallArt: [{ kind, x, y, w, h }]             hung on a wall's face: a 'whiteboard' or a 'picture'
@@ -30,8 +31,8 @@ export const buildStudio = () => {
   const carve = (x, y, w, h) => {
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) cells[j][i] = '.'
   }
-  const room = (name, x, y, w, h, tone, level = 'ground') => {
-    rooms.push({ name, x, y, w, h, tone, level })
+  const room = (name, x, y, w, h, tone, level = 'ground', extra = {}) => {
+    rooms.push({ name, x, y, w, h, tone, level, ...extra })
     carve(x, y, w, h)
   }
   const door = (kind, x, y, w = 1, h = 1, level = 'ground') => {
@@ -84,9 +85,9 @@ export const buildStudio = () => {
   door('sliding', 24, 43, 2, 1, 'mezzanine') // the front doors: double, at the right end
 
   // stairs (after the rooms they cross, so they win when asked what is at a cell)
-  room('CEO stairs', 37, 10, 4, 6, 'stone', 'stairs') // ground to the foyer
-  room('Stairs A', 23, 28, 3, 6, 'stone', 'stairs') // the lobby down to the main street
-  room('Stairs B', 19, 20, 3, 4, 'stone', 'stairs') // the main street up to the open office
+  room('CEO stairs', 37, 10, 4, 6, 'stone', 'stairs', { high: 'north', runner: 'carpet' }) // ground to the foyer
+  room('Stairs A', 23, 28, 3, 6, 'stone', 'stairs', { high: 'south' }) // the lobby down to the main street
+  room('Stairs B', 19, 20, 3, 4, 'stone', 'stairs', { high: 'south' }) // the main street up to the open office
 
   // outside
   room('Front path', 24, 44, 2, 5, 'path', 'outside')

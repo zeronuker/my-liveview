@@ -67,11 +67,44 @@ export const floorTileOps = (tone, x, y) => {
   return ops
 }
 
-// a flight of stairs: a step every four pixels, with a lit edge and a shadowed riser
-export const stairOps = () => {
-  const stone = RAMPS.stone
-  const ops = [r(0, 0, TILE, TILE, stone[2])]
-  for (let step = 0; step < 4; step++) ops.push(r(0, step * 4, TILE, 1, stone[3]), r(0, step * 4 + 3, TILE, 1, stone[1]))
+// A flight of stairs, one room's worth, in its own pixels: a step every four pixels, darker at the low end and
+// lighter at the high one (`room.high` is 'north' or 'south'), a wooden side beam with a handrail and a post
+// every tile on each side, a safety strip on the lowest step, a landing at the top, and a chevron now and then
+// pointing up the flight. A room with a `runner` (the CEO's stairs) has a carpet down the middle with a brass
+// rod at every step.
+export const stairsOps = room => {
+  const [stone, wood, metal, brass] = [RAMPS.stone, RAMPS.wood, RAMPS.metal, RAMPS.light]
+  const [W, H] = [room.w * TILE, room.h * TILE]
+  const north = room.high === 'north'
+  const steps = H / 4
+  const ops = [r(0, 0, W, H, stone[2])]
+  for (let s = 0; s < steps; s++) {
+    const y = s * 4
+    const level = north ? steps - 1 - s : s // 0 at the low end
+    const tone = level < steps / 3 ? 1 : level < (2 * steps) / 3 ? 2 : 3
+    ops.push(r(3, y, W - 6, 3, stone[tone]), r(3, y + (north ? 0 : 2), W - 6, 1, stone[Math.min(3, tone + 1)])) // the tread, and its lit front edge
+    ops.push(r(3, y + 3, W - 6, 1, stone[north ? 1 : 0])) // the riser in shadow, or the shadow of the step above
+  }
+  const lowY = north ? H - 4 : 0
+  ops.push(r(3, lowY, W - 6, 1, brass[1]), r(3, lowY + (north ? 1 : 2), W - 6, 1, brass[2])) // the strip on the lowest step
+  const highY = north ? 0 : H - 4
+  ops.push(r(3, highY, W - 6, 4, wood[2]), r(3, highY + (north ? 3 : 0), W - 6, 1, wood[1])) // the landing at the top
+  for (const x of [0, W - 3]) {
+    ops.push(r(x, 0, 3, H, wood[1]), r(x, 0, 1, H, wood[2]), r(x + 2, 0, 1, H, wood[0]), r(x + 1, 1, 1, H - 2, metal[2])) // the side beam and its rail
+    for (let y = 0; y < H; y += TILE) ops.push(r(x, y, 3, 2, metal[1]), r(x, y, 3, 1, metal[3])) // a post a tile
+    ops.push(r(x, H - 2, 3, 2, metal[1]), r(x, H - 2, 3, 1, metal[3]))
+  }
+  if (room.runner) {
+    const c = RAMPS[room.runner]
+    ops.push(r(8, 0, W - 16, H, c[1]), r(9, 0, W - 18, H, c[2]), r(9, 0, 1, H, c[3]), r(W - 10, 0, 1, H, c[1]))
+    for (let s = 0; s < steps; s++) ops.push(r(7, s * 4 + 3, W - 14, 1, brass[2]), r(7, s * 4 + 3, 2, 1, brass[3]), r(W - 9, s * 4 + 3, 2, 1, brass[3]))
+  } else {
+    const cx = Math.floor(W / 2)
+    for (let s = 2; s < steps - 2; s += 6) {
+      const y = s * 4
+      ops.push(north ? r(cx, y, 2, 1, stone[0]) : r(cx - 3, y, 8, 1, stone[0]), r(cx - 1, y + 1, 1, 1, stone[0]), r(cx + 2, y + 1, 1, 1, stone[0])) // a chevron up the flight
+    }
+  }
   return ops
 }
 
@@ -113,6 +146,13 @@ export const thinWallOps = (x, y, isWall) => {
   return ops
 }
 
+// the part of a list of rectangles that lies in one tile (column tx, row ty of the pixels the list is drawn in), in the tile's own pixels
+const tileOf = (ops, tx, ty) =>
+  ops.flatMap(([kind, x, y, w, h, color]) => {
+    const [x0, x1, y0, y1] = [Math.max(x, tx * TILE), Math.min(x + w, (tx + 1) * TILE), Math.max(y, ty * TILE), Math.min(y + h, (ty + 1) * TILE)]
+    return x1 > x0 && y1 > y0 ? [[kind, x0 - tx * TILE, y0 - ty * TILE, x1 - x0, y1 - y0, color]] : []
+  })
+
 // the part of a list of rectangles that lies between two x positions
 const clipped = (ops, x0, x1) =>
   ops.flatMap(([kind, x, y, w, h, color]) => {
@@ -138,22 +178,35 @@ export const doorOps = (door, isWall, thin = false) => {
       r(2, 4, 12, 2, trim[2]), r(2, 4, 12, 1, trim[3]),
     ]
   }
+  // the beam over the opening, a one pixel frame on each side so the opening takes the whole tile, a shadow under the beam
+  // and a threshold: the opening is clear, so it cannot be taken for wall
   const ops = [
-    r(0, 0, W, 6, cap[2]), r(0, 0, W, 1, cap[3]), r(0, 5, W, 1, cap[1]), r(0, 6, W, 1, trim[0]), // the beam over the opening
-    r(0, 7, 2, 9, trim[1]), r(0, 7, 1, 9, trim[2]), r(W - 2, 7, 2, 9, trim[1]), r(W - 1, 7, 1, 9, trim[0]), // the two posts
+    r(0, 0, W, 6, cap[2]), r(0, 0, W, 1, cap[3]), r(0, 5, W, 1, cap[1]), r(0, 6, W, 1, trim[0]), // the beam
+    r(0, 7, 1, 9, trim[2]), r(W - 1, 7, 1, 9, trim[0]), r(1, 7, W - 2, 2, cap[0]), // the frame and the shadow under the beam
+    r(1, 15, W - 2, 1, metal[2]), // the threshold
   ]
-  if (door.kind === 'swing') ops.push(r(2, 7, 2, 8, trim[2]), r(2, 7, 1, 8, trim[3]), r(2, 9, 2, 1, metal[2]), r(2, 13, 2, 1, metal[2]))
+  if (door.kind === 'swing') {
+    // the leaf standing open, seen at an angle: it narrows away from its hinge; mirrored for some doors
+    const flip = door.x % 2 === 1
+    const at = x => (flip ? 15 - x : x)
+    for (let i = 0; i < 6; i++) {
+      const [top, bottom] = [9 + (i >> 1), 14 - (i >> 1)]
+      ops.push(r(at(1 + i), top, 1, bottom - top + 1, i === 0 ? trim[3] : i === 5 ? trim[0] : trim[2]))
+      if (i > 0 && i < 5) ops.push(r(at(1 + i), top + 2, 1, Math.max(1, bottom - top - 3), trim[1]))
+    }
+    ops.push(r(at(1), 10, 1, 1, metal[2]), r(at(1), 13, 1, 1, metal[2]), r(at(5), 11, 1, 2, brass[2])) // hinges and a handle
+  }
   if (door.kind === 'sliding')
     ops.push(
-      r(2, 7, W - 4, 1, metal[2]), r(2, 14, W - 4, 1, metal[1]),
-      r(2, 8, half - 2, 6, glass[2]), r(half, 8, half - 2, 6, glass[2]), r(half - 1, 7, 2, 8, metal[1]),
-      r(4, 9, 2, 1, glass[3]), r(half + 2, 9, 2, 1, glass[3]),
+      r(1, 7, W - 2, 1, metal[2]), r(half - 3, 2, 6, 3, metal[0]), r(half - 1, 3, 2, 1, RAMPS.brick[2]), // the track and the sensor on the beam
+      r(1, 9, half - 1, 6, glass[2]), r(half, 9, half - 1, 6, glass[2]), r(half - 1, 8, 2, 7, metal[1]), r(1, 9, half - 1, 1, glass[3]), r(half, 9, half - 1, 1, glass[3]), // two glass leaves and the join
+      r(4, 11, 2, 1, glass[3]), r(half + 3, 11, 2, 1, glass[3]), r(half - 3, 11, 1, 3, metal[3]), r(half + 2, 11, 1, 3, metal[3]), // glints and handles
     )
   if (door.kind === 'double')
     ops.push(
-      r(2, 7, half - 3, 8, trim[2]), r(half + 1, 7, half - 3, 8, trim[2]), r(2, 7, 1, 8, trim[3]), r(half + 1, 7, 1, 8, trim[3]),
-      r(4, 9, half - 7, 4, trim[1]), r(half + 3, 9, half - 7, 4, trim[1]), r(half - 1, 7, 2, 8, trim[0]),
-      r(half - 4, 11, 1, 2, brass[2]), r(half + 3, 11, 1, 2, brass[2]),
+      r(1, 9, half - 2, 6, trim[2]), r(half + 1, 9, half - 2, 6, trim[2]), r(1, 9, half - 2, 1, trim[3]), r(half + 1, 9, half - 2, 1, trim[3]), // two leaves
+      r(3, 10, half - 6, 4, trim[1]), r(half + 3, 10, half - 6, 4, trim[1]), r(half - 1, 8, 2, 7, trim[0]), // a panel in each, and the join
+      r(half - 3, 11, 1, 3, brass[2]), r(half + 2, 11, 1, 3, brass[2]), r(half - 3, 11, 1, 1, brass[3]), r(half + 2, 11, 1, 1, brass[3]), // brass handles
     )
   return ops
 }
@@ -232,7 +285,8 @@ export const shellOps = layout => {
 
   for (const room of layout.rooms)
     for (let y = room.y; y < room.y + room.h; y++)
-      for (let x = room.x; x < room.x + room.w; x++) put(x, y, room.level === 'stairs' ? stairOps() : floorTileOps(room.tone, x, y))
+      for (let x = room.x; x < room.x + room.w; x++) put(x, y, room.level === 'stairs' ? [] : floorTileOps(room.tone, x, y))
+  for (const room of layout.rooms) if (room.level === 'stairs') put(room.x, room.y, stairsOps(room))
 
   // the floor of a doorway, or under a guardrail, is the floor of the room beside it (the mezzanine's, if it is there)
   const toneNear = (x, y) => {
@@ -251,7 +305,7 @@ export const shellOps = layout => {
   // a floor to carry on under a thin wall, from the room beside it (or nothing, where that side is garden)
   const floorAt = (x, y) => {
     const room = layout.rooms.findLast(o => x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h)
-    return room ? (room.level === 'stairs' ? stairOps() : floorTileOps(room.tone, x, y)) : []
+    return room ? (room.level === 'stairs' ? tileOf(stairsOps(room), x - room.x, y - room.y) : floorTileOps(room.tone, x, y)) : []
   }
   // thin: a wall cell that only runs north to south, among the first floor and the back rooms
   const isThin = (x, y) => y <= THIN_UNTIL_ROW && (isWall(x, y - 1) || isWall(x, y + 1)) && !isWall(x - 1, y) && !isWall(x + 1, y)
