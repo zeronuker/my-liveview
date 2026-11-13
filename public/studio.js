@@ -20,8 +20,8 @@
 //        for a desk seat, which desk cell is in front of it.
 
 export const buildStudio = () => {
-  const width = 47
-  const height = 49
+  const width = 51 // the building is 47 by 49; the rest is garden, added on the right and the bottom
+  const height = 55
   const cells = Array.from({ length: height }, () => Array(width).fill('#'))
   const rooms = []
   const doors = []

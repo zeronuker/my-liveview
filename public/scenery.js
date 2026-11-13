@@ -11,10 +11,12 @@
 import { backroomArts } from './art/backrooms.js'
 import { ceoArts } from './art/ceo.js'
 import { commonArts, decalOps } from './art/common.js'
+import { flowerOps, gardenHighOps, gardenLowOps } from './art/garden.js'
 import { lobbyArts } from './art/lobby.js'
 import { officeArts } from './art/office.js'
 import { shellOps } from './art/shell.js'
 import { socialArts } from './art/social.js'
+import { buildGarden } from './garden.js'
 import { ramp, shade } from './palette.js'
 import { hash } from './pixel.js'
 
@@ -24,15 +26,18 @@ const r = (x, y, w, h, color) => ['r', x, y, w, h, color]
 
 const grassTile = (x, y) => {
   const h = hash(x, y)
-  return h % 3 === 0 ? [r((h >>> 4) % TILE, (h >>> 8) % TILE, 1, 1, shade('grass', 3)), r((h >>> 12) % TILE, (h >>> 16) % TILE, 1, 1, shade('grass', 1))] : []
+  const tufts = h % 3 === 0 ? [r((h >>> 4) % TILE, (h >>> 8) % TILE, 1, 1, shade('grass', 3)), r((h >>> 12) % TILE, (h >>> 16) % TILE, 1, 1, shade('grass', 1))] : []
+  return (h >>> 20) % 12 === 0 ? [...tufts, ...flowerOps(h)] : tufts // and now and then a flower
 }
 
-// the garden, and over it the shell of the plan: ops in plan pixels (tile * 16)
+// the grass, the garden's pond, path and beds, the shell of the plan, then what stands up in the garden: ops in
+// plan pixels (tile * 16)
 export const groundOps = layout => {
+  const garden = buildGarden(layout)
   const ops = [r(0, 0, layout.width * TILE, layout.height * TILE, shade('grass', 2))]
   for (let ty = 0; ty < layout.height; ty++)
     for (let tx = 0; tx < layout.width; tx++) for (const [, x, y, w, h, color] of grassTile(tx, ty)) ops.push(r(tx * TILE + x, ty * TILE + y, w, h, color))
-  return [...ops, ...shellOps(layout), ...decalOps(layout)]
+  return [...ops, ...gardenLowOps(garden), ...shellOps(layout), ...decalOps(layout), ...gardenHighOps(garden)]
 }
 
 // a guardrail: a thin rail along the way it runs, with a post every tile
