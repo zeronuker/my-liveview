@@ -13,7 +13,7 @@ const water = waterGrid(layout, garden)
 const seeded = seed => () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296
 
 test('the water that can be seen is a good stretch of the pond, away from the terrace and the boardwalk', () => {
-  assert.ok(water.join('').split('.').length - 1 >= 50, 'there is water to swim in')
+  assert.ok(water.join('').split('.').length - 1 >= 30, 'there is water to swim in')
   for (const room of layout.rooms.filter(r => r.name === 'Terrace' || r.name === 'Boardwalk'))
     for (let y = room.y; y < room.y + room.h; y++) for (let x = room.x; x < room.x + room.w; x++) assert.equal(water[y][x], '#', `${x},${y} is under the ${room.name}`)
   assert.equal(water[20][10], '#') // and grass and the building are not water
@@ -94,4 +94,18 @@ test('no water means no fish, and nothing breaks', () => {
   none.tick(0.1)
 
   assert.deepEqual(none.snapshot(), [])
+})
+
+test('fish never swim over or under the terrace, its rail or the boardwalk: the middle of a fish stays at least a tile clear', () => {
+  const fish = createFish(water, 5, seeded(9))
+  const decks = layout.rooms.filter(r => r.name === 'Terrace' || r.name === 'Boardwalk')
+  for (let i = 0; i < 12000; i++) {
+    fish.tick(0.05)
+    for (const f of fish.snapshot())
+      for (const d of decks) {
+        const dx = Math.max(d.x - 1 - f.x, 0, f.x - (d.x + d.w + 1))
+        const dy = Math.max(d.y - f.y, 0, f.y - (d.y + d.h + 1))
+        assert.ok(Math.hypot(dx, dy) >= 1, `${f.id} is ${Math.hypot(dx, dy).toFixed(2)} tiles from the ${d.name} at ${f.x.toFixed(1)},${f.y.toFixed(1)}`)
+      }
+  }
 })

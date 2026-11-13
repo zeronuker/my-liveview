@@ -162,9 +162,15 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   // words on the floor and walls: light, with a dark edge, so they read on any theme
   const label = (value, x, y, size, align = 'center') => {
     ctx.save()
-    ctx.shadowColor = 'rgba(0,0,0,0.8)'
-    ctx.shadowBlur = 3
-    text(value, x, y, size, '#e6e2f2', align)
+    ctx.font = `500 ${size}px ${fontFamily()}`
+    ctx.textAlign = align
+    ctx.textBaseline = 'middle'
+    ctx.lineJoin = 'round'
+    ctx.lineWidth = Math.max(2.5, size * 0.28) // a dark outline, so the name stands out from any floor
+    ctx.strokeStyle = 'rgba(10,10,20,0.92)'
+    ctx.strokeText(value, x, y)
+    ctx.fillStyle = '#f4f1fb'
+    ctx.fillText(value, x, y)
     ctx.restore()
   }
 

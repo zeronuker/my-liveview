@@ -76,7 +76,8 @@ export const roamGrid = (layout, garden) => {
 // not under the terrace or the boardwalk, which hide it
 export const waterGrid = (layout, garden) => {
   const hidden = layout.rooms.filter(room => room.level === 'outside' && (room.name === 'Terrace' || room.name === 'Boardwalk'))
-  const under = (x, y) => hidden.some(room => x >= room.x && x < room.x + room.w && y >= room.y - 1 && y < room.y + room.h + 1)
+  // the deck's rail and posts stand a tile past the floor, and a fish is up to a tile long, so keep two tiles clear (three below, where its tail trails)
+  const under = (x, y) => hidden.some(room => x >= room.x - 2 && x < room.x + room.w + 2 && y >= room.y - 2 && y < room.y + room.h + 3)
   return Array.from({ length: layout.height }, (_, y) => Array.from({ length: layout.width }, (_, x) => (inPond(garden, x, y, 0.92) && !under(x, y) ? '.' : '#')).join(''))
 }
 

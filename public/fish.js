@@ -76,7 +76,7 @@ export const createFish = (water, count, random = Math.random, colors = FISH_COL
       one.x = nx
       one.y = ny
     } else {
-      one.speed -= one.speed * Math.min(1, 2 * dt) // the bank is ahead: ease off and pick another way
+      one.speed -= one.speed * Math.min(1, 1.5 * dt) // the bank is ahead: ease off and pick another way
       one.target = choose(one)
     }
   }
