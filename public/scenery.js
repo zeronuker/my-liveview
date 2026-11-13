@@ -4,11 +4,13 @@
 // scaled up with no smoothing. Plain data in, plain data out, so it can be
 // tested. People are in sprites.js.
 //
-// The shell (floors, walls, doors, windows, stairs) is drawn in art/shell.js. Much of the
-// furniture is still plain placeholder art (a box of one colour); the detailed art comes
-// room by room, drawn with the pixel-art skill and the palette in palette.js.
+// The art is drawn in art/<part>.js, one file for each part of the place: the shell (floors, walls,
+// doors, windows, stairs), the things several rooms share, the lobby, the open office. Furniture that
+// has no art yet is a plain placeholder here (a box of one colour); the detailed art comes room by
+// room, drawn with the pixel-art skill and the palette in palette.js.
 import { commonArts, decalOps } from './art/common.js'
 import { lobbyArts } from './art/lobby.js'
+import { officeArts } from './art/office.js'
 import { shellOps } from './art/shell.js'
 import { ramp, shade } from './palette.js'
 import { hash } from './pixel.js'
@@ -29,22 +31,6 @@ export const groundOps = layout => {
     for (let tx = 0; tx < layout.width; tx++) for (const [, x, y, w, h, color] of grassTile(tx, ty)) ops.push(r(tx * TILE + x, ty * TILE + y, w, h, color))
   return [...ops, ...shellOps(layout), ...decalOps(layout)]
 }
-
-const SHADOW = 'rgba(0,0,0,0.28)'
-
-const deskOps = tiles => {
-  const w = tiles * TILE
-  return [
-    r(1, 15, w - 2, 1, SHADOW),
-    r(0, 2, w, 9, '#b98a5a'), r(0, 2, w, 1, '#d9b384'), r(0, 10, w, 1, '#8a6240'),
-    r(1, 11, w - 2, 4, '#7a5435'), r(3, 11, 1, 4, '#8a6240'), r(w - 12, 12, 9, 3, '#6a472b'), r(w - 8, 13, 1, 1, '#d9b36a'),
-  ]
-}
-
-const chairOps = () => [
-  r(4, 1, 8, 8, '#2b2b3f'), r(5, 2, 6, 6, '#44445e'), r(5, 2, 6, 1, '#5a5a7a'),
-  r(3, 9, 10, 4, '#3c3c56'), r(7, 13, 2, 2, '#2a2a3a'), r(4, 15, 8, 1, '#2a2a3a'),
-]
 
 const BOOKS = ['#c0392b', '#2a7f9e', '#e9c46a', '#4caf50', '#9b5de5', '#e76f51', '#f4efe6']
 const shelfOps = tiles => {
@@ -67,11 +53,6 @@ const shelfOps = tiles => {
   return ops
 }
 
-const trayOps = () => [
-  r(2, 14, 12, 1, SHADOW), r(2, 6, 12, 8, '#8a6a44'), r(3, 7, 10, 6, '#a58058'),
-  r(4, 4, 8, 5, '#f3efe6'), r(5, 3, 8, 5, '#e6e1d6'), r(6, 5, 5, 1, '#b9b4a8'), r(6, 7, 4, 1, '#b9b4a8'),
-]
-
 // a guardrail: a thin rail along the way it runs, with a post every tile
 const railOps = ({ w, h }) => {
   const [dark, , base] = ramp('#6b6f7a')
@@ -93,20 +74,18 @@ const boxOps = ({ w, h }, color) => {
 }
 
 const COLORS = {
-  desk: '#9a6b3f', machine: '#4a4f63', table: '#9a6b3f', tv: '#3c3c56', rack: '#2c2c3a', stall: '#d8d6cc',
+  machine: '#4a4f63', table: '#9a6b3f', tv: '#3c3c56', rack: '#2c2c3a', stall: '#d8d6cc',
   vending: '#e24b4a', cooler: '#6faed6', island: '#b98a5a', counter: '#8d4c2a',
 }
 
 // what to draw for each kind of furniture; `under` things are drawn below the
 // people (a chair, a sofa sat on), the rest are in front of whoever is behind them
 const ARTS = {
-  desk: { under: false, ops: item => (item.h === 1 && item.w >= 2 ? deskOps(item.w) : boxOps(item, COLORS.desk)) },
-  chair: { under: true, ops: () => chairOps() },
   shelf: { under: false, ops: item => shelfOps(item.h) },
-  tray: { under: false, ops: () => trayOps() },
   rail: { under: false, ops: railOps },
   ...commonArts,
   ...lobbyArts,
+  ...officeArts,
 }
 
 // every piece of furniture in the plan with its art, in the item's own pixels
@@ -115,16 +94,6 @@ export const itemsOf = layout =>
     const art = ARTS[item.kind] ?? { under: false, ops: () => boxOps(item, COLORS[item.kind] ?? '#888780') }
     return { ...item, under: art.under, ops: art.ops(item) }
   })
-
-// a laptop on a desk: closed, or open and in use, seen from behind (the person
-// sits on the far side). Pixels are in the desk's own first tile.
-export const LAPTOP = {
-  closed: [r(4, 5, 8, 4, '#8a8f9c'), r(4, 5, 8, 1, '#aeb3bf'), r(4, 9, 8, 1, '#5d6270')],
-  open: [
-    r(4, 0, 8, 7, '#9aa0ae'), r(4, 0, 8, 1, '#5fe3ff'), r(4, 0, 1, 7, '#7d8392'), r(11, 0, 1, 7, '#7d8392'), r(7, 3, 2, 2, '#e8e8f0'),
-    r(4, 7, 8, 2, '#7c8190'), r(4, 9, 8, 1, '#5d6270'),
-  ],
-}
 
 // paints a list of rectangles with its corner at (x, y)
 export const paint = (ctx, ops, x = 0, y = 0) => {

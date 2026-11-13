@@ -35,6 +35,14 @@ const faced = (face, [kind, x, y, w, h, color]) => {
   return [kind, x, y, w, h, color]
 }
 
+// An office chair, as if facing down: its backrest on top, the seat, and a base on wheels.
+const chairFacingDown = f => [
+  r(3, 1, 10, 4, f[1]), r(3, 1, 10, 1, f[2]), r(3, 4, 10, 1, f[0]), // the backrest
+  r(2, 6, 1, 5, f[0]), r(13, 6, 1, 5, f[0]), // the arms
+  r(3, 5, 10, 7, f[1]), r(3, 5, 10, 1, f[2]), r(3, 11, 10, 1, f[0]), // the seat
+  r(7, 12, 2, 2, f[0]), r(3, 14, 10, 1, f[0]), r(3, 15, 1, 1, f[1]), r(12, 15, 1, 1, f[1]), // the column, the base, the wheels
+]
+
 const seatOps = (item, material) =>
   sofaFacingDown(item.face === 'left' || item.face === 'right' ? item.h : item.w, RAMPS[material]).map(op => faced(item.face ?? 'down', op))
 
@@ -64,6 +72,7 @@ const plantOps = () => {
 }
 
 export const commonArts = {
+  chair: { under: true, ops: item => chairFacingDown(RAMPS.metal).map(op => faced(item.face ?? 'down', op)) },
   sofa: { under: true, ops: item => seatOps(item, 'fabricCool') },
   armchair: { under: true, ops: item => seatOps(item, 'fabricWarm') },
   plant: { under: false, ops: plantOps },

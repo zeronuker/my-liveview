@@ -38,6 +38,7 @@
 import { FLOOR_TONES, floorTileOps } from '/art/shell.js'
 import { RAMPS } from '/palette.js'
 import { groundOps, itemsOf, paint, TILE } from '/scenery.js'
+import { spriteFor } from '/sprites.js'
 import { buildStudio } from '/studio.js'
 
 const layout = buildStudio()
@@ -88,8 +89,24 @@ ground.style.height = `${ground.height * 2}px`
 paint(ground.getContext('2d'), groundOps(layout))
 // the furniture on top, the pieces people sit on first, then the rest from the back of the plan to the front
 const placed = itemsOf(layout)
-for (const item of [...placed.filter(i => i.under), ...placed.filter(i => !i.under).sort((a, b) => a.y + a.h - (b.y + b.h))])
-  paint(ground.getContext('2d'), item.ops, item.x * TILE, item.y * TILE)
+const gctx = ground.getContext('2d')
+for (const item of placed.filter(i => i.under)) paint(gctx, item.ops, item.x * TILE, item.y * TILE)
+// and a person at every desk seat, typing, reading or sitting, so the seated views can be checked (a desk hides the legs of whoever is behind it)
+const SHIRTS = ['#e24b4a', '#378add', '#639922', '#ef9f27', '#7f77dd', '#d4537e']
+const draws = placed.filter(i => !i.under).map(item => ({ key: item.y + item.h, run: () => paint(gctx, item.ops, item.x * TILE, item.y * TILE) }))
+layout.spots.desks.forEach((seat, i) =>
+  draws.push({
+    key: seat.y + 0.9,
+    run: () => {
+      const sprite = spriteFor({ pose: ['type', 'read', 'sit', 'type'][i % 4], t: 0, id: `w${i}`, color: SHIRTS[i % SHIRTS.length], dir: seat.face })
+      gctx.save()
+      gctx.translate(seat.x * TILE + 8, seat.y * TILE + 3)
+      if (seat.face === 'left') gctx.scale(-1, 1)
+      sprite.cells.forEach((row, yy) => row.forEach((color, xx) => color && ((gctx.fillStyle = color), gctx.fillRect(xx - 6, yy, 1, 1))))
+      gctx.restore()
+    },
+  }))
+for (const one of draws.sort((a, b) => a.key - b.key)) one.run()
 
 for (const tone of FLOOR_TONES) {
   const ops = []
@@ -117,6 +134,7 @@ crop('Lobby and entrance', 4, 33, 24, 13, 4)
 crop('The waiting lounge, close up', 5, 33, 12, 8, 6)
 crop('Reception and the front doors, close up', 15, 38, 12, 6, 6)
 crop('Social wing: lounge, terrace doors, archway', 25, 31, 18, 13, 4)
+crop('The open office, with someone at every desk seat', 5, 21, 17, 13, 5)
 </script>
 </body>
 </html>

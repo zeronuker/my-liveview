@@ -9,7 +9,8 @@ import { createSound, soundFor } from './sound.js'
 import { fit, keepInView, zoomAt } from './layout.js'
 import { createStage } from './stage.js'
 import { buildStudio } from './studio.js'
-import { groundOps, itemsOf, LAPTOP, paint, TILE } from './scenery.js'
+import { deskOnOps } from './art/office.js'
+import { groundOps, itemsOf, paint, TILE } from './scenery.js'
 import { carrySprite, spriteFor } from './sprites.js'
 
 const BUBBLES = { ok: '--afg', bad: '--dfg', ask: '--nfg', info: '--acc' }
@@ -109,11 +110,14 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     return small
   }
   const ground = smallCanvas(layout.width * TILE, layout.height * TILE, groundOps(layout))
-  const items = itemsOf(layout).map(item => ({ ...item, image: smallCanvas(item.w * TILE, item.h * TILE, item.ops) }))
-  const laptops = { open: smallCanvas(TILE, TILE, LAPTOP.open), closed: smallCanvas(TILE, TILE, LAPTOP.closed) }
-  // the desk behind each seat, so its laptop can open when someone is writing there
+  // a desk has a second picture, for when someone is typing at it (its screen is lit)
+  const items = itemsOf(layout).map(item => ({
+    ...item,
+    image: smallCanvas(item.w * TILE, item.h * TILE, item.ops),
+    ...(item.kind === 'desk' ? { imageOn: smallCanvas(item.w * TILE, item.h * TILE, [...item.ops, ...deskOnOps(item)]) } : {}),
+  }))
+  // the desk in front of each seat, so its screen can light up when someone is writing there
   const deskOfSeat = new Map(layout.spots.desks.map(d => [`${d.x},${d.y}`, `${d.desk.x},${d.desk.y}`]))
-  const laptopDesks = new Set(deskOfSeat.values())
 
   // words on the floor and walls: light, with a dark edge, so they read on any theme
   const label = (value, x, y, size, align = 'center') => {
@@ -139,9 +143,8 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
 
   const drawItem = (item, { tile, left, top }, open) => {
     ctx.imageSmoothingEnabled = false
-    ctx.drawImage(item.image, left + item.x * tile, top + item.y * tile, item.w * tile, item.h * tile)
-    const key = `${item.x},${item.y}`
-    if (item.kind === 'desk' && laptopDesks.has(key)) ctx.drawImage(open.has(key) ? laptops.open : laptops.closed, left + item.x * tile, top + item.y * tile, tile, tile)
+    const lit = item.imageOn && open.has(`${item.x},${item.y}`)
+    ctx.drawImage(lit ? item.imageOn : item.image, left + item.x * tile, top + item.y * tile, item.w * tile, item.h * tile)
   }
 
   const bubble = (value, kind, x, y, tile, ink) => {
@@ -376,7 +379,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.fillRect(0, 0, width, height)
     drawPlan(view)
 
-    // who is writing where: that desk's laptop is open
+    // who is writing where: that desk's screen is lit
     const open = new Set()
     for (const person of snap.workers) {
       if (person.pose !== 'type') continue

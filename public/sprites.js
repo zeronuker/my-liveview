@@ -101,7 +101,14 @@ const TORSOS = {
     read1: ['.obbbbbbbbo.', '.obbbBBbbbo.', '.obbbbBmwwo.', '.obbbbbsmwo.', HIPS],
     read2: ['.obbbbbbbbo.', '.obbbBBbbbo.', '.obbbbBmwlo.', '.obbbbbsmwo.', HIPS],
   },
-  back: {},
+  // from behind, at a desk: no hands in front, the elbows move a little
+  back: {
+    down: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.obbbbbbbbo.', HIPS],
+    type1: ['.obbbbbbbbo.', '.obBbbbbBbo.', '.oBbbbbbbBo.', '.obbbbbbbbo.', HIPS],
+    type2: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.obBbbbbBbo.', '.obbbbbbbbo.', HIPS],
+    read1: ['.obbbbbbbbo.', '.oBbbbbbbBo.', '.oBbbbbbbBo.', '.obbbbbbbbo.', HIPS],
+    read2: ['.obbbbbbbbo.', '.obBbbbbBbo.', '.oBbbbbbbBo.', '.obbbbbbbbo.', HIPS],
+  },
 }
 
 // four rows each
@@ -112,8 +119,9 @@ const LEGS = {
     walkB: ['..oppooppo..', '..oppo.oppo.', '..okko.okko.', '..oooo.oooo.'],
     sit: ['..oppppppo..', '..okkppkko..', BLANK, BLANK],
   },
-  side: {},
-  back: {},
+  // sitting: from the side the thighs go forward and a foot comes down; from behind just the thighs
+  side: { sit: ['..opppppppoo', '......okkkko', BLANK, BLANK] },
+  back: { sit: ['..oppppppo..', '..oppppppo..', BLANK, BLANK] },
 }
 
 const VIEWS = ['front', 'side', 'back']
@@ -160,10 +168,8 @@ const POSES = {
   shake: { every: 0.7, frames: (v, l) => breathe(v, l, 'down', 'stand') },
 }
 
-// Poses that only make sense facing you (a raised hand, a cheer, hands on a
-// book or a keyboard seen from the front); from behind or beside they show the front.
+// Poses that only make sense facing you (a raised hand, a cheer); from behind or beside they show the front.
 const FRONT_ONLY = new Set(['ask', 'cheer'])
-const NOT_FROM_BEHIND = new Set(['type', 'read', 'review'])
 
 export const poses = () => Object.keys(POSES)
 export const views = () => [...VIEWS]
@@ -173,8 +179,7 @@ export const framesOf = (pose, head = 'short', view = 'front') => POSES[pose]?.f
 const VIEW_OF = { down: 'front', up: 'back', left: 'side', right: 'side' }
 export const viewOf = (pose, dir = 'down') => {
   const view = VIEW_OF[dir] ?? 'front'
-  if (FRONT_ONLY.has(pose) || (view === 'back' && NOT_FROM_BEHIND.has(pose))) return 'front'
-  return view
+  return FRONT_ONLY.has(pose) ? 'front' : view
 }
 
 // Colours, as ramps: each shade is a little darker and a little cooler, never

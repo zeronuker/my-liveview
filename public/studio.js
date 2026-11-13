@@ -37,8 +37,8 @@ export const buildStudio = () => {
     doors.push({ kind, x, y, w, h, level })
     carve(x, y, w, h)
   }
-  const block = (kind, x, y, w = 1, h = 1) => {
-    furniture.push({ kind, x, y, w, h, solid: true })
+  const block = (kind, x, y, w = 1, h = 1, face) => {
+    furniture.push({ kind, x, y, w, h, solid: true, ...(face ? { face } : {}) })
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) cells[j][i] = '#'
   }
   const lay = (kind, x, y, w = 1, h = 1, face) => furniture.push({ kind, x, y, w, h, solid: false, ...(face ? { face } : {}) })
@@ -102,30 +102,33 @@ export const buildStudio = () => {
   const island = (x, y, count) => {
     for (let i = 0; i < count; i++) {
       const dx = x + i * 2
-      block('desk', dx, y, 2, 1)
-      block('desk', dx, y + 1, 2, 1)
-      lay('chair', dx, y - 1)
-      lay('chair', dx, y + 2)
+      block('desk', dx, y, 2, 1, 'down') // a desk and a chair face the way whoever sits there does
+      block('desk', dx, y + 1, 2, 1, 'up')
+      lay('chair', dx, y - 1, 1, 1, 'down')
+      lay('chair', dx, y + 2, 1, 1, 'up')
       desks.push({ x: dx, y: y - 1, face: 'down', desk: { x: dx, y } }, { x: dx, y: y + 2, face: 'up', desk: { x: dx, y: y + 1 } })
     }
   }
   island(7, 24, 3) // six desks
   island(14, 25, 2) // four desks
   island(12, 29, 2) // four desks
-  block('desk', 8, 28, 1, 2) // a pair of desks side by side, chairs left and right
-  block('desk', 9, 28, 1, 2)
-  lay('chair', 7, 28)
-  lay('chair', 10, 28)
+  block('desk', 8, 28, 1, 2, 'right') // a pair of desks side by side, chairs left and right
+  block('desk', 9, 28, 1, 2, 'left')
+  lay('chair', 7, 28, 1, 1, 'right')
+  lay('chair', 10, 28, 1, 1, 'left')
   desks.push({ x: 7, y: 28, face: 'right', desk: { x: 8, y: 28 } }, { x: 10, y: 28, face: 'left', desk: { x: 9, y: 28 } })
 
+  // plants in the open office: the corners, by the rail and between the islands
+  for (const [x, y] of [[6, 21], [17, 21], [6, 32], [11, 27], [16, 32], [21, 32]]) block('plant', x, y)
+
   // the manager's desk at the lower east edge of the open office, with the tray
-  block('desk', 19, 29, 1, 2)
-  lay('chair', 20, 29)
+  block('desk', 19, 29, 1, 2, 'left')
+  lay('chair', 20, 29, 1, 1, 'left')
   block('tray', 18, 29)
 
   // the CEO's desk, and the chair behind it
-  block('desk', 25, 4, 6, 1)
-  lay('chair', 27, 3)
+  block('desk', 25, 4, 6, 1, 'down')
+  lay('chair', 27, 3, 1, 1, 'down')
 
   // the file room: shelves down the sides, an aisle between
   block('shelf', 6, 11, 1, 5)

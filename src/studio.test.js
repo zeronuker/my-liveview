@@ -131,13 +131,13 @@ test('a flight of stairs has no way off sideways', () => {
 })
 
 test('every desk seat has a chair, and a desk in front of it', () => {
-  const desk = (x, y) => layout.furniture.some(f => f.kind === 'desk' && f.solid && inside(f, x, y))
-  const chair = (x, y) => layout.furniture.some(f => f.kind === 'chair' && !f.solid && f.x === x && f.y === y)
+  const desk = (x, y, face) => layout.furniture.some(f => f.kind === 'desk' && f.solid && inside(f, x, y) && (!face || f.face === face))
+  const chair = (x, y, face) => layout.furniture.some(f => f.kind === 'chair' && !f.solid && f.x === x && f.y === y && (!face || f.face === face))
   for (const seat of [...layout.spots.desks, layout.spots.managerSeat, layout.spots.ceoSeat]) {
     const [dx, dy] = FACE[seat.face]
     assert.deepEqual(seat.desk, { x: seat.x + dx, y: seat.y + dy }, `desk in front of ${seat.x},${seat.y}`)
-    assert.ok(desk(seat.desk.x, seat.desk.y), `desk at ${seat.desk.x},${seat.desk.y}`)
-    assert.ok(chair(seat.x, seat.y), `chair at ${seat.x},${seat.y}`)
+    assert.ok(desk(seat.desk.x, seat.desk.y, seat.face), `desk at ${seat.desk.x},${seat.desk.y} facing ${seat.face}`)
+    assert.ok(chair(seat.x, seat.y, seat.face), `chair at ${seat.x},${seat.y} facing ${seat.face}`)
   }
   assert.ok(desk(layout.spots.ceoDelivery.x, layout.spots.ceoDelivery.y - 1)) // work is handed over the CEO's desk
   assert.ok(layout.furniture.some(f => f.kind === 'tray' && inside({ x: f.x, y: f.y - 1, w: 1, h: 1 }, layout.spots.handIn.x, layout.spots.handIn.y)))

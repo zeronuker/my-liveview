@@ -161,7 +161,10 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     worker.pending = null
     worker.act = act
     worker.pose = act.pose ?? 'idle'
-    if (FACES_YOU.has(act.pose)) worker.dir = faceAt.get(`${Math.round(worker.x)},${Math.round(worker.y)}`) ?? 'down' // sitting at a desk or a seat, they face the way it faces
+    if (FACES_YOU.has(act.pose)) {
+      worker.dir = faceAt.get(`${Math.round(worker.x)},${Math.round(worker.y)}`) ?? 'down' // sitting at a desk or a seat, they face the way it faces
+      if (worker.dir === 'left' || worker.dir === 'right') worker.facing = worker.dir === 'left' ? -1 : 1 // and the side view is turned to match
+    }
     worker.label = act.label ?? ''
     worker.bubble = act.bubble ?? null
     if (act.bubble?.kind === 'bad') emit('warning', worker.x, worker.y) // something went wrong

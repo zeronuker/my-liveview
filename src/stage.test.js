@@ -610,6 +610,18 @@ test('a seat that says nothing about its way faces the room', () => {
   assert.equal(person('w1').dir, 'down')
 })
 
+test('a seat that faces left or right turns the person that way, so the side view is flipped to match', () => {
+  for (const [face, facing] of [['left', -1], ['right', 1]]) {
+    const { hire, doStep, run, person } = setup({ layout: corridor(['.....'], { seats: [{ x: 3, y: 0, face }] }) })
+    hire('w1')
+    doStep('w1', 'study')
+    for (let i = 0; i < 300 && person('w1').pose !== 'read'; i++) run(0.1)
+
+    assert.equal(person('w1').dir, face)
+    assert.equal(person('w1').facing, facing)
+  }
+})
+
 test('the snapshot says which chat each worker belongs to; the manager belongs to none', () => {
   const { stage, hire, run } = setup()
   hire('w1', { sessionId: 'chat-a' })

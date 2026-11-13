@@ -3,6 +3,7 @@ import { test } from 'node:test'
 
 import { commonArts, decalOps } from '../public/art/common.js'
 import { lobbyArts } from '../public/art/lobby.js'
+import { deskOnOps, officeArts } from '../public/art/office.js'
 import { inPalette } from '../public/palette.js'
 import { ellipseOps, glowOps, gridOps, ringOps } from '../public/pixel.js'
 import { itemsOf } from '../public/scenery.js'
@@ -48,7 +49,7 @@ test('a pool of light is a dither: thicker inside, sparser towards the edge, and
 })
 
 test('every piece of furniture drawn by the lobby and common art fits its size and uses only the palette', () => {
-  const kinds = new Set([...Object.keys(commonArts), ...Object.keys(lobbyArts)])
+  const kinds = new Set([...Object.keys(commonArts), ...Object.keys(lobbyArts), ...Object.keys(officeArts)])
   const items = itemsOf(layout).filter(item => kinds.has(item.kind))
   assert.ok(items.length >= 12)
   for (const item of items) checkOps(item.ops, item.w * TILE, item.h * TILE, `${item.kind} at ${item.x},${item.y}`)
@@ -66,6 +67,31 @@ test('a sofa or armchair is drawn for each way it can face, at each length, insi
 test('a sofa facing one way does not look like the same sofa facing another', () => {
   const looks = ['up', 'down', 'left', 'right'].map(face => JSON.stringify(commonArts.sofa.ops({ w: 1, h: 4, face })))
   assert.equal(new Set(looks).size, 4)
+})
+
+test('a desk is drawn for each way someone can sit at it, and one in use shows a lit screen that fits the desk', () => {
+  const sizes = { up: [2, 1], down: [2, 1], left: [1, 2], right: [1, 2] }
+  const looks = new Set()
+  for (const [face, [w, h]] of Object.entries(sizes)) {
+    const desk = { kind: 'desk', x: 3, y: 4, w, h, face }
+    checkOps(officeArts.desk.ops(desk), w * TILE, h * TILE, `desk for ${face}`)
+    checkOps(deskOnOps(desk), w * TILE, h * TILE, `lit screen for ${face}`)
+    looks.add(JSON.stringify(officeArts.desk.ops(desk)))
+    assert.notDeepEqual(deskOnOps(desk), [])
+  }
+  assert.equal(looks.size, 4)
+  checkOps(officeArts.desk.ops({ kind: 'desk', x: 0, y: 0, w: 6, h: 1, face: 'down' }), 6 * TILE, TILE, 'a long desk') // the CEO's
+  checkOps(officeArts.tray.ops(), TILE, TILE, 'tray')
+})
+
+test('an office chair is drawn for each way it can face', () => {
+  const looks = ['up', 'down', 'left', 'right'].map(face => {
+    const ops = commonArts.chair.ops({ w: 1, h: 1, face })
+    checkOps(ops, TILE, TILE, `chair facing ${face}`)
+    return JSON.stringify(ops)
+  })
+  assert.equal(new Set(looks).size, 4)
+  assert.ok(commonArts.chair.under)
 })
 
 test('the things on the floor (rugs, mats and light) fit the plan and use only the palette, the same every time', () => {

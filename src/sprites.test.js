@@ -93,11 +93,24 @@ test('the way someone faces picks the view: down is the front, up the back, left
   assert.equal(viewOf('walk', 'sideways'), 'front')
 })
 
-test('poses that need to face you, such as a raised hand or typing, show the front when seen from behind', () => {
+test('poses that need to face you, such as a raised hand or a cheer, show the front from any side', () => {
   assert.equal(viewOf('ask', 'left'), 'front')
   assert.equal(viewOf('cheer', 'up'), 'front')
-  assert.equal(viewOf('type', 'up'), 'front')
-  assert.equal(viewOf('type', 'right'), 'side')
+})
+
+test('someone typing, reading or sitting at a desk is seen from behind when they face up and from the side when they face left or right', () => {
+  for (const pose of ['type', 'read', 'review', 'sit']) {
+    assert.equal(viewOf(pose, 'up'), 'back')
+    assert.equal(viewOf(pose, 'right'), 'side')
+    assert.equal(viewOf(pose, 'left'), 'side')
+    assert.equal(viewOf(pose, 'down'), 'front')
+  }
+})
+
+test('from behind a typist has no hands in front, and sitting from the side or behind has legs of its own', () => {
+  const typist = framesOf('type', 'short', 'back')[0].slice(6, 11).join('')
+  assert.equal(typist.includes('s'), false) // no skin on the torso rows: the hands are hidden
+  for (const view of ['side', 'back']) assert.notDeepEqual(framesOf('sit', 'short', view)[0].slice(11), framesOf('sit', 'short', 'front')[0].slice(11))
 })
 
 test('the views look different, and a walk has four frames in each', () => {
