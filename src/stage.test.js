@@ -766,3 +766,26 @@ test('breaks are for workers: the manager does not wander off, and none start at
   const manager = stage.snapshot().workers.find(w => w.id === 'manager')
   assert.deepEqual([manager.x, manager.y], [layout.spots.managerSeat.x, layout.spots.managerSeat.y])
 })
+
+test('a huddle sends helpers to the meeting room table: each sits in a chair of their own, facing the table, until the tool is over', () => {
+  const { stage, hire, doStep, run, person } = setup()
+  for (const id of ['w1', 'w2', 'w3']) {
+    hire(id)
+    doStep(id, 'huddle', { label: 'Updating the todo list' })
+  }
+  run(60)
+  const places = ['w1', 'w2', 'w3'].map(id => `${Math.round(person(id).x)},${Math.round(person(id).y)}`)
+
+  assert.equal(new Set(places).size, 3)
+  for (const id of ['w1', 'w2', 'w3']) {
+    const spot = layout.spots.huddle.find(h => h.x === Math.round(person(id).x) && h.y === Math.round(person(id).y))
+    assert.ok(spot, `${id} is in a meeting room chair`)
+    assert.equal(person(id).pose, 'sit')
+    assert.equal(person(id).label, 'Updating the todo list')
+    assert.equal(person(id).dir, spot.face) // facing the table
+  }
+  doStep('w1', 'planned')
+  run(1)
+  assert.equal(person('w1').pose, 'cheer')
+  assert.equal(stage.isIdle(), false)
+})

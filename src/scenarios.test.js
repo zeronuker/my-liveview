@@ -157,7 +157,7 @@ test('coverage: every tool the Office has a scene for is in some scenario', () =
   const seen = all(r => r.events.filter(e => e.type === 'tool').map(e => e.tool))
   for (const tool of ['Read', 'Edit', 'Write', 'Bash', 'Grep', 'Glob']) assert.ok(seen.has(tool), tool)
   assert.ok([...seen].some(tool => tool.startsWith('mcp__')), 'an MCP tool')
-  for (const tool of ['WebSearch', 'WebFetch', 'LSP', 'AskUserQuestion', 'SendMessage']) assert.ok(seen.has(tool), tool)
+  for (const tool of ['WebSearch', 'WebFetch', 'LSP', 'AskUserQuestion', 'SendMessage', 'TodoWrite', 'EnterPlanMode', 'ExitPlanMode']) assert.ok(seen.has(tool), tool)
 })
 
 test('coverage: a tool that fails, an edit that does not apply and a test that passes are in some scenario', () => {
@@ -177,7 +177,7 @@ test('coverage: every command the director gives and every step the stage plays 
   for (const cmd of ['hire', 'do', 'fire', 'review', 'submit', 'ask', 'answered', 'prompt', 'fail', 'compact', 'compacted', 'denied', 'note', 'memo', 'clear'])
     assert.ok(commands.has(cmd), cmd)
   const steps = all(r => r.commands.filter(c => c.cmd === 'do').map(c => c.step))
-  for (const step of ['arrive', 'fetch', 'study', 'write', 'handIn', 'report', 'reject', 'test', 'search', 'pass', 'fail', 'call', 'unavailable'])
+  for (const step of ['arrive', 'fetch', 'study', 'write', 'handIn', 'report', 'reject', 'test', 'search', 'pass', 'fail', 'call', 'unavailable', 'huddle', 'planned'])
     assert.ok(steps.has(step), step)
 })
 

@@ -46,7 +46,7 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
   const { grid, spots } = layout
   const workers = new Map() // id -> worker (the manager too)
   // which way each seat faces, by place; a seat with no entry faces the room
-  const faceAt = new Map([...spots.desks, ...spots.seats, spots.managerSeat].filter(s => s.face).map(s => [`${s.x},${s.y}`, s.face]))
+  const faceAt = new Map([...spots.desks, ...spots.seats, ...(spots.huddle ?? []), spots.managerSeat].filter(s => s.face).map(s => [`${s.x},${s.y}`, s.face]))
   const handedIn = new Set() // workers whose work is on the manager's tray
   const answered = new Set() // chats whose permission has been answered
   const compacted = new Set() // chats whose memory has been compacted
@@ -101,6 +101,12 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
     return spots.files[sum % spots.files.length]
   }
   const homeOf = worker => (worker.kind === 'manager' ? spots.managerSeat : seatOf(worker))
+
+  // a chair at the meeting room's table that nobody else is heading for (or the first, when all are taken)
+  const huddleSpot = worker => {
+    const taken = new Set([...workers.values()].filter(w => w !== worker && w.present && w.goal).map(w => `${w.goal[0]},${w.goal[1]}`))
+    return spots.huddle.find(h => !taken.has(`${h.x},${h.y}`)) ?? spots.huddle[0]
+  }
 
   // A place at a spot that several people may come to at once (the tray, the CEO's door, the front door): the spot
   // itself for the first, then the nearest free cell within two steps of it, so a crowd stands round it, not on it.
@@ -159,6 +165,10 @@ export const createStage = ({ layout, getMult = () => 1, breaks = true }) => {
         return [{ spot: () => spots.lab[labTurn++ % spots.lab.length], act: { pose: 'machine', dur: 1.5, label: 'Running tests', ...waitsForNext } }]
       case 'search':
         return [{ spot: () => shelfFor(null), act: { pose: 'scan', dur: 1.2, label: cmd.label ?? 'Searching', ...waitsForNext } }]
+      case 'huddle': // planning, or the todo list: a chair at the meeting room's table, until the tool is over
+        return [{ spot: () => huddleSpot(worker), act: { pose: 'sit', dur: 1.5, label: cmd.label ?? 'Planning', ...waitsForNext } }]
+      case 'planned':
+        return [{ spot: null, act: { pose: 'cheer', dur: 1, label: 'Plan ready', bubble: ok('✓') } }]
       case 'call': // an MCP tool: out by the front door, waiting for the answer
         return [{ spot: () => placeAt(spots.entrance, worker), act: { pose: 'scan', dur: 1.2, label: cmd.label ?? (cmd.server ? `Calling ${cmd.server}` : 'Calling a tool'), ...waitsForNext } }]
       case 'unavailable':

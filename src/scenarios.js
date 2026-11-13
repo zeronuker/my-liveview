@@ -131,6 +131,11 @@ export const SCENARIOS = {
     ends: 'stop',
     steps: [['prompt', 'Look it up'], ['web', 'search'], ['web', 'fetch'], ['web', 'search', 'fail'], ['lsp'], ['stop']],
   },
+  planning: {
+    about: 'plan mode and the todo list: helpers gather round the meeting room table, then the plan is ready',
+    ends: 'stop',
+    steps: [['prompt', 'Plan the change'], ['plan', 'enter'], ['plan', 'todo'], ['read', 'cart.js'], ['plan', 'exit'], ...files(['planned.js']), ['stop']],
+  },
   question: {
     about: "Claude asks the person a question: a worker waits at the CEO's door until it is answered",
     ends: 'stop',

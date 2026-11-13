@@ -17,7 +17,7 @@
 // wallArt: [{ kind, x, y, w, h }]             hung on a wall's face: a 'whiteboard' or a 'picture'
 // rugs: [{ kind, x, y, w, h }]                'rug' or 'mat' on the floor; lights: [{ x, y, rx, ry }] pools of light
 // furniture: [{ kind, x, y, w, h, solid }]    solid ones are '#' in the grid (a desk, a rail)
-// spots (breaks too: where an idle worker goes): where people stand for each kind of job. A seat also says which way it faces and,
+// spots (breaks: where an idle worker goes; huddle: the meeting room's chairs, where helpers plan): where people stand for each kind of job. A seat also says which way it faces and,
 //        for a desk seat, which desk cell is in front of it.
 
 export const buildStudio = () => {
@@ -203,7 +203,11 @@ export const buildStudio = () => {
   block('labbench', 11, 11, 2, 1)
   // the meeting room: a board table with five chairs a side, a TV on the east wall, plants, and a whiteboard
   block('boardtable', 28, 13, 5, 2)
-  for (let x = 28; x < 33; x++) lay('chair', x, 12, 1, 1, 'down'), lay('chair', x, 15, 1, 1, 'up')
+  const huddle = [] // helpers gather in these chairs to plan
+  for (let x = 28; x < 33; x++) {
+    lay('chair', x, 12, 1, 1, 'down'), lay('chair', x, 15, 1, 1, 'up')
+    huddle.push({ x, y: 12, face: 'down' }, { x, y: 15, face: 'up' })
+  }
   block('tv', 35, 14, 1, 2)
   for (const [x, y] of [[26, 11], [35, 11]]) block('plant', x, y)
   // the vending area: three machines, a water cooler and a bin
@@ -316,6 +320,7 @@ export const buildStudio = () => {
       entrance: { x: 24, y: 48 },
       files,
       breaks,
+      huddle,
       seats,
       desks,
       lab,

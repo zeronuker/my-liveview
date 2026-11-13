@@ -46,6 +46,9 @@ const ERRANDS = {
   LSP: { start: 'search', ok: 'report', fail: 'fail', label: 'Checking the code' },
   WebSearch: { start: 'call', ok: 'report', fail: 'unavailable', label: 'Searching the web' },
   WebFetch: { start: 'call', ok: 'report', fail: 'unavailable', label: 'Reading a web page' },
+  TodoWrite: { start: 'huddle', ok: 'planned', fail: 'fail', label: 'Updating the todo list' },
+  EnterPlanMode: { start: 'huddle', ok: 'planned', fail: 'fail', label: 'Planning' },
+  ExitPlanMode: { start: 'huddle', ok: 'planned', fail: 'fail', label: 'Presenting the plan' },
 }
 const FILE_TOOLS = new Set(['Read', 'Edit', 'Write'])
 

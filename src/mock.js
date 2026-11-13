@@ -16,6 +16,7 @@
 //   ['compact', ms]               memory is compacted, taking that long
 //   ['session', source]  ['end', reason]   the session starts (startup, resume, clear) or ends
 //   ['web', 'search' | 'fetch', 'fail']  ['lsp']  ['message']   web, code and subagent tools
+//   ['plan', 'todo' | 'enter' | 'exit']  the todo list, and plan mode started and presented
 //   ['question', ms]              Claude asks the person something, and waits that long
 //   ['idle']  ['command', name]  ['batch']  ['task', 'new' | 'done']  ['teammate']
 //   ['model', name]  ['cd', folder]  ['addDir', folder]  ['memo']
@@ -111,6 +112,11 @@ export const toActions = (name, steps, { dir, cwd = path.dirname(dir), tick = 30
         break
       case 'lsp':
         tool('LSP', { operation: 'hover' })
+        break
+      case 'plan':
+        if (a === 'enter') tool('EnterPlanMode', {})
+        else if (a === 'exit') tool('ExitPlanMode', { plan: 'Do the work in three steps' })
+        else tool('TodoWrite', { todos: [{ content: 'Do the work', status: 'pending', activeForm: 'Doing the work' }] })
         break
       case 'question': {
         const quick = wait

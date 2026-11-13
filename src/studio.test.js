@@ -251,3 +251,13 @@ test('every break spot is a free cell with a label, that someone can walk to fro
     assert.ok(reach.has(key(b.x, b.y)), `${b.label} at ${b.x},${b.y} cannot be reached`)
   }
 })
+
+test('the huddle places are the meeting room\'s chairs, facing the table, and can be walked to from the front gate', () => {
+  const room = roomNamed('Meeting room')
+  assert.ok(layout.spots.huddle.length >= 6)
+  for (const h of layout.spots.huddle) {
+    assert.ok(inside(room, h.x, h.y), `${h.x},${h.y} is in the meeting room`)
+    assert.ok(isOpen(h.x, h.y))
+    assert.ok(layout.furniture.some(f => f.kind === 'chair' && !f.solid && f.x === h.x && f.y === h.y && f.face === h.face), 'a chair facing that way')
+  }
+})

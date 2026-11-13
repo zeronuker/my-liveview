@@ -69,7 +69,16 @@ test('a search scans the shelves, reports back and the worker leaves', () => {
 })
 
 test('a tool the office has no scene for does nothing', () => {
-  assert.deepEqual(run([tool('t1', 'TodoWrite'), done('t1')]), [])
+  assert.deepEqual(run([tool('t1', 'NotebookEdit'), done('t1')]), [])
+})
+
+test('the todo list and plan mode send a helper to the meeting room table, who says the plan is ready and leaves', () => {
+  for (const name of ['TodoWrite', 'EnterPlanMode', 'ExitPlanMode']) {
+    const commands = run([tool('t1', name), done('t1')])
+    assert.deepEqual(steps(commands), ['huddle', 'planned'], name)
+    assert.equal(commands.at(-1).cmd, 'fire')
+  }
+  assert.deepEqual(steps(run([tool('t1', 'TodoWrite'), done('t1', false)])), ['huddle', 'fail'])
 })
 
 test('a subagent arrives as its own worker, hands in its report and leaves', () => {
