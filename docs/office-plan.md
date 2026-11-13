@@ -276,6 +276,14 @@ The prototype works end to end (all phases built, 271 tests). The user watched i
 - **Decided:** keep the 16 pixel tile (12 by 16 people). Detail comes from 2-row walls, doors, windows, props, light pools and the garden.
 - **Not done yet:** the renovation itself (layout with real walls and doors, meeting room, pantry, garden, animals, stairs) and the movement work. Plan these next, with the skill loaded.
 
+### The renovation design is decided (2026-11-13)
+
+After many sketch rounds the user approved a design, recorded in full in `docs/office-design-brief.md` ("The Garden Studio"): a stepped building in a garden with three levels (ground floor, a mezzanine with the lobby and the open office, a first floor with the CEO suite), a main street, a social hub joined to the lounge and pantry, a terrace floating over a large pond, stairs between the levels, and workers drawn at game size to check the scale. This replaces the earlier wish list in "Next session" above.
+
+- **Order of work:** the brief (done), then the empty plan in `public/layout.js` with tests, then re-wiring the spots and stage, then the art room by room, then mock sessions, then movement polish, then the angled view.
+- **Views:** flat (top-down) first. The user also wants an angled (isometric) view like their reference screenshot, switched by a toggle. Keep the building data separate from the drawing so a second view can read it. First angled version: diamond floors, tall wall blocks with a front cutaway, upright people. A static concept picture comes first for approval.
+- Nothing of the design is built in the game yet.
+
 ### The user's reference picture for the renovation (described, not stored)
 
 The user shared a screenshot of the "Operational Floorplan" of pixel-agent-desk as what they imagine. Its art is under a restrictive licence (no copying, no redistribution), so the picture is not in this repo; we draw our own in the same spirit. What it shows:
