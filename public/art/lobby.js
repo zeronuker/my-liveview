@@ -69,7 +69,7 @@ const umbrellaStandOps = () => {
 export const lobbyArts = {
   reception: { under: false, ops: receptionOps },
   coffeetable: { under: false, ops: coffeeTableOps },
-  sidetable: { under: false, ops: sideTableOps },
+  sidetable: { under: false, ops: sideTableOps, lights: () => [{ x: 5, y: 3, w: 6, h: 2, pattern: 'flicker', on: RAMPS.light[2], off: RAMPS.light[1] }] }, // the lamp
   coatstand: { under: false, ops: coatStandOps },
   umbrella: { under: false, ops: umbrellaStandOps },
 }

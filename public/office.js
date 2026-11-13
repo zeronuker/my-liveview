@@ -14,7 +14,8 @@ import { createPets } from './pets.js'
 import { buildStudio } from './studio.js'
 import { deskOnOps } from './art/office.js'
 import { petSprite } from './art/pets.js'
-import { groundOps, itemsOf, paint, TILE } from './scenery.js'
+import { lightColor } from './lights.js'
+import { doorLights, groundOps, itemsOf, paint, TILE } from './scenery.js'
 import { carrySprite, spriteFor } from './sprites.js'
 
 const BUBBLES = { ok: '--afg', bad: '--dfg', ask: '--nfg', info: '--acc' }
@@ -121,6 +122,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   // two pictures of the ground, which differ only in the pond's water; shown in turn they make it move
   const grounds = [0, 1].map(frame => smallCanvas(layout.width * TILE, layout.height * TILE, groundOps(layout, frame)))
   // a desk has a second picture, for when someone is typing at it (its screen is lit)
+  const fixedLights = doorLights(layout)
   const items = itemsOf(layout).map(item => ({
     ...item,
     image: smallCanvas(item.w * TILE, item.h * TILE + item.rise, item.ops),
@@ -144,11 +146,19 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.drawImage(grounds[water], left, top, layout.width * tile, layout.height * tile)
   }
 
-  const drawItem = (item, { tile, left, top }, open) => {
+  // a small light over the picture: the colour it is now, on whole screen pixels
+  const drawLight = (light, x0, y0, tile, t) => {
+    const [x, y] = [Math.round(x0 + (light.x * tile) / TILE), Math.round(y0 + (light.y * tile) / TILE)]
+    ctx.fillStyle = lightColor(light, t, reduced)
+    ctx.fillRect(x, y, Math.max(1, Math.round(x0 + ((light.x + light.w) * tile) / TILE) - x), Math.max(1, Math.round(y0 + ((light.y + light.h) * tile) / TILE) - y))
+  }
+
+  const drawItem = (item, { tile, left, top }, open, t) => {
     ctx.imageSmoothingEnabled = false
     const lit = item.imageOn && open.has(`${item.x},${item.y}`)
     const rise = (item.rise * tile) / TILE // a tall piece stands above its tile
     ctx.drawImage(lit ? item.imageOn : item.image, left + item.x * tile, top + item.y * tile - rise, item.w * tile, item.h * tile + rise)
+    for (const light of item.lights) drawLight(light, left + item.x * tile, top + item.y * tile - rise, tile, t)
   }
 
   const bubble = (value, kind, x, y, tile, ink) => {
@@ -416,6 +426,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     if (!reduced && !paused && lastPets) pets.tick(Math.min(0.1, (sinceLast - lastPets) / 1000)) // with less motion, or paused, they stay put
     lastPets = sinceLast
     drawPets(view, t)
+    for (const light of fixedLights) drawLight(light, view.left, view.top, view.tile, t)
 
     // who is writing where: that desk's screen is lit
     const open = new Set()
@@ -428,13 +439,13 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     // Everything is drawn from the back to the front: chairs and sofas first,
     // then whatever is further up the plan before what is further down, so a
     // desk hides the legs of whoever sits behind it.
-    for (const item of items) if (item.under) drawItem(item, view, open)
+    for (const item of items) if (item.under) drawItem(item, view, open, t)
     const seat = layout.spots.ceoSeat
     const ceo = { id: 'ceo', name: 'CEO', color: '#264653', kind: 'manager', x: seat.x, y: seat.y, pose: 'sit', dir: 'down', facing: 1, bubble: snap.ceo.bubble, label: snap.ceo.papers > 0 ? `${snap.ceo.papers} approved` : '', carry: null }
     const here = [...new Set(snap.workers.map(w => w.sessionId).filter(Boolean))]
     multiChat = here.length > 1
     const tags = []
-    const draws = items.filter(item => !item.under).map(item => ({ key: item.y + item.h, run: () => drawItem(item, view, open) }))
+    const draws = items.filter(item => !item.under).map(item => ({ key: item.y + item.h, run: () => drawItem(item, view, open, t) }))
     for (const person of [ceo, ...snap.workers]) draws.push({ key: person.y + 0.9, run: () => drawPerson(person, view, t, ink, tags) })
     for (const one of draws.sort((a, b) => a.key - b.key)) one.run()
 

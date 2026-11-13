@@ -137,11 +137,29 @@ const boardTableOps = ({ w }) => {
   ]
 }
 
+// The lights on a rack's front (a pair of LEDs to every unit, blinking at their own pace) and the test machine's three.
+const rackLights = ({ x, y = 0, face }) =>
+  face === 'up'
+    ? []
+    : [0, 1, 2, 3].flatMap(unit => {
+        const uy = 2 + unit * 4
+        const color = [leaf[3], light[3], leaf[3], brick[2]][(unit + x + y) % 4]
+        return [
+          { x: 4, y: uy + 1, w: 1, h: 1, pattern: 'fast', on: color, off: metal[1] },
+          { x: 11, y: uy + 1, w: 1, h: 1, pattern: unit % 2 ? 'slow' : 'double', on: [light[3], leaf[3], brick[2], glass[3]][unit], off: metal[1] },
+        ]
+      })
+const machineLights = () => [
+  { x: 4, y: 17, w: 2, h: 2, pattern: 'slow', on: leaf[3], off: metal[0] },
+  { x: 8, y: 17, w: 2, h: 2, pattern: 'fast', on: light[3], off: metal[0] },
+  { x: 12, y: 17, w: 2, h: 2, pattern: 'double', on: brick[2], off: metal[0] },
+]
+
 export const backroomArts = {
   shelf: { under: false, ops: shelfOps },
-  machine: { under: false, ops: machineOps },
+  machine: { under: false, ops: machineOps, lights: machineLights },
   labbench: { under: false, ops: labBenchOps },
-  rack: { under: false, rise: RACK_RISE, ops: rackOps },
+  rack: { under: false, rise: RACK_RISE, ops: rackOps, lights: rackLights },
   cubicle: { under: false, ops: cubicleOps },
   urinal: { under: false, ops: urinalOps },
   vanity: { under: false, ops: vanityOps },

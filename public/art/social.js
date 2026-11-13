@@ -129,14 +129,14 @@ const deckRailOps = ({ w, h }) => {
 }
 
 export const socialArts = {
-  tv: { under: false, ops: tvOps },
+  tv: { under: false, ops: tvOps, lights: ({ h }) => [{ x: 6, y: 6, w: 1, h: h * TILE - 18, pattern: 'cycle', on: glass[2], colors: [glass[2], glass[3], plaster[3], light[2], leaf[2]] }] }, // the picture changes
   pingpong: { under: false, ops: pingPongOps },
-  vending: { under: false, rise: VENDING_RISE, ops: vendingOps },
+  vending: { under: false, rise: VENDING_RISE, ops: vendingOps, lights: () => [{ x: 4, y: 3, w: 8, h: 1, pattern: 'flicker', on: light[3], off: light[1] }, { x: 5, y: VENDING_RISE + 12, w: 1, h: 1, pattern: 'slow', on: light[3], off: metal[2] }] }, // the sign and a button
   cooler: { under: false, ops: coolerOps },
   bin: { under: false, ops: binOps },
   counter: { under: false, ops: counterOps },
   sink: { under: false, ops: sinkOps },
-  coffeebar: { under: false, ops: coffeeBarOps },
+  coffeebar: { under: false, ops: coffeeBarOps, lights: () => [{ x: 5, y: 2, w: 2, h: 1, pattern: 'slow', on: light[3], off: brick[2] }] }, // the machine's ready light
   island: { under: false, ops: islandOps },
   stool: { under: true, ops: stoolOps },
   fridge: { under: false, ops: fridgeOps },

@@ -77,8 +77,14 @@ const ARTS = {
 export const itemsOf = layout =>
   layout.furniture.map(item => {
     const art = ARTS[item.kind] ?? { under: false, ops: () => boxOps(item, '#888780') }
-    return { ...item, under: art.under, rise: art.rise ?? 0, ops: art.ops(item) }
+    return { ...item, under: art.under, rise: art.rise ?? 0, ops: art.ops(item), lights: art.lights?.(item) ?? [] }
   })
+
+// the lights that are not on a piece of furniture: a blinking sensor over each sliding door, in plan pixels
+export const doorLights = layout =>
+  layout.doors
+    .filter(door => door.kind === 'sliding')
+    .map(door => ({ x: door.x * TILE + (door.w * TILE) / 2 - 1, y: door.y * TILE + 3, w: 2, h: 1, pattern: 'slow', on: shade('light', 3), off: shade('brick', 2) }))
 
 // paints a list of rectangles with its corner at (x, y)
 export const paint = (ctx, ops, x = 0, y = 0) => {
