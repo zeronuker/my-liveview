@@ -104,11 +104,11 @@ const fridgeOps = () => [
   r(1, 18, 14, 1, frost[1]), r(11, 9, 1, 7, metal[2]), r(11, 20, 1, 9, metal[2]), r(1, 31, 14, 1, frost[0]), // the two doors and their handles
 ]
 
-// a round café table, two tiles across, with a cup on it
+// a round café table, one tile across, with a cup on it
 const cafeTableOps = () => [
-  r(15, 17, 2, 12, metal[1]), r(10, 29, 12, 2, metal[0]), // the pole and the foot
-  ...ellipseOps(16, 16, 14, 11, metal[1]), ...ellipseOps(16, 15, 14, 11, plaster[3]), ...ellipseOps(11, 10, 5, 3, plaster[3]),
-  r(18, 12, 4, 3, brick[2]), r(18, 12, 4, 1, brick[3]), r(22, 13, 1, 1, brick[2]), // a cup
+  r(7, 9, 2, 5, metal[1]), r(5, 14, 6, 2, metal[0]), // the pole and the foot
+  ...ellipseOps(8, 7, 7, 5, metal[1]), ...ellipseOps(8, 6, 7, 5, plaster[3]), ...ellipseOps(5, 4, 2, 1, plaster[2]),
+  r(9, 4, 3, 2, brick[2]), r(9, 4, 3, 1, brick[3]), r(12, 5, 1, 1, brick[2]), // a cup
 ]
 
 // a wooden railing along the edge of the deck: a rail and posts, with balusters

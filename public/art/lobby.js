@@ -28,13 +28,14 @@ const receptionOps = ({ w, h }) => {
   ]
 }
 
+// a round coffee table, one tile (about a metre) across
 const coffeeTableOps = () => {
   const wood = RAMPS.wood
   return [
-    ...ellipseOps(16, 16, 15, 13, wood[0]), ...ellipseOps(16, 15, 14, 12, wood[2]), ...ellipseOps(11, 10, 6, 3, wood[3]), // the round top, lit top-left
-    r(8, 12, 8, 5, RAMPS.brick[2]), r(8, 12, 8, 1, RAMPS.brick[3]), r(9, 14, 6, 1, RAMPS.plaster[3]), // a magazine
-    r(13, 15, 8, 5, RAMPS.glass[2]), r(13, 15, 8, 1, RAMPS.glass[3]), // and another
-    r(22, 10, 3, 5, RAMPS.plaster[2]), r(22, 10, 3, 1, RAMPS.plaster[3]), ...ellipseOps(23.5, 9, 3, 2, RAMPS.leaf[2]), // a small vase with a leaf
+    ...ellipseOps(8, 9, 7, 6, wood[0]), ...ellipseOps(8, 8, 7, 6, wood[2]), ...ellipseOps(6, 6, 3, 2, wood[3]), // the round top, lit top-left
+    r(4, 7, 4, 3, RAMPS.brick[2]), r(4, 7, 4, 1, RAMPS.brick[3]), // a magazine
+    r(8, 8, 4, 3, RAMPS.glass[2]), r(8, 8, 4, 1, RAMPS.glass[3]), // and another
+    r(10, 4, 2, 3, RAMPS.plaster[2]), r(10, 4, 2, 1, RAMPS.plaster[3]), r(10, 3, 2, 1, RAMPS.leaf[2]), // a small vase with a leaf
   ]
 }
 

@@ -99,8 +99,8 @@ test('an office chair is drawn for each way it can face', () => {
 
 test('every kind of furniture in the social wing is drawn, at every size it is used, inside its cells, with palette colours', () => {
   const sizes = {
-    tv: [[1, 4], [1, 3]], pingpong: [[3, 2]], vending: [[1, 1]], cooler: [[1, 1]], bin: [[1, 1]], counter: [[2, 1]], sink: [[2, 1]], coffeebar: [[2, 1]],
-    island: [[3, 1]], stool: [[1, 1]], fridge: [[1, 2]], cafetable: [[2, 2]], deckrail: [[10, 1], [1, 5], [1, 3], [1, 1]],
+    tv: [[1, 2]], pingpong: [[3, 2]], vending: [[1, 1]], cooler: [[1, 1]], bin: [[1, 1]], counter: [[2, 1]], sink: [[2, 1]], coffeebar: [[2, 1]],
+    island: [[3, 1]], stool: [[1, 1]], fridge: [[1, 2]], cafetable: [[1, 1]], deckrail: [[10, 1], [1, 5], [1, 3], [1, 1]],
   }
   assert.deepEqual(Object.keys(socialArts).sort(), Object.keys(sizes).sort())
   for (const [kind, list] of Object.entries(sizes))
@@ -116,7 +116,7 @@ test('every piece of furniture in the back rooms is drawn, at every size it is u
 
 test('the CEO desk and the drinks cabinet are drawn inside their cells with palette colours, and the suite\'s furniture is in leather', () => {
   assert.deepEqual(Object.keys(ceoArts).sort(), ['cabinet', 'ceodesk'])
-  checkOps(ceoArts.ceodesk.ops({ kind: 'ceodesk', x: 25, y: 4, w: 6, h: 1, face: 'down' }), 6 * TILE, TILE, 'the CEO desk')
+  checkOps(ceoArts.ceodesk.ops({ kind: 'ceodesk', x: 26, y: 4, w: 3, h: 1, face: 'down' }), 3 * TILE, TILE, 'the CEO desk')
   checkOps(ceoArts.cabinet.ops({ kind: 'cabinet', x: 22, y: 2, w: 2, h: 1 }), 2 * TILE, TILE, 'the drinks cabinet')
   const plain = commonArts.chair.ops({ w: 1, h: 1, face: 'down' })
   const leather = commonArts.chair.ops({ w: 1, h: 1, face: 'down', tone: 'leather' })

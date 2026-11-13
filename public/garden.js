@@ -3,15 +3,17 @@
 // scenery.js bakes it into the ground. Nothing here is walked on by the Office's people (the grass is solid
 // in the studio's grid), so it only has to keep clear of the building.
 //
-// A tree is named by its trunk cell: its crown fills the box one tile either side of it and two tiles above.
+// A tree is named by its trunk cell. A small tree ('round' or 'pine', for the narrow edges) has a crown filling the box one
+// tile either side of it and two tiles above; a big one ('biground' or 'bigpine', the size trees really are next to a
+// building) fills the box two tiles either side and four above.
 
 const TREES = [
   // the lawn at the top left, and the west edge
-  ['round', 7, 5], ['pine', 10, 8], ['round', 2, 5], ['pine', 2, 8], ['round', 2, 21], ['pine', 3, 27], ['round', 2, 34],
+  ['biground', 4, 7], ['bigpine', 9, 8], ['round', 2, 21], ['pine', 3, 27], ['round', 2, 34],
   // the lawn in front of the lobby
-  ['pine', 3, 41], ['pine', 3, 46], ['round', 9, 47], ['round', 16, 48], ['pine', 5, 52], ['round', 12, 52], ['pine', 19, 52],
+  ['pine', 3, 41], ['pine', 3, 46], ['biground', 9, 50], ['bigpine', 16, 52], ['pine', 5, 52], ['pine', 21, 52],
   // the east edge, and the bottom right
-  ['round', 46, 5], ['pine', 47, 11], ['round', 45, 17], ['pine', 46, 24], ['round', 45, 31], ['pine', 47, 37], ['round', 47, 43], ['round', 48, 48], ['pine', 47, 52],
+  ['biground', 45, 6], ['bigpine', 46, 13], ['biground', 45, 21], ['bigpine', 46, 29], ['biground', 45, 37], ['bigpine', 47, 43], ['round', 48, 48], ['pine', 47, 52],
 ]
 
 export const buildGarden = layout => {
@@ -29,18 +31,24 @@ export const buildGarden = layout => {
       { x: 23, y: 50, w: 1, h: 3 }, { x: 26, y: 50, w: 1, h: 3 }, // either side of the path to the gate
     ],
     trees: TREES.map(([kind, x, y]) => ({ kind, x, y })),
-    bushes: [[6, 41], [10, 41], [11, 41], [14, 43], [22, 53], [27, 53], [44, 22], [43, 35]].map(([x, y]) => ({ x, y })),
+    bushes: [[6, 41], [10, 41], [11, 41], [14, 43], [22, 53], [27, 53], [44, 22], [43, 31]].map(([x, y]) => ({ x, y })),
     rocks: [[27, 50], [29, 52], [43, 51], [45, 45], [44, 42]].map(([x, y]) => ({ x, y })),
     // the pets, where each starts: the cat on the east strip, the dog and the chickens on the lawn at the front left
-    pets: [['cat', 43, 20], ['dog', 10, 50], ['chicken', 6, 45], ['chicken', 7, 44], ['chicken', 6, 47]].map(([kind, x, y]) => ({ kind, x, y })),
+    pets: [['cat', 42, 26], ['dog', 13, 45], ['chicken', 6, 45], ['chicken', 7, 44], ['chicken', 6, 47]].map(([kind, x, y]) => ({ kind, x, y })),
   }
 }
 
 // a cell that is in a room, or in the wall one cell round a room
 export const nearBuilding = (layout, x, y) => layout.rooms.some(room => x >= room.x - 1 && x <= room.x + room.w && y >= room.y - 1 && y <= room.y + room.h)
 
-// the cells of a tree's crown and trunk: one tile either side of the trunk and two above it
-const treeCells = tree => Array.from({ length: 9 }, (_, i) => [tree.x - 1 + (i % 3), tree.y - 2 + Math.floor(i / 3)])
+// how many tiles across (and high) a tree's crown box is
+export const treeSize = tree => (tree.kind.startsWith('big') ? 5 : 3)
+
+// the cells of a tree's crown and trunk
+export const treeCells = tree => {
+  const n = treeSize(tree)
+  return Array.from({ length: n * n }, (_, i) => [tree.x - (n - 1) / 2 + (i % n), tree.y - (n - 1) + Math.floor(i / n)])
+}
 
 // where the pets may walk, as a grid like the studio's ('#' is in the way): the grass inside the fence that is
 // not the building, the pond, a tree, a bush, a rock or a flower bed

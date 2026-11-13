@@ -3,6 +3,7 @@
 // ['r', x, y, w, h, colour] in pixels, palette colours only, light from the top-left. `gardenLowOps` is
 // what lies on the ground (under the building's shell); `gardenHighOps` is what stands up (over it).
 import { RAMPS } from '../palette.js'
+import { treeSize } from '../garden.js'
 import { ellipseOps, hash, ringOps } from '../pixel.js'
 import { floorTileOps } from './shell.js'
 
@@ -22,32 +23,48 @@ export const flowerOps = h => {
 
 // ---- standing things, each in its own box of pixels ----
 
-// a round tree, 3 tiles by 3: a shadow, a trunk and a crown of leaf clusters, light from the top left
-const roundTreeOps = ({ x, y }, tint) => {
-  const ops = [...ellipseOps(26, 45, 15, 3, grass[0]), r(19, 43, 10, 2, wood[0]), r(21, 30, 6, 14, wood[1]), r(21, 30, 2, 14, wood[2]), r(26, 31, 1, 13, wood[0])]
-  ops.push(...ellipseOps(24, 19, 22, 17, tint[0]), ...ellipseOps(24, 19, 21, 16, tint[1]), ...ellipseOps(22, 17, 17, 12, tint[2]), ...ellipseOps(16, 11, 8, 5, tint[3]))
-  for (let i = 0; i < 12; i++) {
+// A round tree: a shadow, a trunk and a crown of leaf clusters, light from the top left. Drawn in a box of 3 tiles by 3 and,
+// with `k` of 5/3, a big one in a box of 5 by 5 (every measure scaled).
+const roundTreeOps = ({ x, y }, tint, k = 1) => {
+  const S = n => Math.max(1, Math.round(n * k))
+  const ops = [...ellipseOps(S(26), S(45), S(15), S(3), grass[0]), r(S(19), S(43), S(10), S(2), wood[0]), r(S(21), S(30), S(6), S(14), wood[1]), r(S(21), S(30), S(2), S(14), wood[2]), r(S(26), S(31), S(1), S(13), wood[0])]
+  ops.push(...ellipseOps(S(24), S(19), S(22), S(17), tint[0]), ...ellipseOps(S(24), S(19), S(21), S(16), tint[1]), ...ellipseOps(S(22), S(17), S(17), S(12), tint[2]), ...ellipseOps(S(16), S(11), S(8), S(5), tint[3]))
+  for (let i = 0; i < Math.round(12 * k * k); i++) {
     const h = hash(x * 7 + i, y * 3 + i * 5)
-    const [px, py] = [7 + (h % 32), 7 + ((h >>> 6) % 24)]
-    if (((px - 24) / 19) ** 2 + ((py - 19) / 14) ** 2 > 0.8) continue
-    ops.push(r(px, py, 4, 2, tint[1]), r(px, py, 4, 1, tint[3]))
+    const [px, py] = [S(7) + (h % S(32)), S(7) + ((h >>> 6) % S(24))]
+    if (((px - S(24)) / S(19)) ** 2 + ((py - S(19)) / S(14)) ** 2 > 0.8) continue
+    ops.push(r(px, py, S(4), S(2), tint[1]), r(px, py, S(4), 1, tint[3]))
   }
   return ops
 }
 
-// a pine, 3 tiles by 3: three tiers of needles, widest at the bottom, on a short trunk
-const pineOps = () => {
-  const ops = [...ellipseOps(26, 45, 14, 3, grass[0]), r(22, 37, 4, 8, wood[1]), r(22, 37, 1, 8, wood[2]), r(25, 38, 1, 7, wood[0])]
+// A pine: three tiers of needles, widest at the bottom, on a short trunk. The same boxes and scale as the round tree.
+const pineOps = (_, k = 1) => {
+  const S = n => Math.max(1, Math.round(n * k))
+  const ops = [...ellipseOps(S(26), S(45), S(14), S(3), grass[0]), r(S(22), S(37), S(4), S(8), wood[1]), r(S(22), S(37), S(1), S(8), wood[2]), r(S(25), S(38), S(1), S(7), wood[0])]
+  const rows = S(15)
   for (const tier of [2, 1, 0]) {
-    const top = 2 + tier * 11
-    for (let i = 0; i < 15; i++) {
-      const half = Math.floor((2 + Math.round((i / 14) * (14 + tier * 4))) / 2)
-      ops.push(r(24 - half, top + i, half * 2, 1, i === 14 ? leaf[0] : leaf[1]))
-      ops.push(r(24 - half, top + i, Math.min(2, half), 1, leaf[2]), r(24 + half - Math.min(2, half), top + i, Math.min(2, half), 1, leaf[0]))
+    const top = S(2 + tier * 11)
+    for (let i = 0; i < rows; i++) {
+      const half = Math.floor((S(2) + Math.round((i / (rows - 1)) * (S(14) + tier * S(4)))) / 2)
+      ops.push(r(S(24) - half, top + i, half * 2, 1, i === rows - 1 ? leaf[0] : leaf[1]))
+      ops.push(r(S(24) - half, top + i, Math.min(S(2), half), 1, leaf[2]), r(S(24) + half - Math.min(S(2), half), top + i, Math.min(S(2), half), 1, leaf[0]))
     }
-    ops.push(r(21, top + 3, 3, 1, leaf[3]))
+    ops.push(r(S(21), top + S(3), S(3), 1, leaf[3]))
   }
   return ops
+}
+
+const BIG = 5 / 3 // a big tree is this much bigger than a small one
+// the picture of a tree, by its kind
+const treeOps = tree => {
+  const tint = hash(tree.x, tree.y) % 2 ? leaf : grass
+  switch (tree.kind) {
+    case 'pine': return pineOps(tree)
+    case 'bigpine': return pineOps(tree, BIG)
+    case 'biground': return roundTreeOps(tree, tint, BIG)
+    default: return roundTreeOps(tree, tint)
+  }
 }
 
 // a bush, one tile
@@ -146,7 +163,7 @@ export const gardenLowOps = (garden, frame = 0) => {
 // over the shell.
 export const gardenHighOps = garden => {
   const standing = [
-    ...garden.trees.map(t => ({ key: t.y, ops: moved(t.kind === 'pine' ? pineOps(t) : roundTreeOps(t, hash(t.x, t.y) % 2 ? leaf : grass), (t.x - 1) * TILE, (t.y - 2) * TILE) })),
+    ...garden.trees.map(t => ({ key: t.y, ops: moved(treeOps(t), (t.x - (treeSize(t) - 1) / 2) * TILE, (t.y - (treeSize(t) - 1)) * TILE) })),
     ...garden.bushes.map(b => ({ key: b.y, ops: moved(bushOps(b), b.x * TILE, b.y * TILE) })),
     ...garden.rocks.map(k => ({ key: k.y, ops: moved(rockOps(), k.x * TILE, k.y * TILE) })),
   ]
@@ -158,6 +175,8 @@ export const gardenParts = {
   roundTree: { ops: roundTreeOps({ x: 2, y: 5 }, leaf), w: 3 * TILE, h: 3 * TILE },
   lightTree: { ops: roundTreeOps({ x: 2, y: 5 }, grass), w: 3 * TILE, h: 3 * TILE },
   pine: { ops: pineOps(), w: 3 * TILE, h: 3 * TILE },
+  bigRoundTree: { ops: roundTreeOps({ x: 2, y: 5 }, leaf, BIG), w: 5 * TILE, h: 5 * TILE },
+  bigPine: { ops: pineOps({}, BIG), w: 5 * TILE, h: 5 * TILE },
   bush: { ops: bushOps({ x: 6, y: 41 }), w: TILE, h: TILE },
   rock: { ops: rockOps(), w: TILE, h: TILE },
   bed: { ops: bedOps({ x: 26, y: 42, w: 4, h: 2 }), w: 4 * TILE, h: 2 * TILE },

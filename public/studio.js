@@ -131,13 +131,13 @@ export const buildStudio = () => {
   block('tray', 18, 29)
 
   // the CEO's desk, and the leather chair behind it
-  block('ceodesk', 25, 4, 6, 1, 'down')
+  block('ceodesk', 26, 4, 3, 1, 'down')
   lay('chair', 27, 3, 1, 1, 'down', 'leather')
   // the rest of the CEO office: two visitor chairs facing the desk, a leather sofa with a coffee table in front of it,
   // shelves on the west wall, a drinks cabinet under the windows, and plants. The doors' floor cells stay clear.
   for (const x of [25, 28]) block('chair', x, 6, 1, 1, 'up', 'fabricWarm')
   block('sofa', 25, 9, 4, 1, 'up', 'leather')
-  block('coffeetable', 26, 7, 2, 2)
+  block('coffeetable', 27, 8)
   block('shelf', 21, 3, 1, 4)
   block('cabinet', 22, 2, 2, 1)
   for (const [x, y] of [[21, 2], [32, 2], [32, 9], [21, 9]]) block('plant', x, y)
@@ -148,7 +148,7 @@ export const buildStudio = () => {
   // the small conference room: a table with three chairs a side, a TV on the east wall, plants
   block('boardtable', 15, 5, 3, 2)
   for (let x = 15; x < 18; x++) lay('chair', x, 4, 1, 1, 'down'), lay('chair', x, 7, 1, 1, 'up')
-  block('tv', 19, 3, 1, 3)
+  block('tv', 19, 4, 1, 2)
   for (const [x, y] of [[13, 2], [13, 9]]) block('plant', x, y)
 
   // the file room: shelves down the sides, an aisle between
@@ -171,19 +171,19 @@ export const buildStudio = () => {
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) seats.push({ x: i, y: j, face })
   }
   // the social hub: a sofa and two armchairs round a coffee table, facing the TV on the east wall
-  sofa(34, 24, 1, 4, 'right', 'sofa', 'terracotta')
-  sofa(36, 23, 1, 1, 'down', 'armchair', 'sage')
-  sofa(36, 28, 1, 1, 'up', 'armchair', 'slate')
-  block('coffeetable', 36, 25, 2, 2)
-  block('tv', 40, 24, 1, 4)
+  sofa(34, 24, 1, 3, 'right', 'sofa', 'terracotta')
+  sofa(36, 24, 1, 1, 'down', 'armchair', 'sage')
+  sofa(36, 26, 1, 1, 'up', 'armchair', 'slate')
+  block('coffeetable', 36, 25)
+  block('tv', 40, 25, 1, 2)
   block('pingpong', 28, 21, 3, 2)
   for (const [x, y] of [[40, 20], [40, 31], [27, 31]]) block('plant', x, y)
-  sofa(35, 37, 4, 1, 'up', 'sofa', 'fabricWarm') // the lounge
-  sofa(6, 35, 1, 4, 'right')
-  sofa(8, 38, 4, 1, 'up', 'sofa', 'slate')
+  sofa(36, 37, 3, 1, 'up', 'sofa', 'fabricWarm') // the lounge
+  sofa(6, 36, 1, 2, 'right')
+  sofa(9, 38, 2, 1, 'up', 'sofa', 'slate')
   sofa(14, 35, 1, 1, 'left', 'armchair', 'sage')
   sofa(14, 38, 1, 1, 'left', 'armchair', 'periwinkle')
-  block('coffeetable', 9, 36, 2, 2)
+  block('coffeetable', 10, 37)
   block('sidetable', 14, 36) // with a lamp, between the armchairs
   for (const [x, y] of [[6, 34], [6, 39], [13, 34], [21, 35], [16, 40]]) block('plant', x, y)
   block('coatstand', 21, 41) // by the front doors
@@ -204,7 +204,7 @@ export const buildStudio = () => {
   // the meeting room: a board table with five chairs a side, a TV on the east wall, plants, and a whiteboard
   block('boardtable', 28, 13, 5, 2)
   for (let x = 28; x < 33; x++) lay('chair', x, 12, 1, 1, 'down'), lay('chair', x, 15, 1, 1, 'up')
-  block('tv', 35, 13, 1, 3)
+  block('tv', 35, 14, 1, 2)
   for (const [x, y] of [[26, 11], [35, 11]]) block('plant', x, y)
   // the vending area: three machines, a water cooler and a bin
   for (const x of [28, 29, 30]) block('vending', x, 33)
@@ -221,7 +221,7 @@ export const buildStudio = () => {
   block('fridge', 37, 39, 1, 2)
   for (const [x, y] of [[40, 35], [27, 40]]) block('plant', x, y)
   // the terrace: two tables with chairs, plants, and a railing round the deck's edge
-  for (const x of [33, 37]) block('cafetable', x, 43, 2, 2)
+  for (const x of [34, 38]) block('cafetable', x, 44)
   for (const [x, y, face] of [[32, 43, 'right'], [35, 44, 'left'], [36, 43, 'right'], [39, 44, 'left']]) lay('chair', x, y, 1, 1, face)
   for (const [x, y] of [[31, 42], [40, 42]]) block('plant', x, y)
   block('deckrail', 31, 47, 10, 1)

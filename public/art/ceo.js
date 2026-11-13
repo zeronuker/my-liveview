@@ -9,11 +9,23 @@ const [wood, metal, plaster, glass, brick, leaf, light, leather] = [
   RAMPS.wood, RAMPS.metal, RAMPS.plaster, RAMPS.glass, RAMPS.brick, RAMPS.leaf, RAMPS.light, RAMPS.leather,
 ]
 
-// The CEO's desk, six tiles by one, for someone sitting north of it: dark wood with a drawer pedestal at each
-// end and a brass nameplate on the front, three monitors seen from behind, a leather blotter with a
-// keyboard, a green lamp, a pile of papers and a mug.
+// The CEO's desk, three tiles by one (about two metres), for someone sitting north of it: dark wood with a drawer pedestal
+// at each end and a brass nameplate on the front, two monitors seen from behind, a leather blotter with a keyboard, a
+// green lamp and a pile of papers.
 const ceoDeskOps = ({ w }) => {
   const W = w * TILE
+  if (W < 64)
+    return [
+      r(0, 0, W, 10, wood[1]), r(0, 0, W, 1, wood[2]), r(0, 0, 1, 10, wood[2]), r(W - 1, 1, 1, 9, wood[0]), // the top
+      r(0, 10, W, 6, wood[0]), r(0, 10, W, 1, wood[1]), // the front
+      r(2, 11, 13, 4, wood[1]), r(2, 11, 13, 1, wood[2]), r(7, 13, 3, 1, light[2]), r(W - 15, 11, 13, 4, wood[1]), r(W - 15, 11, 13, 1, wood[2]), r(W - 10, 13, 3, 1, light[2]), // a pedestal of drawers at each end
+      r(W / 2 - 6, 12, 12, 3, light[1]), r(W / 2 - 6, 12, 12, 1, light[3]), r(W / 2 - 4, 13, 3, 1, wood[0]), r(W / 2, 13, 4, 1, wood[0]), // the nameplate
+      r(W / 2 - 10, 0, 20, 3, leather[2]), r(W / 2 - 10, 0, 20, 1, leather[3]), r(W / 2 - 5, 1, 10, 2, plaster[2]), r(W / 2 - 5, 1, 10, 1, plaster[3]), // the blotter and keyboard
+      r(W / 2 - 15, 3, 14, 6, metal[1]), r(W / 2 - 15, 3, 14, 1, metal[2]), r(W / 2 - 15, 8, 14, 1, metal[0]), r(W / 2 - 9, 5, 2, 1, metal[2]), // the backs of two monitors
+      r(W / 2 + 1, 3, 14, 6, metal[1]), r(W / 2 + 1, 3, 14, 1, metal[2]), r(W / 2 + 1, 8, 14, 1, metal[0]), r(W / 2 + 7, 5, 2, 1, metal[2]),
+      r(2, 6, 4, 3, metal[1]), r(3, 3, 2, 3, metal[2]), r(1, 0, 6, 3, leaf[1]), r(1, 0, 6, 1, leaf[3]), // the lamp: base, stem, green shade
+      r(W - 6, 2, 5, 6, plaster[3]), r(W - 6, 2, 5, 1, plaster[2]), r(W - 5, 4, 3, 1, plaster[1]), // papers
+    ]
   const ops = [
     r(0, 0, W, 10, wood[1]), r(0, 0, W, 1, wood[2]), r(0, 0, 1, 10, wood[2]), r(W - 1, 1, 1, 9, wood[0]), // the top
     r(0, 10, W, 6, wood[0]), r(0, 10, W, 1, wood[1]), // the front

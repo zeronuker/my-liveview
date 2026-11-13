@@ -108,16 +108,15 @@ const fronds = (cx, cy, angles, length, droop) =>
     ),
   )
 
+// Their heights: a bush, a fern, a cactus and a snake plant are about a metre (11 to 13 pixels with the pot), the rubber
+// plant 1.3 m, the palm a person's height; the pot is 5 pixels of it.
 const PLANTS = [
-  { pot: RAMPS.brick, foliage: () => gridOps(PLANT.slice(0, 11), { o: leafO, d: leafD, g: leafG, l: leafL }) }, // bushy
-  { pot: RAMPS.plaster, foliage: () => fronds(8, 10, [165, 135, 105, 75, 45, 15], 7, 4) }, // a fern in a white pot
+  { pot: RAMPS.brick, foliage: () => [...ellipseOps(8, 8, 7, 5, leafO), ...ellipseOps(8, 8, 6, 4, leafD), ...ellipseOps(7, 7, 4, 3, leafG), r(4, 5, 3, 1, leafL), r(9, 6, 2, 1, leafL), r(11, 8, 1, 1, leafL)] }, // a bushy plant
+  { pot: RAMPS.plaster, foliage: () => fronds(8, 10, [165, 135, 105, 75, 45, 15], 5, 3) }, // a fern in a white pot
   { pot: RAMPS.metal, foliage: () => [r(7, 5, 2, 6, RAMPS.wood[2]), r(7, 5, 1, 6, RAMPS.wood[3]), r(8, 7, 1, 1, RAMPS.wood[1]), r(8, 9, 1, 1, RAMPS.wood[1]), ...fronds(8, 5, [170, 140, 110, 70, 40, 10], 7, 5)] }, // a palm in a grey pot
-  { pot: RAMPS.wood, wide: true, foliage: () => [3, 5, 7, 9, 11].flatMap((x, i) => { const h = [6, 9, 10, 8, 6][i]; return [r(x - 1, 11 - h - 1, 4, h + 2, leafO), r(x, 11 - h, 2, h, leafD), r(x, 11 - h, 1, h, leafG), r(x, 11 - h, 2, 1, leafL)] }) }, // a snake plant in a wooden planter
-  { pot: RAMPS.terracotta, foliage: () => [r(7, 3, 2, 8, RAMPS.wood[1]), ...blobs([[3, 4, 4], [10, 3, 4], [6, 1, 4], [2, 7, 3], [11, 7, 3]].map(([x, y, s]) => [x, y, s, leafD])), r(4, 5, 1, 1, leafL), r(11, 4, 1, 1, leafL), r(7, 2, 1, 1, leafL)] }, // a rubber plant in a terracotta pot
-  {
-    pot: RAMPS.slate,
-    foliage: () => [r(5, 1, 6, 10, leafO), r(6, 2, 4, 9, leafG), r(7, 2, 1, 9, leafL), r(2, 4, 4, 5, leafO), r(3, 5, 2, 3, leafG), r(10, 5, 4, 5, leafO), r(11, 6, 2, 3, leafG), r(7, 0, 2, 2, RAMPS.brick[2]), r(7, 0, 1, 1, RAMPS.brick[3])], // a cactus with two arms and a flower
-  },
+  { pot: RAMPS.wood, wide: true, foliage: () => [3, 5, 7, 9, 11].flatMap((x, i) => { const h = [4, 6, 7, 5, 4][i]; return [r(x - 1, 11 - h - 1, 4, h + 2, leafO), r(x, 11 - h, 2, h, leafD), r(x, 11 - h, 1, h, leafG), r(x, 11 - h, 2, 1, leafL)] }) }, // a snake plant in a wooden planter
+  { pot: RAMPS.terracotta, foliage: () => [r(7, 5, 2, 6, RAMPS.wood[1]), ...blobs([[3, 6, 3], [10, 5, 3], [6, 2, 4]].map(([x, y, s]) => [x, y, s, leafD])), r(4, 7, 1, 1, leafL), r(11, 6, 1, 1, leafL), r(7, 3, 1, 1, leafL)] }, // a rubber plant in a terracotta pot
+  { pot: RAMPS.slate, foliage: () => [r(5, 4, 6, 7, leafO), r(6, 5, 4, 6, leafG), r(7, 5, 1, 6, leafL), r(2, 6, 4, 4, leafO), r(3, 7, 2, 2, leafG), r(10, 7, 4, 3, leafO), r(11, 8, 2, 1, leafG), r(7, 3, 2, 2, RAMPS.brick[2]), r(7, 3, 1, 1, RAMPS.brick[3])] }, // a cactus with two arms and a flower
 ]
 
 const plantOps = ({ x, y }) => {

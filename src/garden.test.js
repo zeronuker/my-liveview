@@ -3,7 +3,7 @@ import { test } from 'node:test'
 
 import { flowerOps, gardenHighOps, gardenLowOps, gardenParts, pondOps } from '../public/art/garden.js'
 import { PET_STATES, petSprite } from '../public/art/pets.js'
-import { buildGarden, inPond, nearBuilding as near, roamGrid } from '../public/garden.js'
+import { buildGarden, inPond, nearBuilding as near, roamGrid, treeCells, treeSize } from '../public/garden.js'
 import { inPalette } from '../public/palette.js'
 import { createPets } from '../public/pets.js'
 import { buildStudio } from '../public/studio.js'
@@ -32,11 +32,7 @@ const seeded = seed => () => {
   return seed / 2 ** 32
 }
 
-const boxOf = tree => {
-  const cells = []
-  for (let y = tree.y - 2; y <= tree.y; y++) for (let x = tree.x - 1; x <= tree.x + 1; x++) cells.push([x, y])
-  return cells
-}
+const boxOf = tree => treeCells(tree)
 
 test('the garden is the same every time, and the plan has room for it', () => {
   assert.deepEqual(buildGarden(buildStudio()), garden)
@@ -107,7 +103,8 @@ test('every pet starts on free grass, there is plenty of grass, and trees, water
     assert.equal(grid[pet.y][pet.x], '.', `${pet.kind} at ${pet.x},${pet.y} is not on free grass`)
   }
   assert.ok(grid.join('').split('.').length > 400, 'there is grass to wander on')
-  for (const tree of garden.trees) for (const [x, y] of [[tree.x, tree.y], [tree.x - 1, tree.y - 2], [tree.x + 1, tree.y]]) assert.equal(grid[y][x], '#', `a tree at ${x},${y}`)
+  for (const tree of garden.trees) for (const [x, y] of treeCells(tree)) assert.equal(grid[y][x], '#', `a tree at ${x},${y}`)
+  assert.ok(garden.trees.some(tree => treeSize(tree) === 5) && garden.trees.some(tree => treeSize(tree) === 3), 'big trees and small ones')
   for (const [x, y] of [[26, 45], [36, 47], [30, 10]]) assert.equal(grid[y][x], '#', `water or building at ${x},${y}`)
 })
 
