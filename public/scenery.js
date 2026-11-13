@@ -12,6 +12,7 @@ import { commonArts, decalOps } from './art/common.js'
 import { lobbyArts } from './art/lobby.js'
 import { officeArts } from './art/office.js'
 import { shellOps } from './art/shell.js'
+import { socialArts } from './art/social.js'
 import { ramp, shade } from './palette.js'
 import { hash } from './pixel.js'
 
@@ -73,10 +74,7 @@ const boxOps = ({ w, h }, color) => {
   return [r(0, 0, w * TILE, h * TILE, base), r(0, 0, w * TILE, 3, light), r(0, h * TILE - 3, w * TILE, 2, mid), r(0, h * TILE - 1, w * TILE, 1, dark)]
 }
 
-const COLORS = {
-  machine: '#4a4f63', table: '#9a6b3f', tv: '#3c3c56', rack: '#2c2c3a', stall: '#d8d6cc',
-  vending: '#e24b4a', cooler: '#6faed6', island: '#b98a5a', counter: '#8d4c2a',
-}
+const COLORS = { machine: '#4a4f63', table: '#9a6b3f', rack: '#2c2c3a', stall: '#d8d6cc' }
 
 // what to draw for each kind of furniture; `under` things are drawn below the
 // people (a chair, a sofa sat on), the rest are in front of whoever is behind them
@@ -86,6 +84,7 @@ const ARTS = {
   ...commonArts,
   ...lobbyArts,
   ...officeArts,
+  ...socialArts,
 }
 
 // every piece of furniture in the plan with its art, in the item's own pixels

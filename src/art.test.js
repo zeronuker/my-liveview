@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import { commonArts, decalOps } from '../public/art/common.js'
 import { lobbyArts } from '../public/art/lobby.js'
 import { deskOnOps, officeArts } from '../public/art/office.js'
+import { socialArts } from '../public/art/social.js'
 import { inPalette } from '../public/palette.js'
 import { ellipseOps, glowOps, gridOps, ringOps } from '../public/pixel.js'
 import { itemsOf } from '../public/scenery.js'
@@ -49,7 +50,7 @@ test('a pool of light is a dither: thicker inside, sparser towards the edge, and
 })
 
 test('every piece of furniture drawn by the lobby and common art fits its size and uses only the palette', () => {
-  const kinds = new Set([...Object.keys(commonArts), ...Object.keys(lobbyArts), ...Object.keys(officeArts)])
+  const kinds = new Set([...Object.keys(commonArts), ...Object.keys(lobbyArts), ...Object.keys(officeArts), ...Object.keys(socialArts)])
   const items = itemsOf(layout).filter(item => kinds.has(item.kind))
   assert.ok(items.length >= 12)
   for (const item of items) checkOps(item.ops, item.w * TILE, item.h * TILE, `${item.kind} at ${item.x},${item.y}`)
@@ -92,6 +93,28 @@ test('an office chair is drawn for each way it can face', () => {
   })
   assert.equal(new Set(looks).size, 4)
   assert.ok(commonArts.chair.under)
+})
+
+test('every kind of furniture in the social wing is drawn, at every size it is used, inside its cells, with palette colours', () => {
+  const sizes = {
+    tv: [[1, 4], [1, 3]], pingpong: [[3, 2]], vending: [[1, 1]], cooler: [[1, 1]], bin: [[1, 1]], counter: [[2, 1]], sink: [[2, 1]], coffeebar: [[2, 1]],
+    island: [[3, 1]], stool: [[1, 1]], fridge: [[1, 2]], cafetable: [[2, 2]], deckrail: [[10, 1], [1, 5], [1, 3], [1, 1]],
+  }
+  assert.deepEqual(Object.keys(socialArts).sort(), Object.keys(sizes).sort())
+  for (const [kind, list] of Object.entries(sizes))
+    for (const [w, h] of list) for (const x of [28, 29, 30]) checkOps(socialArts[kind].ops({ kind, x, y: 33, w, h }), w * TILE, h * TILE, `${kind} ${w} by ${h}`)
+})
+
+test('the three vending machines are not all the same colour, and the stools are under the people', () => {
+  assert.equal(new Set([28, 29, 30].map(x => JSON.stringify(socialArts.vending.ops({ x })))).size, 3)
+  assert.ok(socialArts.stool.under && !socialArts.vending.under)
+})
+
+test('a rug can be another colour, and the plan\'s rugs use colours of the palette', () => {
+  const rugs = [{ kind: 'rug', tone: 'periwinkle', x: 0, y: 0, w: 7, h: 6 }, { kind: 'rug', x: 0, y: 0, w: 7, h: 6 }]
+  const [a, b] = rugs.map(rug => decalOps({ rugs: [rug], lights: [] }))
+  assert.notDeepEqual(a, b)
+  assert.ok(layout.rugs.some(rug => rug.tone === 'periwinkle'))
 })
 
 test('the things on the floor (rugs, mats and light) fit the plan and use only the palette, the same every time', () => {

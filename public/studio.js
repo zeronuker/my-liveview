@@ -149,9 +149,15 @@ export const buildStudio = () => {
     lay(kind, x, y, w, h, face) // the way the people on it face is the way it faces
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) seats.push({ x: i, y: j, face })
   }
-  sofa(38, 24, 1, 4, 'right')
+  // the social hub: a sofa and two armchairs round a coffee table, facing the TV on the east wall
+  sofa(34, 24, 1, 4, 'right')
+  sofa(36, 23, 1, 1, 'down', 'armchair')
+  sofa(36, 28, 1, 1, 'up', 'armchair')
+  block('coffeetable', 36, 25, 2, 2)
   block('tv', 40, 24, 1, 4)
-  sofa(35, 37, 4, 1, 'up')
+  block('pingpong', 28, 21, 3, 2)
+  for (const [x, y] of [[40, 20], [40, 31], [27, 31]]) block('plant', x, y)
+  sofa(35, 37, 4, 1, 'up') // the lounge
   sofa(6, 35, 1, 4, 'right')
   sofa(8, 38, 4, 1, 'up')
   sofa(14, 35, 1, 1, 'left', 'armchair')
@@ -169,18 +175,45 @@ export const buildStudio = () => {
   block('table', 28, 14, 6, 1)
   block('tv', 35, 13, 1, 3)
   block('table', 15, 4, 3, 2)
-  block('vending', 28, 33, 3, 1)
+  // the vending area: three machines, a water cooler and a bin
+  for (const x of [28, 29, 30]) block('vending', x, 33)
   block('cooler', 33, 33)
-  block('vending', 28, 35, 2, 1)
+  block('bin', 35, 33)
+  // the lounge and pantry: two more machines, an island with stools, the counter along the south wall, a fridge
+  for (const x of [28, 29]) block('vending', x, 35)
   block('island', 31, 37, 3, 1)
-  block('counter', 29, 40, 8, 1)
+  for (const x of [31, 32, 33]) lay('stool', x, 38)
+  block('counter', 29, 40, 2, 1)
+  block('sink', 31, 40, 2, 1)
+  block('counter', 33, 40, 2, 1)
+  block('coffeebar', 35, 40, 2, 1)
+  block('fridge', 37, 39, 1, 2)
+  for (const [x, y] of [[40, 35], [27, 40]]) block('plant', x, y)
+  // the terrace: two tables with chairs, plants, and a railing round the deck's edge
+  for (const x of [33, 37]) block('cafetable', x, 43, 2, 2)
+  for (const [x, y, face] of [[32, 43, 'right'], [35, 44, 'left'], [36, 43, 'right'], [39, 44, 'left']]) lay('chair', x, y, 1, 1, face)
+  for (const [x, y] of [[31, 42], [40, 42]]) block('plant', x, y)
+  block('deckrail', 31, 47, 10, 1)
+  block('deckrail', 41, 42, 1, 5)
+  block('deckrail', 30, 42, 1, 3)
+  block('deckrail', 30, 46, 1, 1)
   block('reception', 17, 42, 3, 1) // reception: the long side, and the short arm
   block('reception', 19, 40, 1, 2)
 
   // things on the floor that are walked over: rugs and mats (a rug lies under the furniture on it), and
   // pools of light, in tiles from the middle (a lamp lights the floor round it)
-  const rugs = [{ kind: 'rug', x: 7, y: 35, w: 7, h: 4 }, { kind: 'mat', x: 24, y: 42, w: 2, h: 1 }]
-  const lights = [{ x: 10.5, y: 37, rx: 4.6, ry: 2.6 }, { x: 14.5, y: 36.5, rx: 1.6, ry: 1.6 }]
+  const rugs = [
+    { kind: 'rug', x: 7, y: 35, w: 7, h: 4 },
+    { kind: 'rug', tone: 'periwinkle', x: 33, y: 23, w: 7, h: 6 },
+    { kind: 'rug', tone: 'periwinkle', x: 34, y: 36, w: 6, h: 3 },
+    { kind: 'mat', x: 24, y: 42, w: 2, h: 1 },
+  ]
+  const lights = [
+    { x: 10.5, y: 37, rx: 4.6, ry: 2.6 },
+    { x: 14.5, y: 36.5, rx: 1.6, ry: 1.6 },
+    { x: 29.5, y: 22, rx: 2.6, ry: 2 }, // over the ping-pong table
+    { x: 32.5, y: 37.5, rx: 2.8, ry: 1.8 }, // over the island
+  ]
 
   // windows: on solid wall cells. A window one cell high is seen on the face of a wall that runs
   // east to west; one more than one cell high on the cap of a wall that runs north to south.

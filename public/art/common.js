@@ -79,7 +79,7 @@ export const commonArts = {
 }
 
 // a rug (an oval with a border and a ring of dots) or a doormat, in its own pixels
-const rugOps = ({ kind, w, h }) => {
+const rugOps = ({ kind, tone = 'terracotta', w, h }) => {
   const [W, H] = [w * TILE, h * TILE]
   if (kind === 'mat') {
     const wood = RAMPS.wood
@@ -87,7 +87,7 @@ const rugOps = ({ kind, w, h }) => {
     for (let x = 4; x < W - 3; x += 4) ops.push(r(x, 2, 1, H - 4, wood[3]))
     return ops
   }
-  const t = RAMPS.terracotta
+  const t = RAMPS[tone]
   const [cx, cy] = [W / 2, H / 2]
   return [
     ...ellipseOps(cx, cy, W / 2, H / 2, t[1]), // the outline
