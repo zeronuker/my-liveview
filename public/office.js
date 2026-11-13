@@ -259,7 +259,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
 
     // the pixel-art person, and the plain shapes for a pose that has no sprite
     // with less motion, a resting person stays in one frame; walking still walks
-    const sprite = spriteFor({ pose: p.pose, t: reduced && !walking ? 0 : t, id: p.id, kind: p.kind, color: p.color, dir: p.dir })
+    const sprite = spriteFor({ pose: p.pose, t: reduced && !walking ? 0 : t, id: p.id, kind: p.kind, color: p.color, dir: p.dir, still: reduced })
     let headTop = cy - tile * 0.5 // where a bubble goes
     if (sprite) headTop = drawSprite(sprite, p, cx, cy, tile)
     else {

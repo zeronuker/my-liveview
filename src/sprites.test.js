@@ -153,3 +153,31 @@ test('the manager has the tie from the front only, and glasses from the front an
   assert.equal(cells('right').includes(tie), false)
   assert.equal(cells('up').includes(tie), false)
 })
+
+test('people blink now and then, from the front and the side but never from behind, the same way every time; with less motion never', () => {
+  const eyesOpen = sprite => sprite.cells[4].some(color => color === '#20182a')
+  const sample = (dir, extra = {}) => Array.from({ length: 1200 }, (_, i) => spriteFor({ pose: 'idle', t: i / 20, id: 'w7', color: '#378add', dir, ...extra }))
+  const front = sample('down')
+  const closed = front.filter(s => !eyesOpen(s)).length / front.length
+  assert.ok(closed > 0.02 && closed < 0.1, `eyes shut ${closed} of the time`)
+  assert.ok(front.some(s => s.key.endsWith('|blink')))
+  assert.ok(sample('right').some(s => s.key.includes('|blink')), 'from the side')
+  assert.ok(!sample('up').some(s => s.key.includes('|blink')), 'not from behind')
+  assert.ok(!sample('down', { still: true }).some(s => s.key.includes('|blink')), 'not with less motion')
+  assert.deepEqual(sample('down').map(s => s.key), front.map(s => s.key))
+  assert.notDeepEqual(front.map(s => s.key.includes('|blink')), Array.from({ length: 1200 }, (_, i) => spriteFor({ pose: 'idle', t: i / 20, id: 'w8', color: '#378add' }).key.includes('|blink'))) // neighbours blink out of step
+})
+
+test('someone standing or sitting still sometimes scratches their head or stretches; no one busy, walking or seen from the side or behind does', () => {
+  const sample = (pose, dir = 'down', extra = {}) => Array.from({ length: 3000 }, (_, i) => spriteFor({ pose, t: i / 20, id: 'w3', color: '#378add', dir, ...extra }))
+  const idle = sample('idle')
+  const share = idle.filter(s => /\|(scratch|stretch)$/.test(s.key)).length / idle.length
+  assert.ok(share > 0.01 && share < 0.15, `fidgeting ${share} of the time`)
+  assert.ok(idle.some(s => s.key.endsWith('|scratch')) && idle.some(s => s.key.endsWith('|stretch')), 'both kinds')
+  assert.ok(idle.filter(s => s.key.endsWith('|stretch')).every(s => s.cells[3][0] && s.cells[3][11]), 'a stretch raises both arms')
+  assert.ok(sample('sit').some(s => /\|(scratch|stretch)$/.test(s.key)), 'seated too')
+  for (const pose of ['walk', 'type', 'read', 'give']) assert.ok(!sample(pose).some(s => /\|(scratch|stretch)$/.test(s.key)), pose)
+  assert.ok(!sample('idle', 'right').some(s => /\|(scratch|stretch)$/.test(s.key)), 'not from the side')
+  assert.ok(!sample('idle', 'up').some(s => /\|(scratch|stretch)$/.test(s.key)), 'not from behind')
+  assert.ok(!sample('idle', 'down', { still: true }).some(s => /\|(scratch|stretch)$/.test(s.key)), 'not with less motion')
+})

@@ -254,21 +254,51 @@ export const tint = (rows, { look, shirt, kind = 'worker', view = 'front' }) => 
   return dressed(rows, kind, view).map(row => row.map(letter => ink[letter] ?? null))
 }
 
+// Small signs of life, from the person's id and the time: every few seconds they blink (the eyes shut for a moment), and
+// every so often someone who is standing or sitting still scratches their head or stretches. Always the same for one
+// id; none of it with `still` (less motion).
+const BLINK_FOR = 0.15 // seconds the eyes are shut
+const FIDGET_FOR = 0.7 // seconds a fidget lasts
+const FIDGET_POSES = new Set(['idle', 'scan', 'sit']) // the poses of someone not busy with their hands
+const SCRATCH = HAND_UP
+const STRETCH = [...HAND_UP, [11, 3, 's'], [11, 4, 's'], [10, 5, 'B'], [10, 6, 'B']]
+
+export const isBlinking = (t, h) => (t + (h % 100) / 10) % (3 + (h % 30) / 10) < BLINK_FOR
+
+// 'scratch', 'stretch' or null: which fidget someone is in at a time
+export const fidgetOf = (t, h) => {
+  const period = 7 + ((h >>> 8) % 9)
+  const at = t + ((h >>> 4) % 50) / 5
+  if (at % period >= FIDGET_FOR) return null
+  return (Math.floor(at / period) + h) % 2 ? 'stretch' : 'scratch'
+}
+
+const withOverlay = (rows, overlay) => {
+  const grid = rows.map(row => [...row])
+  for (const [x, y, letter] of overlay) grid[y][x] = letter
+  return grid.map(row => row.join(''))
+}
+
 // Which frame someone is in: `t` is the time in seconds, `dir` which way they
 // face ('down', 'up', 'left', 'right'), and the id puts neighbours out of
 // step. Null for a pose with no sprite (the Office then draws a shape).
-export const spriteFor = ({ pose, t, id, kind = 'worker', color, dir = 'down' }) => {
+export const spriteFor = ({ pose, t, id, kind = 'worker', color, dir = 'down', still = false }) => {
   const def = POSES[pose]
   if (!def) return null
   const look = lookOf(id, kind)
   const view = viewOf(pose, dir)
   const frames = def.frames(view, look.head)
   const index = Math.floor(t / def.every + (look.h % 7)) % frames.length
+  let rows = frames[index]
+  const blink = !still && view !== 'back' && isBlinking(t, look.h)
+  const fidget = !still && view === 'front' && FIDGET_POSES.has(pose) ? fidgetOf(t, look.h) : null
+  if (blink) rows = rows.map(row => row.replace(/e/g, 'S'))
+  if (fidget) rows = withOverlay(rows, fidget === 'stretch' ? STRETCH : SCRATCH)
   return {
     width: WIDTH,
     height: HEIGHT,
-    cells: tint(frames[index], { look, shirt: color, kind, view }),
-    key: `${pose}${index}|${view}|${look.head}|${look.skin[0]}|${look.hair[0]}|${look.pants}|${color}|${kind}`,
+    cells: tint(rows, { look, shirt: color, kind, view }),
+    key: `${pose}${index}|${view}|${look.head}|${look.skin[0]}|${look.hair[0]}|${look.pants}|${color}|${kind}${blink ? '|blink' : ''}${fidget ? `|${fidget}` : ''}`,
   }
 }
 
