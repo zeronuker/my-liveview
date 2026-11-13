@@ -86,6 +86,20 @@ export const doorLights = layout =>
     .filter(door => door.kind === 'sliding')
     .map(door => ({ x: door.x * TILE + (door.w * TILE) / 2 - 1, y: door.y * TILE + 3, w: 2, h: 1, pattern: 'slow', on: shade('light', 3), off: shade('brick', 2) }))
 
+// a sparkle sweeping along the glass of every window and glass wall that runs east to west, in plan pixels: a row of one
+// pixel lights low in the pane, which flash in turn, each window out of step with the next
+export const windowLights = layout =>
+  layout.windows
+    .filter(win => win.w >= win.h)
+    .flatMap(win => {
+      const [x0, W] = [win.x * TILE, win.w * TILE]
+      const [y, glass] = win.kind === 'glass' ? [win.y * TILE + 12, shade('glass', 2)] : [win.y * TILE + 11, shade('glass', 2)]
+      const seed = hash(win.x, win.y) % 40
+      const lights = []
+      for (let x = x0 + 3; x < x0 + W - 3; x += 5) if (win.kind !== 'glass' || (x - x0) % TILE > 1) lights.push({ x, y, w: 1, h: 1, pattern: 'glint', seed, on: shade('glass', 3), off: glass })
+      return lights
+    })
+
 // paints a list of rectangles with its corner at (x, y)
 export const paint = (ctx, ops, x = 0, y = 0) => {
   for (const [, ox, oy, w, h, color] of ops) {

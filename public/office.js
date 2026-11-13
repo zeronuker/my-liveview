@@ -15,7 +15,7 @@ import { buildStudio } from './studio.js'
 import { deskOnOps } from './art/office.js'
 import { petSprite } from './art/pets.js'
 import { lightColor } from './lights.js'
-import { doorLights, groundOps, itemsOf, paint, TILE } from './scenery.js'
+import { doorLights, groundOps, itemsOf, paint, TILE, windowLights } from './scenery.js'
 import { carrySprite, spriteFor } from './sprites.js'
 
 const BUBBLES = { ok: '--afg', bad: '--dfg', ask: '--nfg', info: '--acc' }
@@ -122,7 +122,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   // two pictures of the ground, which differ only in the pond's water; shown in turn they make it move
   const grounds = [0, 1].map(frame => smallCanvas(layout.width * TILE, layout.height * TILE, groundOps(layout, frame)))
   // a desk has a second picture, for when someone is typing at it (its screen is lit)
-  const fixedLights = doorLights(layout)
+  const fixedLights = [...doorLights(layout), ...windowLights(layout)]
   const items = itemsOf(layout).map(item => ({
     ...item,
     image: smallCanvas(item.w * TILE, item.h * TILE + item.rise, item.ops),
@@ -158,7 +158,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     const lit = item.imageOn && open.has(`${item.x},${item.y}`)
     const rise = (item.rise * tile) / TILE // a tall piece stands above its tile
     ctx.drawImage(lit ? item.imageOn : item.image, left + item.x * tile, top + item.y * tile - rise, item.w * tile, item.h * tile + rise)
-    for (const light of item.lights) drawLight(light, left + item.x * tile, top + item.y * tile - rise, tile, t)
+    for (const light of item.lights) if (!light.idleOnly || !lit) drawLight(light, left + item.x * tile, top + item.y * tile - rise, tile, t)
   }
 
   const bubble = (value, kind, x, y, tile, ink) => {

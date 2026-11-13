@@ -92,7 +92,16 @@ const trayOps = () => [
   r(4, 4, 8, 5, plaster[3]), r(5, 3, 8, 5, plaster[2]), r(6, 5, 5, 1, plaster[1]), r(6, 7, 4, 1, plaster[1]), // papers piled in it
 ]
 
+// the screensaver on a monitor that nobody is typing at: three pixels twinkling on the dark screen (only the screens seen
+// from the front, a desk whose person faces up; `idleOnly` means not while the screen is lit)
+const deskLights = item =>
+  item.face !== 'up' || item.h > item.w
+    ? []
+    : Array.from({ length: Math.floor(item.w / 2) }, (_, place) => place * 32).flatMap(x =>
+        [[11, 2, 'slow'], [16, 3, 'double'], [20, 2, 'fast']].map(([dx, dy, pattern]) => ({ x: x + dx, y: dy, w: 1, h: 1, pattern, on: glass[2], off: glass[0], idleOnly: true })),
+      )
+
 export const officeArts = {
-  desk: { under: false, ops: deskOps },
+  desk: { under: false, ops: deskOps, lights: deskLights },
   tray: { under: false, ops: trayOps },
 }

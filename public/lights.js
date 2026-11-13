@@ -10,14 +10,17 @@
 //   double   two flashes, then a pause
 //   flicker  nearly always `on`, now and then `off` for a moment (a lamp)
 //   cycle    steps through `colors` (a TV)
+//   glint    on for a moment as a sparkle sweeps along a row of lights (a window pane); `seed` puts one row out of step
+//            with another. Held `off` with less motion (a still sparkle would look like a spot of dirt).
 import { hash } from './pixel.js'
 
-export const PATTERNS = ['steady', 'slow', 'fast', 'double', 'flicker', 'cycle']
+export const PATTERNS = ['steady', 'slow', 'fast', 'double', 'flicker', 'cycle', 'glint']
 const TICK = 0.25 // seconds: lights change four times a second at most, which keeps them pixel-art blinks, not fades
 
 // the colour a light is at a time in seconds; `still` (less motion) holds every light at its `on` colour
 export const lightColor = (light, seconds, still = false) => {
-  if (still) return light.on
+  if (still) return light.pattern === 'glint' ? light.off : light.on
+  if (light.pattern === 'glint') return ((((Math.floor(seconds / TICK) - Math.floor(light.x / 4) + (light.seed ?? 0)) % 40) + 40) % 40) < 2 ? light.on : light.off
   // each light starts at a point of its own, so a row of them does not blink together
   const tick = Math.floor(seconds / TICK) + (hash(light.x, light.y) % 16)
   switch (light.pattern) {

@@ -3,7 +3,7 @@ import { test } from 'node:test'
 
 import { lightColor, PATTERNS } from '../public/lights.js'
 import { inPalette } from '../public/palette.js'
-import { doorLights, itemsOf } from '../public/scenery.js'
+import { doorLights, itemsOf, windowLights } from '../public/scenery.js'
 import { buildStudio } from '../public/studio.js'
 
 const layout = buildStudio()
@@ -12,7 +12,8 @@ const over = (l, seconds = 60) => new Set(Array.from({ length: seconds * 4 }, (_
 
 test('a steady light never changes; with less motion every light holds its on colour', () => {
   assert.deepEqual([...over(light('steady'))], ['#aaaaaa'])
-  for (const pattern of PATTERNS) assert.equal(lightColor(light(pattern), 12.3, true), '#aaaaaa')
+  for (const pattern of PATTERNS.filter(p => p !== 'glint')) assert.equal(lightColor(light(pattern), 12.3, true), '#aaaaaa')
+  assert.equal(lightColor(light('glint'), 12.3, true), '#111111') // a sparkle held still would look like a spot of dirt
 })
 
 test('slow, fast, double and flicker lights are on and off at times, a cycle steps through its colours', () => {
@@ -48,4 +49,30 @@ test('every light in the plan is inside its piece, a palette colour, of a known 
   assert.equal(doors.length, layout.doors.filter(d => d.kind === 'sliding').length)
   assert.ok(doors.length >= 2)
   for (const l of doors) for (const color of [l.on, l.off]) assert.ok(inPalette(color))
+})
+
+test('a glint sweeps along a row of lights, one at a time, and a different row is out of step', () => {
+  const row = seed => [0, 4, 8, 12, 16, 20].map(x => light('glint', { x, y: 3, seed }))
+  const flashing = (seed, seconds) => row(seed).map(l => lightColor(l, seconds) === '#aaaaaa')
+  const seen = new Set()
+  for (let i = 0; i < 160; i++) {
+    const on = flashing(0, i / 4)
+    assert.ok(on.filter(Boolean).length <= 2, 'at most a pair at once')
+    on.forEach((flash, x) => flash && seen.add(x))
+  }
+  assert.equal(seen.size, 6, 'the sparkle visits every light')
+  assert.notDeepEqual(Array.from({ length: 160 }, (_, i) => flashing(0, i / 4)), Array.from({ length: 160 }, (_, i) => flashing(17, i / 4)))
+})
+
+test('every window has a sparkle low in its pane, inside the window; the monitors facing the room have a screensaver that is only for a screen that is not lit', () => {
+  const lights = windowLights(layout)
+  assert.ok(lights.length > 50)
+  for (const l of lights) {
+    assert.equal(l.pattern, 'glint')
+    assert.ok(layout.windows.some(w => w.w >= w.h && l.x >= w.x * 16 && l.x < (w.x + w.w) * 16 && l.y >= w.y * 16 && l.y < (w.y + 1) * 16), `a light at ${l.x},${l.y} is not on a window`)
+    for (const color of [l.on, l.off]) assert.ok(inPalette(color))
+  }
+  const desks = itemsOf(layout).filter(item => item.kind === 'desk')
+  assert.ok(desks.some(d => d.lights.length > 0 && d.lights.every(l => l.idleOnly)))
+  assert.ok(desks.filter(d => d.face !== 'up').every(d => d.lights.length === 0), 'no screensaver on a monitor seen from the back')
 })
