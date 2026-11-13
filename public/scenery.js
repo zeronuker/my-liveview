@@ -7,6 +7,8 @@
 // The shell (floors, walls, doors, windows, stairs) is drawn in art/shell.js. Much of the
 // furniture is still plain placeholder art (a box of one colour); the detailed art comes
 // room by room, drawn with the pixel-art skill and the palette in palette.js.
+import { commonArts, decalOps } from './art/common.js'
+import { lobbyArts } from './art/lobby.js'
 import { shellOps } from './art/shell.js'
 import { ramp, shade } from './palette.js'
 import { hash } from './pixel.js'
@@ -25,7 +27,7 @@ export const groundOps = layout => {
   const ops = [r(0, 0, layout.width * TILE, layout.height * TILE, shade('grass', 2))]
   for (let ty = 0; ty < layout.height; ty++)
     for (let tx = 0; tx < layout.width; tx++) for (const [, x, y, w, h, color] of grassTile(tx, ty)) ops.push(r(tx * TILE + x, ty * TILE + y, w, h, color))
-  return [...ops, ...shellOps(layout)]
+  return [...ops, ...shellOps(layout), ...decalOps(layout)]
 }
 
 const SHADOW = 'rgba(0,0,0,0.28)'
@@ -91,7 +93,7 @@ const boxOps = ({ w, h }, color) => {
 }
 
 const COLORS = {
-  desk: '#9a6b3f', sofa: '#2a7f9e', machine: '#4a4f63', table: '#9a6b3f', tv: '#3c3c56', rack: '#2c2c3a', stall: '#d8d6cc',
+  desk: '#9a6b3f', machine: '#4a4f63', table: '#9a6b3f', tv: '#3c3c56', rack: '#2c2c3a', stall: '#d8d6cc',
   vending: '#e24b4a', cooler: '#6faed6', island: '#b98a5a', counter: '#8d4c2a',
 }
 
@@ -100,10 +102,11 @@ const COLORS = {
 const ARTS = {
   desk: { under: false, ops: item => (item.h === 1 && item.w >= 2 ? deskOps(item.w) : boxOps(item, COLORS.desk)) },
   chair: { under: true, ops: () => chairOps() },
-  sofa: { under: true, ops: item => boxOps(item, COLORS.sofa) },
   shelf: { under: false, ops: item => shelfOps(item.h) },
   tray: { under: false, ops: () => trayOps() },
   rail: { under: false, ops: railOps },
+  ...commonArts,
+  ...lobbyArts,
 }
 
 // every piece of furniture in the plan with its art, in the item's own pixels

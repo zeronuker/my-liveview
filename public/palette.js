@@ -69,6 +69,8 @@ export const MATERIALS = {
   frost: '#cfe0e6',
   stone: '#b6b3a9',
   wallcap: '#7d7898',
+  // rugs
+  terracotta: '#c4825a',
 }
 
 export const RAMPS = Object.fromEntries(Object.entries(MATERIALS).map(([name, base]) => [name, ramp(base)]))

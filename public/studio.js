@@ -13,6 +13,7 @@
 // rooms: [{ name, x, y, w, h, tone, level }]  the floor to draw (inside the walls)
 // doors: [{ kind, x, y, w, h, level }]        open cells in a wall: swing, double, sliding, arch
 // windows: [{ kind, x, y, w, h }]             on solid wall cells: 'window' or a 'glass' wall
+// rugs: [{ kind, x, y, w, h }]                'rug' or 'mat' on the floor; lights: [{ x, y, rx, ry }] pools of light
 // furniture: [{ kind, x, y, w, h, solid }]    solid ones are '#' in the grid (a desk, a rail)
 // spots: where people stand for each kind of job. A seat also says which way it faces and,
 //        for a desk seat, which desk cell is in front of it.
@@ -40,7 +41,7 @@ export const buildStudio = () => {
     furniture.push({ kind, x, y, w, h, solid: true })
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) cells[j][i] = '#'
   }
-  const lay = (kind, x, y, w = 1, h = 1) => furniture.push({ kind, x, y, w, h, solid: false })
+  const lay = (kind, x, y, w = 1, h = 1, face) => furniture.push({ kind, x, y, w, h, solid: false, ...(face ? { face } : {}) })
 
   // first floor: the CEO suite (rows 2 to 9)
   room('Small conference', 13, 2, 7, 8, 'glass', 'first')
@@ -141,8 +142,8 @@ export const buildStudio = () => {
 
   // sofa seats, the nearest first: the hub, the lounge, then the lobby's waiting lounge
   const seats = []
-  const sofa = (x, y, w, h, face) => {
-    lay('sofa', x, y, w, h)
+  const sofa = (x, y, w, h, face, kind = 'sofa') => {
+    lay(kind, x, y, w, h, face) // the way the people on it face is the way it faces
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) seats.push({ x: i, y: j, face })
   }
   sofa(38, 24, 1, 4, 'right')
@@ -150,9 +151,13 @@ export const buildStudio = () => {
   sofa(35, 37, 4, 1, 'up')
   sofa(6, 35, 1, 4, 'right')
   sofa(8, 38, 4, 1, 'up')
-  sofa(14, 35, 1, 1, 'left')
-  sofa(14, 38, 1, 1, 'left')
-  block('table', 9, 36, 2, 2)
+  sofa(14, 35, 1, 1, 'left', 'armchair')
+  sofa(14, 38, 1, 1, 'left', 'armchair')
+  block('coffeetable', 9, 36, 2, 2)
+  block('sidetable', 14, 36) // with a lamp, between the armchairs
+  for (const [x, y] of [[6, 34], [6, 39], [13, 34], [21, 35], [16, 40]]) block('plant', x, y)
+  block('coatstand', 21, 41) // by the front doors
+  block('umbrella', 21, 42)
 
   // other things that are in the way
   block('rack', 16, 11, 3, 2)
@@ -166,8 +171,13 @@ export const buildStudio = () => {
   block('vending', 28, 35, 2, 1)
   block('island', 31, 37, 3, 1)
   block('counter', 29, 40, 8, 1)
-  block('counter', 17, 42, 3, 1) // reception: the long side, and the short arm
-  block('counter', 19, 40, 1, 2)
+  block('reception', 17, 42, 3, 1) // reception: the long side, and the short arm
+  block('reception', 19, 40, 1, 2)
+
+  // things on the floor that are walked over: rugs and mats (a rug lies under the furniture on it), and
+  // pools of light, in tiles from the middle (a lamp lights the floor round it)
+  const rugs = [{ kind: 'rug', x: 7, y: 35, w: 7, h: 4 }, { kind: 'mat', x: 24, y: 42, w: 2, h: 1 }]
+  const lights = [{ x: 10.5, y: 37, rx: 4.6, ry: 2.6 }, { x: 14.5, y: 36.5, rx: 1.6, ry: 1.6 }]
 
   // windows: on solid wall cells. A window one cell high is seen on the face of a wall that runs
   // east to west; one more than one cell high on the cap of a wall that runs north to south.
@@ -208,6 +218,8 @@ export const buildStudio = () => {
     rooms,
     doors,
     windows,
+    rugs,
+    lights,
     furniture,
     spots: {
       entrance: { x: 24, y: 48 },

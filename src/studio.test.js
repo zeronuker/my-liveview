@@ -143,9 +143,18 @@ test('every desk seat has a chair, and a desk in front of it', () => {
   assert.ok(layout.furniture.some(f => f.kind === 'tray' && inside({ x: f.x, y: f.y - 1, w: 1, h: 1 }, layout.spots.handIn.x, layout.spots.handIn.y)))
 })
 
-test('every sofa seat is on a sofa, and the sofa is walked over', () => {
+test('every seat is on a sofa or an armchair that faces the way the seat does, and it is walked over', () => {
   for (const seat of layout.spots.seats)
-    assert.ok(layout.furniture.some(f => f.kind === 'sofa' && !f.solid && inside(f, seat.x, seat.y)), `sofa at ${seat.x},${seat.y}`)
+    assert.ok(layout.furniture.some(f => ['sofa', 'armchair'].includes(f.kind) && !f.solid && f.face === seat.face && inside(f, seat.x, seat.y)), `sofa at ${seat.x},${seat.y}`)
+})
+
+test('rugs lie on the floor inside the building, and pools of light are over the plan', () => {
+  for (const rug of layout.rugs)
+    for (const [x, y] of cellsOf(rug)) assert.ok(layout.rooms.some(r => r.level !== 'outside' && inside(r, x, y)), `${rug.kind} at ${x},${y} is not on a floor`)
+  for (const light of layout.lights) {
+    assert.ok(light.x - light.rx >= 0 && light.x + light.rx <= layout.width && light.y - light.ry >= 0 && light.y + light.ry <= layout.height)
+    assert.ok(layout.rooms.some(r => r.level !== 'outside' && inside(r, Math.floor(light.x), Math.floor(light.y))), 'a light is in a room')
+  }
 })
 
 test('solid furniture is in the way on the grid and the rest is not', () => {
