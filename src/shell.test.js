@@ -88,6 +88,8 @@ test('the first floor and back rooms have thin vertical walls and thin door post
   assert.ok(doorOps({ kind: 'swing', x: 5, y: 5, w: 1, h: 1 }, (x, y) => x === 5 && y !== 5, true).every(([, x, , w], i) => i >= 5 || (x >= 5 && x + w <= 11)))
   checkOps(windowOps({ kind: 'window', x: 0, y: 0, w: 1, h: 3 }, true), TILE, 3 * TILE, 'thin tall window')
   checkOps(wallArtOps({ kind: 'whiteboard', x: 0, y: 0, w: 2, h: 1 }), 2 * TILE, TILE, 'whiteboard')
+  for (const w of [1, 2, 3]) checkOps(wallArtOps({ kind: 'picture', x: 0, y: 0, w, h: 1 }), w * TILE, TILE, `a picture ${w} wide`)
+  assert.notDeepEqual(wallArtOps({ kind: 'picture', x: 0, y: 0, w: 2, h: 1 }), wallArtOps({ kind: 'whiteboard', x: 0, y: 0, w: 2, h: 1 }))
 })
 
 test('the whole shell of the plan is inside the plan, in whole pixels and palette colours, and is the same every time', () => {

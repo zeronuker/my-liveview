@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { backroomArts } from '../public/art/backrooms.js'
+import { ceoArts } from '../public/art/ceo.js'
 import { commonArts, decalOps } from '../public/art/common.js'
 import { lobbyArts } from '../public/art/lobby.js'
 import { deskOnOps, officeArts } from '../public/art/office.js'
@@ -51,7 +52,7 @@ test('a pool of light is a dither: thicker inside, sparser towards the edge, and
 })
 
 test('every piece of furniture drawn by the lobby and common art fits its size and uses only the palette', () => {
-  const kinds = new Set([...Object.keys(commonArts), ...Object.keys(lobbyArts), ...Object.keys(officeArts), ...Object.keys(socialArts), ...Object.keys(backroomArts)])
+  const kinds = new Set([...Object.keys(commonArts), ...Object.keys(lobbyArts), ...Object.keys(officeArts), ...Object.keys(socialArts), ...Object.keys(backroomArts), ...Object.keys(ceoArts)])
   const items = itemsOf(layout).filter(item => kinds.has(item.kind))
   assert.ok(items.length >= 12)
   for (const item of items) checkOps(item.ops, item.w * TILE, item.h * TILE, `${item.kind} at ${item.x},${item.y}`)
@@ -107,10 +108,23 @@ test('every kind of furniture in the social wing is drawn, at every size it is u
 })
 
 test('every piece of furniture in the back rooms is drawn, at every size it is used, inside its cells, with palette colours', () => {
-  const sizes = { shelf: [[1, 5], [1, 6]], machine: [[2, 2]], labbench: [[2, 1]], rack: [[1, 2]], stall: [[1, 2]], basin: [[1, 1]], boardtable: [[5, 2]] }
+  const sizes = { shelf: [[1, 4], [1, 5], [1, 6]], machine: [[2, 2]], labbench: [[2, 1]], rack: [[1, 2]], stall: [[1, 2]], basin: [[1, 1]], boardtable: [[3, 2], [5, 2]] }
   assert.deepEqual(Object.keys(backroomArts).sort(), Object.keys(sizes).sort())
   for (const [kind, list] of Object.entries(sizes))
     for (const [w, h] of list) for (const x of [11, 13, 16, 17]) checkOps(backroomArts[kind].ops({ kind, x, y: 11, w, h }), w * TILE, h * TILE, `${kind} ${w} by ${h} at ${x}`)
+})
+
+test('the CEO desk and the drinks cabinet are drawn inside their cells with palette colours, and the suite\'s furniture is in leather', () => {
+  assert.deepEqual(Object.keys(ceoArts).sort(), ['cabinet', 'ceodesk'])
+  checkOps(ceoArts.ceodesk.ops({ kind: 'ceodesk', x: 25, y: 4, w: 6, h: 1, face: 'down' }), 6 * TILE, TILE, 'the CEO desk')
+  checkOps(ceoArts.cabinet.ops({ kind: 'cabinet', x: 22, y: 2, w: 2, h: 1 }), 2 * TILE, TILE, 'the drinks cabinet')
+  const plain = commonArts.chair.ops({ w: 1, h: 1, face: 'down' })
+  const leather = commonArts.chair.ops({ w: 1, h: 1, face: 'down', tone: 'leather' })
+  assert.notDeepEqual(plain, leather)
+  checkOps(leather, TILE, TILE, 'a leather chair')
+  checkOps(commonArts.sofa.ops({ w: 4, h: 1, face: 'up', tone: 'leather' }), 4 * TILE, TILE, 'a leather sofa')
+  assert.ok(itemsOf(layout).some(item => item.kind === 'sofa' && item.tone === 'leather'))
+  assert.ok(itemsOf(layout).some(item => item.kind === 'ceodesk'))
 })
 
 test('shelves differ from place to place, the two lab benches and the stalls are not all alike', () => {

@@ -13,7 +13,7 @@
 // rooms: [{ name, x, y, w, h, tone, level }]  the floor to draw (inside the walls)
 // doors: [{ kind, x, y, w, h, level }]        open cells in a wall: swing, double, sliding, arch
 // windows: [{ kind, x, y, w, h }]             on solid wall cells: 'window' or a 'glass' wall
-// wallArt: [{ kind, x, y, w, h }]             hung on a wall's face, such as a 'whiteboard'
+// wallArt: [{ kind, x, y, w, h }]             hung on a wall's face: a 'whiteboard' or a 'picture'
 // rugs: [{ kind, x, y, w, h }]                'rug' or 'mat' on the floor; lights: [{ x, y, rx, ry }] pools of light
 // furniture: [{ kind, x, y, w, h, solid }]    solid ones are '#' in the grid (a desk, a rail)
 // spots: where people stand for each kind of job. A seat also says which way it faces and,
@@ -38,11 +38,12 @@ export const buildStudio = () => {
     doors.push({ kind, x, y, w, h, level })
     carve(x, y, w, h)
   }
-  const block = (kind, x, y, w = 1, h = 1, face) => {
-    furniture.push({ kind, x, y, w, h, solid: true, ...(face ? { face } : {}) })
+  // `tone` names the colours a sofa or chair is drawn in, when not its usual ones
+  const block = (kind, x, y, w = 1, h = 1, face, tone) => {
+    furniture.push({ kind, x, y, w, h, solid: true, ...(face ? { face } : {}), ...(tone ? { tone } : {}) })
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) cells[j][i] = '#'
   }
-  const lay = (kind, x, y, w = 1, h = 1, face) => furniture.push({ kind, x, y, w, h, solid: false, ...(face ? { face } : {}) })
+  const lay = (kind, x, y, w = 1, h = 1, face, tone) => furniture.push({ kind, x, y, w, h, solid: false, ...(face ? { face } : {}), ...(tone ? { tone } : {}) })
 
   // first floor: the CEO suite (rows 2 to 9)
   room('Small conference', 13, 2, 7, 8, 'glass', 'first')
@@ -127,9 +128,26 @@ export const buildStudio = () => {
   lay('chair', 20, 29, 1, 1, 'left')
   block('tray', 18, 29)
 
-  // the CEO's desk, and the chair behind it
-  block('desk', 25, 4, 6, 1, 'down')
-  lay('chair', 27, 3, 1, 1, 'down')
+  // the CEO's desk, and the leather chair behind it
+  block('ceodesk', 25, 4, 6, 1, 'down')
+  lay('chair', 27, 3, 1, 1, 'down', 'leather')
+  // the rest of the CEO office: two visitor chairs facing the desk, a leather sofa with a coffee table in front of it,
+  // shelves on the west wall, a drinks cabinet under the windows, and plants. The doors' floor cells stay clear.
+  for (const x of [25, 28]) block('chair', x, 6, 1, 1, 'up', 'fabricWarm')
+  block('sofa', 25, 9, 4, 1, 'up', 'leather')
+  block('coffeetable', 26, 7, 2, 2)
+  block('shelf', 21, 3, 1, 4)
+  block('cabinet', 22, 2, 2, 1)
+  for (const [x, y] of [[21, 2], [32, 2], [32, 9], [21, 9]]) block('plant', x, y)
+  // the foyer: a leather bench under a picture, a lamp and plants
+  lay('sofa', 35, 2, 3, 1, 'down', 'leather')
+  block('sidetable', 38, 2)
+  for (const [x, y] of [[34, 2], [39, 2]]) block('plant', x, y)
+  // the small conference room: a table with three chairs a side, a TV on the east wall, plants
+  block('boardtable', 15, 5, 3, 2)
+  for (let x = 15; x < 18; x++) lay('chair', x, 4, 1, 1, 'down'), lay('chair', x, 7, 1, 1, 'up')
+  block('tv', 19, 3, 1, 3)
+  for (const [x, y] of [[13, 2], [13, 9]]) block('plant', x, y)
 
   // the file room: shelves down the sides, an aisle between
   block('shelf', 6, 11, 1, 5)
@@ -180,7 +198,6 @@ export const buildStudio = () => {
   for (let x = 28; x < 33; x++) lay('chair', x, 12, 1, 1, 'down'), lay('chair', x, 15, 1, 1, 'up')
   block('tv', 35, 13, 1, 3)
   for (const [x, y] of [[26, 11], [35, 11]]) block('plant', x, y)
-  block('table', 15, 4, 3, 2)
   // the vending area: three machines, a water cooler and a bin
   for (const x of [28, 29, 30]) block('vending', x, 33)
   block('cooler', 33, 33)
@@ -213,12 +230,16 @@ export const buildStudio = () => {
     { kind: 'rug', tone: 'periwinkle', x: 33, y: 23, w: 7, h: 6 },
     { kind: 'rug', tone: 'periwinkle', x: 34, y: 36, w: 6, h: 3 },
     { kind: 'mat', x: 24, y: 42, w: 2, h: 1 },
+    { kind: 'rug', tone: 'carpet', x: 24, y: 5, w: 6, h: 4 }, // the CEO's, under the visitor chairs
+    { kind: 'rug', tone: 'periwinkle', x: 35, y: 4, w: 5, h: 3 }, // the foyer's
   ]
   const lights = [
     { x: 10.5, y: 37, rx: 4.6, ry: 2.6 },
     { x: 14.5, y: 36.5, rx: 1.6, ry: 1.6 },
     { x: 29.5, y: 22, rx: 2.6, ry: 2 }, // over the ping-pong table
     { x: 32.5, y: 37.5, rx: 2.8, ry: 1.8 }, // over the island
+    { x: 27, y: 7, rx: 3.4, ry: 2.2 }, // over the CEO's rug
+    { x: 38.5, y: 3.3, rx: 1.6, ry: 1.3 }, // the foyer lamp
   ]
 
   // windows: on solid wall cells. A window one cell high is seen on the face of a wall that runs
@@ -253,7 +274,11 @@ export const buildStudio = () => {
   win(35, 41, 2)
 
   // things hung on the face of a wall (one cell high, like a window)
-  const wallArt = [{ kind: 'whiteboard', x: 30, y: 10, w: 2, h: 1 }] // the meeting room, between its windows
+  const wallArt = [
+    { kind: 'whiteboard', x: 30, y: 10, w: 2, h: 1 }, // the meeting room, between its windows
+    { kind: 'picture', x: 26, y: 1, w: 2, h: 1 }, // the CEO office, behind the chair
+    { kind: 'picture', x: 36, y: 1, w: 2, h: 1 }, // and the foyer, over the bench
+  ]
 
   return {
     width,

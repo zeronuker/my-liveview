@@ -9,6 +9,7 @@
 // has no art yet is a plain placeholder here (a box of one colour); the detailed art comes room by
 // room, drawn with the pixel-art skill and the palette in palette.js.
 import { backroomArts } from './art/backrooms.js'
+import { ceoArts } from './art/ceo.js'
 import { commonArts, decalOps } from './art/common.js'
 import { lobbyArts } from './art/lobby.js'
 import { officeArts } from './art/office.js'
@@ -54,13 +55,12 @@ const boxOps = ({ w, h }, color) => {
   return [r(0, 0, w * TILE, h * TILE, base), r(0, 0, w * TILE, 3, light), r(0, h * TILE - 3, w * TILE, 2, mid), r(0, h * TILE - 1, w * TILE, 1, dark)]
 }
 
-const COLORS = { table: '#9a6b3f' }
-
 // what to draw for each kind of furniture; `under` things are drawn below the
 // people (a chair, a sofa sat on), the rest are in front of whoever is behind them
 const ARTS = {
   rail: { under: false, ops: railOps },
   ...backroomArts,
+  ...ceoArts,
   ...commonArts,
   ...lobbyArts,
   ...officeArts,
@@ -70,7 +70,7 @@ const ARTS = {
 // every piece of furniture in the plan with its art, in the item's own pixels
 export const itemsOf = layout =>
   layout.furniture.map(item => {
-    const art = ARTS[item.kind] ?? { under: false, ops: () => boxOps(item, COLORS[item.kind] ?? '#888780') }
+    const art = ARTS[item.kind] ?? { under: false, ops: () => boxOps(item, '#888780') }
     return { ...item, under: art.under, ops: art.ops(item) }
   })
 

@@ -186,10 +186,19 @@ export const windowOps = (win, thin = false) => {
   return ops
 }
 
-// something hung on the face of a wall, in its own pixels: a whiteboard with a marker tray
+// something hung on the face of a wall, in its own pixels: a whiteboard with a marker tray, or a framed
+// landscape picture
 export const wallArtOps = item => {
   const [metal, plaster, glass, brick, leaf] = [RAMPS.metal, RAMPS.plaster, RAMPS.glass, RAMPS.brick, RAMPS.leaf]
   const W = item.w * TILE
+  if (item.kind === 'picture') {
+    const [wood, light] = [RAMPS.wood, RAMPS.light]
+    return [
+      r(1, 6, W - 2, 9, wood[1]), r(1, 6, W - 2, 1, wood[2]), r(1, 6, 1, 9, wood[2]), r(W - 2, 7, 1, 8, wood[0]), // the frame
+      r(3, 8, W - 6, 5, glass[3]), r(W - 9, 9, 2, 2, light[3]), // the sky and a sun
+      r(3, 11, W - 6, 2, leaf[2]), r(5, 10, 5, 1, leaf[2]), r(3, 12, W - 6, 1, leaf[1]), // hills
+    ]
+  }
   return [
     r(1, 7, W - 2, 7, metal[2]), r(1, 7, W - 2, 1, metal[3]), r(2, 8, W - 4, 5, plaster[3]), // the frame and the board
     r(4, 9, 8, 1, glass[2]), r(4, 11, 12, 1, brick[2]), r(W - 14, 9, 8, 1, leaf[2]), // something written on it

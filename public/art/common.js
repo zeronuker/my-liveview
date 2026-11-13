@@ -43,8 +43,9 @@ const chairFacingDown = f => [
   r(7, 12, 2, 2, f[0]), r(3, 14, 10, 1, f[0]), r(3, 15, 1, 1, f[1]), r(12, 15, 1, 1, f[1]), // the column, the base, the wheels
 ]
 
+// a sofa or armchair in the colour of its `tone` if it has one (the CEO suite's is leather)
 const seatOps = (item, material) =>
-  sofaFacingDown(item.face === 'left' || item.face === 'right' ? item.h : item.w, RAMPS[material]).map(op => faced(item.face ?? 'down', op))
+  sofaFacingDown(item.face === 'left' || item.face === 'right' ? item.h : item.w, RAMPS[item.tone ?? material]).map(op => faced(item.face ?? 'down', op))
 
 const PLANT = [
   '......oo..oo....',
@@ -72,7 +73,7 @@ const plantOps = () => {
 }
 
 export const commonArts = {
-  chair: { under: true, ops: item => chairFacingDown(RAMPS.metal).map(op => faced(item.face ?? 'down', op)) },
+  chair: { under: true, ops: item => chairFacingDown(RAMPS[item.tone ?? 'metal']).map(op => faced(item.face ?? 'down', op)) },
   sofa: { under: true, ops: item => seatOps(item, 'fabricCool') },
   armchair: { under: true, ops: item => seatOps(item, 'fabricWarm') },
   plant: { under: false, ops: plantOps },

@@ -71,6 +71,8 @@ export const MATERIALS = {
   wallcap: '#7d7898',
   // rugs
   terracotta: '#c4825a',
+  // the CEO suite's oxblood leather
+  leather: '#8c4048',
 }
 
 export const RAMPS = Object.fromEntries(Object.entries(MATERIALS).map(([name, base]) => [name, ramp(base)]))

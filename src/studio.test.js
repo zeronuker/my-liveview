@@ -131,7 +131,7 @@ test('a flight of stairs has no way off sideways', () => {
 })
 
 test('every desk seat has a chair, and a desk in front of it', () => {
-  const desk = (x, y, face) => layout.furniture.some(f => f.kind === 'desk' && f.solid && inside(f, x, y) && (!face || f.face === face))
+  const desk = (x, y, face) => layout.furniture.some(f => ['desk', 'ceodesk'].includes(f.kind) && f.solid && inside(f, x, y) && (!face || f.face === face))
   const chair = (x, y, face) => layout.furniture.some(f => f.kind === 'chair' && !f.solid && f.x === x && f.y === y && (!face || f.face === face))
   for (const seat of [...layout.spots.desks, layout.spots.managerSeat, layout.spots.ceoSeat]) {
     const [dx, dy] = FACE[seat.face]

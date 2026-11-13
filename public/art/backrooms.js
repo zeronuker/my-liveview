@@ -93,15 +93,19 @@ const basinOps = () => [
   r(7, 2, 2, 3, metal[3]), r(7, 2, 2, 1, plaster[3]), r(6, 3, 1, 2, metal[2]), // the tap
 ]
 
-// the board table, five tiles by two: a polished top with an inlaid line, the edge, and what is on it
-const boardTableOps = () => [
-  r(0, 0, 80, 26, wood[2]), r(0, 0, 80, 1, wood[3]), r(0, 0, 1, 26, wood[3]), r(79, 1, 1, 25, wood[1]), // the top, lit top-left
-  r(3, 3, 74, 1, wood[3]), r(3, 22, 74, 1, wood[1]), r(3, 3, 1, 20, wood[3]), r(76, 3, 1, 20, wood[1]), // an inlaid border
-  r(0, 26, 80, 6, wood[0]), r(0, 26, 80, 1, wood[1]), // the edge
-  r(36, 11, 6, 5, metal[1]), r(36, 11, 6, 1, metal[3]), r(38, 12, 2, 2, light[2]), // a speaker for calls
-  r(10, 7, 8, 5, plaster[3]), r(10, 7, 8, 1, plaster[2]), r(11, 9, 5, 1, plaster[1]), r(60, 14, 8, 5, plaster[3]), r(61, 16, 5, 1, plaster[1]), // papers
-  r(24, 15, 3, 6, glass[2]), r(24, 15, 3, 1, glass[3]), r(52, 6, 3, 3, plaster[3]), r(56, 6, 3, 3, brick[2]), // a carafe and cups
-]
+// the board table, three or five tiles by two: a polished top with an inlaid line, the edge, and what is on it
+const boardTableOps = ({ w }) => {
+  const W = w * TILE
+  const [mid, carafe] = [W / 2, Math.round(W * 0.3)]
+  return [
+    r(0, 0, W, 26, wood[2]), r(0, 0, W, 1, wood[3]), r(0, 0, 1, 26, wood[3]), r(W - 1, 1, 1, 25, wood[1]), // the top, lit top-left
+    r(3, 3, W - 6, 1, wood[3]), r(3, 22, W - 6, 1, wood[1]), r(3, 3, 1, 20, wood[3]), r(W - 4, 3, 1, 20, wood[1]), // an inlaid border
+    r(0, 26, W, 6, wood[0]), r(0, 26, W, 1, wood[1]), // the edge
+    r(mid - 4, 11, 6, 5, metal[1]), r(mid - 4, 11, 6, 1, metal[3]), r(mid - 2, 12, 2, 2, light[2]), // a speaker for calls
+    r(10, 7, 8, 5, plaster[3]), r(10, 7, 8, 1, plaster[2]), r(11, 9, 5, 1, plaster[1]), r(W - 20, 14, 8, 5, plaster[3]), r(W - 19, 16, 5, 1, plaster[1]), // papers
+    r(carafe, 15, 3, 6, glass[2]), r(carafe, 15, 3, 1, glass[3]), r(W - 28, 6, 3, 3, plaster[3]), r(W - 24, 6, 3, 3, brick[2]), // a carafe and cups
+  ]
+}
 
 export const backroomArts = {
   shelf: { under: false, ops: shelfOps },
