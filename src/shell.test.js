@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { doorOps, FLOOR_TONES, floorTileOps, shellOps, stairOps, wallOps, windowOps } from '../public/art/shell.js'
+import { doorOps, FLOOR_TONES, floorTileOps, shellOps, stairOps, thinWallOps, wallArtOps, wallOps, windowOps } from '../public/art/shell.js'
 import { inPalette, RAMPS } from '../public/palette.js'
 import { buildStudio } from '../public/studio.js'
 
@@ -67,6 +67,27 @@ test('a window, a tall window and a glass wall fit their cells and use only the 
   checkOps(windowOps({ kind: 'window', x: 0, y: 0, w: 1, h: 4 }), TILE, 4 * TILE, 'tall window')
   checkOps(windowOps({ kind: 'glass', x: 0, y: 0, w: 9, h: 1 }), 9 * TILE, TILE, 'glass wall')
   checkOps(stairOps(), TILE, TILE, 'stairs')
+})
+
+test('a thin wall is six pixels of cap in the middle of its cell, with the rooms\' floors either side', () => {
+  const ops = thinWallOps(5, 5, (x, y) => x === 5)
+  checkOps(ops, TILE, TILE, 'thin wall')
+  assert.ok(ops.some(([, x, , w, , color]) => x === 5 && w === 6 && color === RAMPS.wallcap[2]))
+  assert.ok(ops.every(([, x, , w]) => x >= 5 && x + w <= 11))
+
+  const inCell = (cx, cy) => shellOps(layout).filter(([, x, y]) => x >= cx * TILE && x < (cx + 1) * TILE && y >= cy * TILE && y < (cy + 1) * TILE)
+  const capWidth = ops => Math.max(0, ...ops.filter(([, , , , , color]) => RAMPS.wallcap.includes(color)).map(([, , , w]) => w))
+  assert.equal(capWidth(inCell(10, 12)), 6) // between the file room and the test lab
+  assert.equal(capWidth(inCell(5, 25)), TILE) // the open office's west wall stays thick
+  assert.equal(capWidth(inCell(15, 17)), TILE) // and so does a post of the wall with the back rooms' doors, between two doors
+  assert.ok(inCell(10, 12).some(([, x, , , , color]) => x < 5 * TILE + 10 * TILE && RAMPS.stone.includes(color))) // the file room's floor carries on to the wall
+})
+
+test('the first floor and back rooms have thin vertical walls and thin door posts and windows; a whiteboard fits its cells', () => {
+  checkOps(doorOps({ kind: 'swing', x: 5, y: 5, w: 1, h: 1 }, (x, y) => x === 5 && y !== 5, true), TILE, TILE, 'thin door')
+  assert.ok(doorOps({ kind: 'swing', x: 5, y: 5, w: 1, h: 1 }, (x, y) => x === 5 && y !== 5, true).every(([, x, , w], i) => i >= 5 || (x >= 5 && x + w <= 11)))
+  checkOps(windowOps({ kind: 'window', x: 0, y: 0, w: 1, h: 3 }, true), TILE, 3 * TILE, 'thin tall window')
+  checkOps(wallArtOps({ kind: 'whiteboard', x: 0, y: 0, w: 2, h: 1 }), 2 * TILE, TILE, 'whiteboard')
 })
 
 test('the whole shell of the plan is inside the plan, in whole pixels and palette colours, and is the same every time', () => {

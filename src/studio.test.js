@@ -195,6 +195,18 @@ test('every window is on a bare wall, with floor beside it to be seen from, and 
   }
 })
 
+test('things hung on a wall are on bare wall cells, not on a window or a door, and not on each other', () => {
+  const taken = new Set([...layout.windows, ...layout.doors].flatMap(o => cellsOf(o).map(([x, y]) => key(x, y))))
+  assert.ok(layout.wallArt.length > 0)
+  for (const art of layout.wallArt)
+    for (const [x, y] of cellsOf(art)) {
+      assert.equal(cell(x, y), '#', `${art.kind} at ${x},${y} is not on a wall`)
+      assert.ok(!taken.has(key(x, y)), `${art.kind} at ${x},${y} is on a window or a door`)
+      assert.ok(isOpen(x, y + 1), `${art.kind} at ${x},${y} has no floor below it to be seen from`)
+      taken.add(key(x, y))
+    }
+})
+
 test('the plan is the same every time', () => {
   assert.deepEqual(buildStudio(), buildStudio())
 })

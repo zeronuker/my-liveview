@@ -103,10 +103,27 @@ export const wallOps = (x, y, isWall) => {
   return ops
 }
 
+// A thin wall that runs north to south, in the middle of its cell: six pixels of cap, lit on the left.
+// The floors of the rooms on each side carry on to it (the plan draws them first).
+export const thinWallOps = (x, y, isWall) => {
+  const cap = RAMPS.wallcap
+  const ops = [r(5, 0, 6, TILE, cap[2]), r(5, 0, 1, TILE, cap[3]), r(10, 0, 1, TILE, cap[1])]
+  if (!isWall(x, y - 1)) ops.push(r(5, 0, 6, 1, cap[3]))
+  if (!isWall(x, y + 1)) ops.push(r(5, TILE - 1, 6, 1, cap[1]))
+  return ops
+}
+
+// the part of a list of rectangles that lies between two x positions
+const clipped = (ops, x0, x1) =>
+  ops.flatMap(([kind, x, y, w, h, color]) => {
+    const [a, b] = [Math.max(x, x0), Math.min(x + w, x1)]
+    return b > a ? [[kind, a, y, b - a, h, color]] : []
+  })
+
 // A door, in its own pixels (a tile is 16 wide): a swing door seen edge on, a pair of glass
 // sliding doors, double wooden doors, or an archway with no door at all. A door in a wall that
-// runs north to south is only a gap with a leaf standing open beside it.
-export const doorOps = (door, isWall) => {
+// runs north to south is only a gap with a leaf standing open beside it (its posts as thin as the wall when `thin`).
+export const doorOps = (door, isWall, thin = false) => {
   const cap = RAMPS.wallcap
   const trim = RAMPS.wood
   const metal = RAMPS.metal
@@ -114,11 +131,13 @@ export const doorOps = (door, isWall) => {
   const brass = RAMPS.light
   const W = door.w * TILE
   const half = W / 2
-  if (!(isWall(door.x - 1, door.y) && isWall(door.x + door.w, door.y)))
+  if (!(isWall(door.x - 1, door.y) && isWall(door.x + door.w, door.y))) {
+    const [x, w] = thin ? [5, 6] : [0, TILE]
     return [
-      r(0, 0, TILE, 4, cap[2]), r(0, 0, TILE, 1, cap[3]), r(0, 12, TILE, 4, cap[2]), r(0, 12, TILE, 1, cap[3]), r(0, 15, TILE, 1, cap[1]),
+      r(x, 0, w, 4, cap[2]), r(x, 0, w, 1, cap[3]), r(x, 12, w, 4, cap[2]), r(x, 12, w, 1, cap[3]), r(x, 15, w, 1, cap[1]),
       r(2, 4, 12, 2, trim[2]), r(2, 4, 12, 1, trim[3]),
     ]
+  }
   const ops = [
     r(0, 0, W, 6, cap[2]), r(0, 0, W, 1, cap[3]), r(0, 5, W, 1, cap[1]), r(0, 6, W, 1, trim[0]), // the beam over the opening
     r(0, 7, 2, 9, trim[1]), r(0, 7, 1, 9, trim[2]), r(W - 2, 7, 2, 9, trim[1]), r(W - 1, 7, 1, 9, trim[0]), // the two posts
@@ -140,8 +159,9 @@ export const doorOps = (door, isWall) => {
 }
 
 // A window or a glass wall, in its own pixels. A window one cell high is drawn on the face of
-// the wall below its cap; a taller one is drawn on the cap of a wall that runs north to south.
-export const windowOps = win => {
+// the wall below its cap; a taller one is drawn on the cap of a wall that runs north to south (a narrow
+// one when that wall is `thin`).
+export const windowOps = (win, thin = false) => {
   const metal = RAMPS.metal
   const glass = RAMPS.glass
   const plaster = RAMPS.plaster
@@ -149,8 +169,9 @@ export const windowOps = win => {
   const H = win.h * TILE
   const ops = []
   if (win.h > win.w) {
-    ops.push(r(2, 1, 12, H - 2, metal[1]), r(3, 2, 10, H - 4, glass[2]), r(4, 3, 1, Math.max(1, H - 8), glass[3]))
-    for (let i = 1; i < win.h; i++) ops.push(r(3, i * TILE - 1, 10, 1, metal[1]))
+    const [x, w] = thin ? [5, 6] : [2, 12]
+    ops.push(r(x, 1, w, H - 2, metal[1]), r(x + 1, 2, w - 2, H - 4, glass[2]), r(x + 2, 3, 1, Math.max(1, H - 8), glass[3]))
+    for (let i = 1; i < win.h; i++) ops.push(r(x + 1, i * TILE - 1, w - 2, 1, metal[1]))
     return ops
   }
   if (win.kind === 'glass') {
@@ -164,6 +185,20 @@ export const windowOps = win => {
   for (let i = 0; i < win.w; i++) ops.push(r(i * TILE + 3, 9, 2, 1, glass[3]), r(i * TILE + 5, 10, 2, 1, glass[3]))
   return ops
 }
+
+// something hung on the face of a wall, in its own pixels: a whiteboard with a marker tray
+export const wallArtOps = item => {
+  const [metal, plaster, glass, brick, leaf] = [RAMPS.metal, RAMPS.plaster, RAMPS.glass, RAMPS.brick, RAMPS.leaf]
+  const W = item.w * TILE
+  return [
+    r(1, 7, W - 2, 7, metal[2]), r(1, 7, W - 2, 1, metal[3]), r(2, 8, W - 4, 5, plaster[3]), // the frame and the board
+    r(4, 9, 8, 1, glass[2]), r(4, 11, 12, 1, brick[2]), r(W - 14, 9, 8, 1, leaf[2]), // something written on it
+    r(3, 13, W - 6, 1, metal[1]), r(8, 12, 2, 1, brick[2]), r(12, 12, 2, 1, glass[1]), // the marker tray, and two markers
+  ]
+}
+
+// Vertical walls down to this row (the first floor and the back rooms, above the wall with their doors) are thin, the rest thick.
+const THIN_UNTIL_ROW = 16
 
 // the whole shell of a plan: ops in plan pixels
 export const shellOps = layout => {
@@ -204,11 +239,23 @@ export const shellOps = layout => {
     if (!inRoom(x, y)) put(x, y, floorTileOps(toneNear(x, y), x, y))
   }
 
+  // a floor to carry on under a thin wall, from the room beside it (or nothing, where that side is garden)
+  const floorAt = (x, y) => {
+    const room = layout.rooms.findLast(o => x >= o.x && x < o.x + o.w && y >= o.y && y < o.y + o.h)
+    return room ? (room.level === 'stairs' ? stairOps() : floorTileOps(room.tone, x, y)) : []
+  }
+  // thin: a wall cell that only runs north to south, among the first floor and the back rooms
+  const isThin = (x, y) => y <= THIN_UNTIL_ROW && (isWall(x, y - 1) || isWall(x, y + 1)) && !isWall(x - 1, y) && !isWall(x + 1, y)
+
   for (const key of walls) {
     const [x, y] = key.split(',').map(Number)
-    put(x, y, wallOps(x, y, isWall))
+    if (isThin(x, y)) {
+      put(x, y, [...clipped(floorAt(x - 1, y), 0, 5), ...clipped(floorAt(x + 1, y), 11, TILE), ...thinWallOps(x, y, isWall)])
+    } else put(x, y, wallOps(x, y, isWall))
   }
-  for (const door of layout.doors) put(door.x, door.y, doorOps(door, isWall))
-  for (const win of layout.windows) put(win.x, win.y, windowOps(win))
+  const thinDoor = door => door.y <= THIN_UNTIL_ROW
+  for (const door of layout.doors) put(door.x, door.y, doorOps(door, isWall, thinDoor(door)))
+  for (const win of layout.windows) put(win.x, win.y, windowOps(win, win.h > win.w && win.y <= THIN_UNTIL_ROW))
+  for (const art of layout.wallArt ?? []) put(art.x, art.y, wallArtOps(art))
   return ops
 }

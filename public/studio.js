@@ -13,6 +13,7 @@
 // rooms: [{ name, x, y, w, h, tone, level }]  the floor to draw (inside the walls)
 // doors: [{ kind, x, y, w, h, level }]        open cells in a wall: swing, double, sliding, arch
 // windows: [{ kind, x, y, w, h }]             on solid wall cells: 'window' or a 'glass' wall
+// wallArt: [{ kind, x, y, w, h }]             hung on a wall's face, such as a 'whiteboard'
 // rugs: [{ kind, x, y, w, h }]                'rug' or 'mat' on the floor; lights: [{ x, y, rx, ry }] pools of light
 // furniture: [{ kind, x, y, w, h, solid }]    solid ones are '#' in the grid (a desk, a rail)
 // spots: where people stand for each kind of job. A seat also says which way it faces and,
@@ -169,11 +170,16 @@ export const buildStudio = () => {
   block('umbrella', 21, 42)
 
   // other things that are in the way
-  block('rack', 16, 11, 3, 2)
-  block('stall', 20, 11, 2, 2)
-  block('stall', 23, 11, 2, 2)
-  block('table', 28, 14, 6, 1)
+  for (const x of [16, 17, 18]) block('rack', x, 11, 1, 2) // the server room: three racks
+  for (const x of [20, 21, 23, 24]) block('stall', x, 11, 1, 2) // the bathrooms: two stalls each, and a basin or two by the door
+  for (const [x, y] of [[21, 15], [21, 16], [23, 15], [23, 16]]) block('basin', x, y)
+  block('labbench', 11, 11, 2, 1) // the test lab: benches along the north wall
+  block('labbench', 13, 11, 2, 1)
+  // the meeting room: a board table with five chairs a side, a TV on the east wall, plants, and a whiteboard
+  block('boardtable', 28, 13, 5, 2)
+  for (let x = 28; x < 33; x++) lay('chair', x, 12, 1, 1, 'down'), lay('chair', x, 15, 1, 1, 'up')
   block('tv', 35, 13, 1, 3)
+  for (const [x, y] of [[26, 11], [35, 11]]) block('plant', x, y)
   block('table', 15, 4, 3, 2)
   // the vending area: three machines, a water cooler and a bin
   for (const x of [28, 29, 30]) block('vending', x, 33)
@@ -246,6 +252,9 @@ export const buildStudio = () => {
   win(31, 41, 3) // and its south wall, over the pantry counter
   win(35, 41, 2)
 
+  // things hung on the face of a wall (one cell high, like a window)
+  const wallArt = [{ kind: 'whiteboard', x: 30, y: 10, w: 2, h: 1 }] // the meeting room, between its windows
+
   return {
     width,
     height,
@@ -254,6 +263,7 @@ export const buildStudio = () => {
     rooms,
     doors,
     windows,
+    wallArt,
     rugs,
     lights,
     furniture,

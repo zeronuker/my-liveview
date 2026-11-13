@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
+import { backroomArts } from '../public/art/backrooms.js'
 import { commonArts, decalOps } from '../public/art/common.js'
 import { lobbyArts } from '../public/art/lobby.js'
 import { deskOnOps, officeArts } from '../public/art/office.js'
@@ -50,7 +51,7 @@ test('a pool of light is a dither: thicker inside, sparser towards the edge, and
 })
 
 test('every piece of furniture drawn by the lobby and common art fits its size and uses only the palette', () => {
-  const kinds = new Set([...Object.keys(commonArts), ...Object.keys(lobbyArts), ...Object.keys(officeArts), ...Object.keys(socialArts)])
+  const kinds = new Set([...Object.keys(commonArts), ...Object.keys(lobbyArts), ...Object.keys(officeArts), ...Object.keys(socialArts), ...Object.keys(backroomArts)])
   const items = itemsOf(layout).filter(item => kinds.has(item.kind))
   assert.ok(items.length >= 12)
   for (const item of items) checkOps(item.ops, item.w * TILE, item.h * TILE, `${item.kind} at ${item.x},${item.y}`)
@@ -103,6 +104,20 @@ test('every kind of furniture in the social wing is drawn, at every size it is u
   assert.deepEqual(Object.keys(socialArts).sort(), Object.keys(sizes).sort())
   for (const [kind, list] of Object.entries(sizes))
     for (const [w, h] of list) for (const x of [28, 29, 30]) checkOps(socialArts[kind].ops({ kind, x, y: 33, w, h }), w * TILE, h * TILE, `${kind} ${w} by ${h}`)
+})
+
+test('every piece of furniture in the back rooms is drawn, at every size it is used, inside its cells, with palette colours', () => {
+  const sizes = { shelf: [[1, 5], [1, 6]], machine: [[2, 2]], labbench: [[2, 1]], rack: [[1, 2]], stall: [[1, 2]], basin: [[1, 1]], boardtable: [[5, 2]] }
+  assert.deepEqual(Object.keys(backroomArts).sort(), Object.keys(sizes).sort())
+  for (const [kind, list] of Object.entries(sizes))
+    for (const [w, h] of list) for (const x of [11, 13, 16, 17]) checkOps(backroomArts[kind].ops({ kind, x, y: 11, w, h }), w * TILE, h * TILE, `${kind} ${w} by ${h} at ${x}`)
+})
+
+test('shelves differ from place to place, the two lab benches and the stalls are not all alike', () => {
+  const look = (kind, x, y, w, h) => JSON.stringify(backroomArts[kind].ops({ kind, x, y, w, h }))
+  assert.notEqual(look('shelf', 6, 11, 1, 5), look('shelf', 9, 11, 1, 6))
+  assert.notEqual(look('labbench', 11, 11, 2, 1), look('labbench', 13, 11, 2, 1))
+  assert.notEqual(look('stall', 20, 11, 1, 2), look('stall', 21, 11, 1, 2))
 })
 
 test('the three vending machines are not all the same colour, and the stools are under the people', () => {

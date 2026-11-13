@@ -8,6 +8,7 @@
 // doors, windows, stairs), the things several rooms share, the lobby, the open office. Furniture that
 // has no art yet is a plain placeholder here (a box of one colour); the detailed art comes room by
 // room, drawn with the pixel-art skill and the palette in palette.js.
+import { backroomArts } from './art/backrooms.js'
 import { commonArts, decalOps } from './art/common.js'
 import { lobbyArts } from './art/lobby.js'
 import { officeArts } from './art/office.js'
@@ -33,27 +34,6 @@ export const groundOps = layout => {
   return [...ops, ...shellOps(layout), ...decalOps(layout)]
 }
 
-const BOOKS = ['#c0392b', '#2a7f9e', '#e9c46a', '#4caf50', '#9b5de5', '#e76f51', '#f4efe6']
-const shelfOps = tiles => {
-  const ops = []
-  for (let t = 0; t < tiles; t++) {
-    const top = t * TILE
-    ops.push(r(1, top, 14, TILE, '#5b4330'), r(2, top + 1, 12, 14, '#3d2c20'))
-    for (const level of [0, 1]) {
-      let x = 2
-      for (let i = 0; i < 4; i++) {
-        const h = hash(t * 2 + level, i)
-        const width = 2 + (h % 2)
-        if (x + width > 14) break
-        ops.push(r(x, top + 1 + level * 7 + (h % 3), width, 6 - (h % 3), BOOKS[(h >>> 4) % BOOKS.length]))
-        x += width + 1
-      }
-      ops.push(r(2, top + 7 + level * 7, 12, 1, '#5b4330'))
-    }
-  }
-  return ops
-}
-
 // a guardrail: a thin rail along the way it runs, with a post every tile
 const railOps = ({ w, h }) => {
   const [dark, , base] = ramp('#6b6f7a')
@@ -74,13 +54,13 @@ const boxOps = ({ w, h }, color) => {
   return [r(0, 0, w * TILE, h * TILE, base), r(0, 0, w * TILE, 3, light), r(0, h * TILE - 3, w * TILE, 2, mid), r(0, h * TILE - 1, w * TILE, 1, dark)]
 }
 
-const COLORS = { machine: '#4a4f63', table: '#9a6b3f', rack: '#2c2c3a', stall: '#d8d6cc' }
+const COLORS = { table: '#9a6b3f' }
 
 // what to draw for each kind of furniture; `under` things are drawn below the
 // people (a chair, a sofa sat on), the rest are in front of whoever is behind them
 const ARTS = {
-  shelf: { under: false, ops: item => shelfOps(item.h) },
   rail: { under: false, ops: railOps },
+  ...backroomArts,
   ...commonArts,
   ...lobbyArts,
   ...officeArts,
