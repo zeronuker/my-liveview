@@ -25,6 +25,9 @@
 <h2>Furniture: each kind at 1x and 8x</h2>
 <div id="pieces" class="row"></div>
 
+<h2>Pets: each state at 12x, walking in two frames</h2>
+<div id="pets" class="row"></div>
+
 <h2>Floors: each kind as 4 by 4 tiles at 3x (look for seams)</h2>
 <div id="floors" class="row"></div>
 
@@ -38,6 +41,7 @@
 import { FLOOR_TONES, floorTileOps } from '/art/shell.js'
 import { RAMPS } from '/palette.js'
 import { groundOps, itemsOf, paint, TILE } from '/scenery.js'
+import { PET_STATES, petSprite } from '/art/pets.js'
 import { spriteFor } from '/sprites.js'
 import { buildStudio } from '/studio.js'
 
@@ -107,6 +111,14 @@ const draws = placed.filter(i => !i.under).map(item => ({ key: item.y + item.h, 
     },
   }))
 for (const one of draws.sort((a, b) => a.key - b.key)) one.run()
+
+for (const [kind, states] of Object.entries(PET_STATES))
+  for (const state of states)
+    for (const t of state === 'walk' ? [0, 0.2] : [0]) {
+      const sprite = petSprite(kind, state, t)
+      const ops = sprite.cells.flatMap((row, y) => row.flatMap((color, x) => (color ? [['r', x, y, 1, 1, color]] : [])))
+      show(document.getElementById('pets'), `${kind} ${state}`, ops, sprite.width, sprite.height, [12])
+    }
 
 for (const tone of FLOOR_TONES) {
   const ops = []

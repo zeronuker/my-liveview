@@ -2,8 +2,10 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
 import { flowerOps, gardenHighOps, gardenLowOps, gardenParts, pondOps } from '../public/art/garden.js'
-import { buildGarden, inPond } from '../public/garden.js'
+import { PET_STATES, petSprite } from '../public/art/pets.js'
+import { buildGarden, inPond, nearBuilding as near, roamGrid } from '../public/garden.js'
 import { inPalette } from '../public/palette.js'
+import { createPets } from '../public/pets.js'
 import { buildStudio } from '../public/studio.js'
 
 const layout = buildStudio()
@@ -22,8 +24,13 @@ const checkOps = (ops, w, h, what) => {
   }
 }
 
-// a cell that is in a room, or in the wall one cell round a room
-const nearBuilding = (x, y) => layout.rooms.some(room => x >= room.x - 1 && x <= room.x + room.w && y >= room.y - 1 && y <= room.y + room.h)
+const nearBuilding = (x, y) => near(layout, x, y)
+
+// a number generator that gives the same numbers every time, so a walk can be repeated
+const seeded = seed => () => {
+  seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0
+  return seed / 2 ** 32
+}
 
 const boxOf = tree => {
   const cells = []
@@ -89,4 +96,61 @@ test('the pond has two frames that differ, both inside the plan, and the garden 
   assert.equal(a.length > 100, true)
   for (const ops of [a, b, gardenLowOps(garden), gardenHighOps(garden)]) checkOps(ops, layout.width * TILE, layout.height * TILE, 'garden ops')
   assert.deepEqual(gardenHighOps(garden), gardenHighOps(buildGarden(buildStudio())))
+})
+
+test('every pet starts on free grass, there is plenty of grass, and trees, water and the building are in the way', () => {
+  const grid = roamGrid(layout, garden)
+  assert.equal(grid.length, layout.height)
+  for (const row of grid) assert.equal(row.length, layout.width)
+  assert.deepEqual(garden.pets.map(p => p.kind).sort(), ['cat', 'chicken', 'chicken', 'chicken', 'dog'])
+  for (const pet of garden.pets) {
+    assert.equal(grid[pet.y][pet.x], '.', `${pet.kind} at ${pet.x},${pet.y} is not on free grass`)
+  }
+  assert.ok(grid.join('').split('.').length > 400, 'there is grass to wander on')
+  for (const tree of garden.trees) for (const [x, y] of [[tree.x, tree.y], [tree.x - 1, tree.y - 2], [tree.x + 1, tree.y]]) assert.equal(grid[y][x], '#', `a tree at ${x},${y}`)
+  for (const [x, y] of [[26, 45], [36, 47], [30, 10]]) assert.equal(grid[y][x], '#', `water or building at ${x},${y}`)
+})
+
+test('pets wander over free grass only, rest between walks, face the way they go, and do the same again with the same numbers', () => {
+  const grid = roamGrid(layout, garden)
+  const run = seed => {
+    const pets = createPets(grid, garden.pets, seeded(seed))
+    const seen = { states: new Set(), moved: new Set(), faces: new Set() }
+    for (let i = 0; i < 4000; i++) {
+      pets.tick(0.05)
+      for (const pet of pets.snapshot()) {
+        assert.equal(grid[Math.round(pet.y)][Math.round(pet.x)], '.', `${pet.id} at ${pet.x.toFixed(2)},${pet.y.toFixed(2)} is on something`)
+        seen.states.add(`${pet.kind}:${pet.state}`)
+        seen.faces.add(pet.facing)
+        if (pet.x !== garden.pets[Number(pet.id.replace(/\D/g, ''))].x) seen.moved.add(pet.id)
+      }
+    }
+    return { seen, end: pets.snapshot() }
+  }
+  const a = run(1)
+  assert.deepEqual(run(1).end, a.end)
+  assert.notDeepEqual(run(2).end, a.end)
+  assert.equal(a.seen.moved.size, 5, 'every pet walks somewhere in the end')
+  assert.deepEqual([...a.seen.faces].sort(), [-1, 1])
+  for (const state of ['cat:walk', 'cat:rest', 'dog:walk', 'dog:rest', 'chicken:walk', 'chicken:rest', 'chicken:peck']) assert.ok(a.seen.states.has(state), state)
+})
+
+test('each pet has a picture for each of its states, whole, in palette colours, and a walk has two frames that differ', () => {
+  assert.deepEqual(PET_STATES, { cat: ['walk', 'rest'], dog: ['walk', 'rest'], chicken: ['walk', 'rest', 'peck'] })
+  for (const [kind, states] of Object.entries(PET_STATES))
+    for (const state of states) {
+      const frames = new Set()
+      for (const t of [0, 0.2, 0.4]) {
+        const sprite = petSprite(kind, state, t)
+        assert.equal(sprite.cells.length, sprite.height)
+        for (const row of sprite.cells) {
+          assert.equal(row.length, sprite.width)
+          for (const color of row) assert.ok(color === null || inPalette(color), `${kind} ${state}: ${color}`)
+        }
+        assert.ok(sprite.cells.flat().filter(Boolean).length > 20, `${kind} ${state} has something to see`)
+        frames.add(sprite.key)
+      }
+      assert.equal(frames.size, state === 'walk' ? 2 : 1, `${kind} ${state}`)
+    }
+  assert.notDeepEqual(petSprite('cat', 'rest').cells, petSprite('dog', 'rest').cells.map(row => row.slice(0, 12)).slice(0, 9))
 })

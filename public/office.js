@@ -8,8 +8,11 @@ import { createEffects, isShown } from './effects.js'
 import { createSound, soundFor } from './sound.js'
 import { fit, keepInView, zoomAt } from './layout.js'
 import { createStage } from './stage.js'
+import { buildGarden, roamGrid } from './garden.js'
+import { createPets } from './pets.js'
 import { buildStudio } from './studio.js'
 import { deskOnOps } from './art/office.js'
+import { petSprite } from './art/pets.js'
 import { groundOps, itemsOf, paint, TILE } from './scenery.js'
 import { carrySprite, spriteFor } from './sprites.js'
 
@@ -34,6 +37,10 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   const layout = buildStudio()
   const director = createDirector()
   const stage = createStage({ layout, getMult })
+  // the garden's pets wander on their own; nothing in the stage knows about them
+  const garden = buildGarden(layout)
+  const pets = createPets(roamGrid(layout, garden), garden.pets)
+  let lastPets = 0
   const effects = createEffects()
   const sound = createSound()
   // the person's setting for less motion: no confetti, rings, glyphs, bobbing or breathing
@@ -184,6 +191,27 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
       images.set(sprite.key, image)
     }
     return image
+  }
+
+  // the pets, on the grass: small, so a whole number of screen pixels to a pixel of theirs at a sixteenth of a tile
+  const drawPets = ({ tile, left, top }, t) => {
+    ctx.imageSmoothingEnabled = false
+    const unit = Math.max(1, Math.round((tile * ratio) / 16)) / ratio
+    for (const pet of pets.snapshot().sort((a, b) => a.y - b.y)) {
+      const sprite = petSprite(pet.kind, pet.state, reduced ? 0 : t)
+      const cx = left + (pet.x + 0.5) * tile
+      const feet = top + (pet.y + 0.5) * tile + tile * 0.4
+      const hop = !reduced && pet.state === 'walk' ? -Math.abs(Math.sin(t * 12 + hash(pet.id))) * tile * 0.05 : 0
+      ctx.fillStyle = 'rgba(0,0,0,0.25)'
+      ctx.beginPath()
+      ctx.ellipse(cx, feet, sprite.width * unit * 0.4, tile * 0.07, 0, 0, Math.PI * 2)
+      ctx.fill()
+      ctx.save()
+      ctx.translate(Math.round(cx * ratio) / ratio, Math.round((feet + hop) * ratio) / ratio - sprite.height * unit)
+      ctx.scale(pet.facing < 0 ? -1 : 1, 1)
+      ctx.drawImage(imageOf(sprite), (-sprite.width * unit) / 2, 0, sprite.width * unit, sprite.height * unit)
+      ctx.restore()
+    }
   }
 
   // draws the person standing at (cx, cy) and says where the top of their head is
@@ -381,6 +409,10 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.fillStyle = ink.bg
     ctx.fillRect(0, 0, width, height)
     drawPlan(view)
+    const sinceLast = performance.now()
+    if (!reduced && !paused && lastPets) pets.tick(Math.min(0.1, (sinceLast - lastPets) / 1000)) // with less motion, or paused, they stay put
+    lastPets = sinceLast
+    drawPets(view, t)
 
     // who is writing where: that desk's screen is lit
     const open = new Set()

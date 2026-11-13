@@ -31,7 +31,28 @@ export const buildGarden = layout => {
     trees: TREES.map(([kind, x, y]) => ({ kind, x, y })),
     bushes: [[6, 41], [10, 41], [11, 41], [14, 43], [22, 53], [27, 53], [44, 22], [43, 35]].map(([x, y]) => ({ x, y })),
     rocks: [[27, 50], [29, 52], [43, 51], [45, 45], [44, 42]].map(([x, y]) => ({ x, y })),
+    // the pets, where each starts: the cat on the east strip, the dog and the chickens on the lawn at the front left
+    pets: [['cat', 43, 20], ['dog', 10, 50], ['chicken', 6, 45], ['chicken', 7, 44], ['chicken', 6, 47]].map(([kind, x, y]) => ({ kind, x, y })),
   }
+}
+
+// a cell that is in a room, or in the wall one cell round a room
+export const nearBuilding = (layout, x, y) => layout.rooms.some(room => x >= room.x - 1 && x <= room.x + room.w && y >= room.y - 1 && y <= room.y + room.h)
+
+// the cells of a tree's crown and trunk: one tile either side of the trunk and two above it
+const treeCells = tree => Array.from({ length: 9 }, (_, i) => [tree.x - 1 + (i % 3), tree.y - 2 + Math.floor(i / 3)])
+
+// where the pets may walk, as a grid like the studio's ('#' is in the way): the grass inside the fence that is
+// not the building, the pond, a tree, a bush, a rock or a flower bed
+export const roamGrid = (layout, garden) => {
+  const blocked = new Set()
+  const block = (x, y) => blocked.add(`${x},${y}`)
+  for (const tree of garden.trees) for (const [x, y] of treeCells(tree)) block(x, y)
+  for (const thing of [...garden.bushes, ...garden.rocks]) block(thing.x, thing.y)
+  for (const bed of garden.beds) for (let y = bed.y; y < bed.y + bed.h; y++) for (let x = bed.x; x < bed.x + bed.w; x++) block(x, y)
+  return Array.from({ length: layout.height }, (_, y) =>
+    Array.from({ length: layout.width }, (_, x) => (x < 1 || y < 1 || x >= layout.width - 1 || y >= layout.height - 1 || nearBuilding(layout, x, y) || blocked.has(`${x},${y}`) || inPond(garden, x, y, 1.12) ? '#' : '.')).join(''),
+  )
 }
 
 // whether the middle of a cell is in the pond, which is made `scale` times bigger about its middle
