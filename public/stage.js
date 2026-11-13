@@ -43,6 +43,8 @@ export const personality = id => {
 export const createStage = ({ layout, getMult = () => 1 }) => {
   const { grid, spots } = layout
   const workers = new Map() // id -> worker (the manager too)
+  // which way each seat faces, by place; a seat with no entry faces the room
+  const faceAt = new Map([...spots.desks, ...spots.seats, spots.managerSeat].filter(s => s.face).map(s => [`${s.x},${s.y}`, s.face]))
   const handedIn = new Set() // workers whose work is on the manager's tray
   const answered = new Set() // chats whose permission has been answered
   const compacted = new Set() // chats whose memory has been compacted
@@ -159,7 +161,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     worker.pending = null
     worker.act = act
     worker.pose = act.pose ?? 'idle'
-    if (FACES_YOU.has(act.pose)) worker.dir = 'down' // sitting at a desk or a seat, they face the room
+    if (FACES_YOU.has(act.pose)) worker.dir = faceAt.get(`${Math.round(worker.x)},${Math.round(worker.y)}`) ?? 'down' // sitting at a desk or a seat, they face the way it faces
     worker.label = act.label ?? ''
     worker.bubble = act.bubble ?? null
     if (act.bubble?.kind === 'bad') emit('warning', worker.x, worker.y) // something went wrong

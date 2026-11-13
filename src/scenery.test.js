@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { buildLayout } from '../public/layout.js'
+import { buildStudio } from '../public/studio.js'
 import { groundOps, itemsOf, LAPTOP, paint, TILE } from '../public/scenery.js'
 
-const layout = buildLayout()
+const layout = buildStudio()
 const COLOR = /^(#[0-9a-f]{6}|rgba\(\d+,\d+,\d+,[0-9.]+\))$/
 
 const checkOps = (ops, width, height, what) => {
@@ -36,7 +36,7 @@ test('chairs and sofas are under the people; desks, shelves and the rest are in 
 })
 
 test('the floor is the same every time: nothing is random', () => {
-  assert.deepEqual(groundOps(layout), groundOps(buildLayout()))
+  assert.deepEqual(groundOps(layout), groundOps(buildStudio()))
 })
 
 test('a laptop open and in use looks different from one that is closed, and both fit in the first tile of a desk', () => {

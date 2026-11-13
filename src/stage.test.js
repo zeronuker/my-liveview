@@ -1,10 +1,10 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { buildLayout } from '../public/layout.js'
+import { buildStudio } from '../public/studio.js'
 import { createStage, personality } from '../public/stage.js'
 
-const layout = buildLayout()
+const layout = buildStudio()
 const at = (p, list) => list.some(s => s.x === Math.round(p.x) && s.y === Math.round(p.y))
 
 // a stage with a clock the test moves by hand, in milliseconds
@@ -588,11 +588,21 @@ test('a worker faces the way they walk: right, left, up or down, by the larger p
   assert.deepEqual([...dirsOver(12)].sort(), ['left', 'up'])
 })
 
-test('sitting at a seat or a desk, a worker faces the room', () => {
+test('sitting at a seat or a desk, a worker faces the way the seat faces', () => {
   const { hire, doStep, run, person } = setup()
   hire('w1', { path: 'a.js' })
   doStep('w1', 'fetch', { path: 'a.js' }) // up to the shelves: they face away
   run(30)
+  doStep('w1', 'study')
+  for (let i = 0; i < 300 && person('w1').pose !== 'read'; i++) run(0.1)
+
+  assert.equal(person('w1').pose, 'read')
+  assert.equal(person('w1').dir, layout.spots.seats.find(s => s.x === person('w1').x && s.y === person('w1').y).face)
+})
+
+test('a seat that says nothing about its way faces the room', () => {
+  const { hire, doStep, run, person } = setup({ layout: corridor(['.....'], { seats: [{ x: 3, y: 0 }] }) })
+  hire('w1')
   doStep('w1', 'study')
   for (let i = 0; i < 300 && person('w1').pose !== 'read'; i++) run(0.1)
 

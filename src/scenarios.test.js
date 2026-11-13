@@ -8,7 +8,7 @@ import { after, before, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 
 import { createDirector } from '../public/director.js'
-import { buildLayout } from '../public/layout.js'
+import { buildStudio } from '../public/studio.js'
 import { createStage } from '../public/stage.js'
 import { play, toActions } from './mock.js'
 import { SCENARIOS } from './scenarios.js'
@@ -21,7 +21,7 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = 4797
 const base = `http://127.0.0.1:${PORT}`
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms))
-const layout = buildLayout()
+const layout = buildStudio()
 
 let server
 let tmp

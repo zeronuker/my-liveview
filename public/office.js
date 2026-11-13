@@ -6,8 +6,9 @@
 import { createDirector } from './director.js'
 import { createEffects, isShown } from './effects.js'
 import { createSound, soundFor } from './sound.js'
-import { buildLayout, fit, keepInView, zoomAt } from './layout.js'
+import { fit, keepInView, zoomAt } from './layout.js'
 import { createStage } from './stage.js'
+import { buildStudio } from './studio.js'
 import { groundOps, itemsOf, LAPTOP, paint, TILE } from './scenery.js'
 import { carrySprite, spriteFor } from './sprites.js'
 
@@ -28,7 +29,7 @@ const roundRect = (ctx, x, y, w, h, r) => {
 
 // `getMult` is the speed (see stage.js); `getChatName` says what a chat is called
 export const createOffice = ({ canvas, getMult, getChatName = () => '', onView = () => {} }) => {
-  const layout = buildLayout()
+  const layout = buildStudio()
   const director = createDirector()
   const stage = createStage({ layout, getMult })
   const effects = createEffects()
@@ -111,7 +112,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   const items = itemsOf(layout).map(item => ({ ...item, image: smallCanvas(item.w * TILE, item.h * TILE, item.ops) }))
   const laptops = { open: smallCanvas(TILE, TILE, LAPTOP.open), closed: smallCanvas(TILE, TILE, LAPTOP.closed) }
   // the desk behind each seat, so its laptop can open when someone is writing there
-  const deskOfSeat = new Map(layout.spots.desks.map(d => [`${d.x},${d.y}`, `${d.x},${d.y + 1}`]))
+  const deskOfSeat = new Map(layout.spots.desks.map(d => [`${d.x},${d.y}`, `${d.desk.x},${d.desk.y}`]))
   const laptopDesks = new Set(deskOfSeat.values())
 
   // words on the floor and walls: light, with a dark edge, so they read on any theme
@@ -126,13 +127,11 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   const drawPlan = ({ tile, left, top }) => {
     ctx.imageSmoothingEnabled = false
     ctx.drawImage(ground, left, top, layout.width * tile, layout.height * tile)
-    for (const room of layout.rooms) {
-      // a room's name goes on the wall above it
-      const onWall = room.y === layout.groundTop ? -0.45 : 0.55
-      if (tile >= 9) label(room.name, left + (room.x + 0.4) * tile, top + (room.y + onWall) * tile, Math.max(9, tile * 0.5), 'left')
-    }
-    const door = layout.spots.entrance
-    label('Entrance', left + (door.x + 0.5) * tile, top + (door.y + 0.5) * tile, Math.max(8, tile * 0.4))
+    // a room's name goes in its top-left corner; small rooms and stairs have none
+    for (const room of layout.rooms)
+      if (tile >= 9 && room.w >= 4 && room.level !== 'stairs') label(room.name, left + (room.x + 0.4) * tile, top + (room.y + 0.55) * tile, Math.max(9, tile * 0.5), 'left')
+    const gate = layout.spots.entrance
+    label('Front gate', left + (gate.x + 0.5) * tile, top + (gate.y + 0.5) * tile, Math.max(8, tile * 0.4))
   }
 
   const drawItem = (item, { tile, left, top }, open) => {

@@ -1,6 +1,6 @@
 // The Garden Studio: the renovated Office floor plan, in tiles (docs/office-design-brief.md).
-// Plain data, so it can be tested. It is not drawn or walked yet: the Office still
-// uses layout.js until the stage and the art are switched over.
+// Plain data, so it can be tested. The stage walks people over it, scenery.js draws it
+// and layout.js fits it on the canvas.
 //
 // One grid for the whole world. Every cell starts as a wall ('#'); rooms, doors and
 // stairs are carved out of it, so people can only get from one room to another through
