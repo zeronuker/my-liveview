@@ -156,3 +156,31 @@ test('sofas, armchairs, rugs and mats are under the people; counters, tables and
   assert.ok(commonArts.sofa.under && commonArts.armchair.under)
   assert.ok(!commonArts.plant.under && !lobbyArts.reception.under && !lobbyArts.coffeetable.under)
 })
+
+test('plants come in several kinds, sofas in several styles and colours, and rugs in several shapes and patterns, all inside their own size', () => {
+  const plants = itemsOf(layout).filter(item => item.kind === 'plant')
+  assert.ok(new Set(plants.map(p => JSON.stringify(p.ops))).size >= 4, 'at least four different plants in the plan')
+  for (let x = 0; x < 12; x++) for (let y = 0; y < 3; y++) checkOps(commonArts.plant.ops({ x, y }), TILE, TILE, `plant at ${x},${y}`)
+
+  const looks = new Set()
+  for (const x of [1, 2, 3, 4, 5, 6])
+    for (const length of [1, 3]) {
+      const ops = commonArts.sofa.ops({ x, y: 7, w: length, h: 1, face: 'down' })
+      checkOps(ops, length * TILE, TILE, `sofa style at ${x}, ${length} long`)
+      looks.add(JSON.stringify(ops))
+    }
+  assert.ok(looks.size >= 6)
+  assert.ok(new Set(layout.furniture.filter(f => f.kind === 'sofa' || f.kind === 'armchair').map(f => f.tone ?? 'default')).size >= 5, 'the sofas are in several colours')
+
+  const rugs = new Set()
+  for (const pattern of ['diamond', 'stripes', 'check', undefined])
+    for (const [w, h] of [[7, 4], [5, 3], [6, 4]]) {
+      const ops = decalOps({ rugs: [{ kind: 'rug', shape: 'rect', pattern, tone: 'sage', x: 0, y: 0, w, h }], lights: [] })
+      checkOps(ops, w * TILE, h * TILE, `${pattern} rug`)
+      rugs.add(JSON.stringify(ops))
+    }
+  const samePlace = ['diamond', 'stripes', 'check', undefined].map(pattern => JSON.stringify(decalOps({ rugs: [{ kind: 'rug', shape: 'rect', pattern, tone: 'sage', x: 0, y: 0, w: 7, h: 4 }], lights: [] })))
+  assert.equal(new Set(samePlace).size, 4, 'the four patterns look different')
+  assert.ok(rugs.size >= 9)
+  assert.ok(new Set(layout.rugs.filter(r => r.kind === 'rug').map(r => r.shape ?? 'oval')).size >= 2, 'some round, some rectangular')
+})

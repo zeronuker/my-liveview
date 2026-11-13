@@ -164,23 +164,23 @@ export const buildStudio = () => {
 
   // sofa seats, the nearest first: the hub, the lounge, then the lobby's waiting lounge
   const seats = []
-  const sofa = (x, y, w, h, face, kind = 'sofa') => {
-    lay(kind, x, y, w, h, face) // the way the people on it face is the way it faces
+  const sofa = (x, y, w, h, face, kind = 'sofa', tone) => {
+    lay(kind, x, y, w, h, face, tone) // the way the people on it face is the way it faces
     for (let j = y; j < y + h; j++) for (let i = x; i < x + w; i++) seats.push({ x: i, y: j, face })
   }
   // the social hub: a sofa and two armchairs round a coffee table, facing the TV on the east wall
-  sofa(34, 24, 1, 4, 'right')
-  sofa(36, 23, 1, 1, 'down', 'armchair')
-  sofa(36, 28, 1, 1, 'up', 'armchair')
+  sofa(34, 24, 1, 4, 'right', 'sofa', 'terracotta')
+  sofa(36, 23, 1, 1, 'down', 'armchair', 'sage')
+  sofa(36, 28, 1, 1, 'up', 'armchair', 'slate')
   block('coffeetable', 36, 25, 2, 2)
   block('tv', 40, 24, 1, 4)
   block('pingpong', 28, 21, 3, 2)
   for (const [x, y] of [[40, 20], [40, 31], [27, 31]]) block('plant', x, y)
-  sofa(35, 37, 4, 1, 'up') // the lounge
+  sofa(35, 37, 4, 1, 'up', 'sofa', 'fabricWarm') // the lounge
   sofa(6, 35, 1, 4, 'right')
-  sofa(8, 38, 4, 1, 'up')
-  sofa(14, 35, 1, 1, 'left', 'armchair')
-  sofa(14, 38, 1, 1, 'left', 'armchair')
+  sofa(8, 38, 4, 1, 'up', 'sofa', 'slate')
+  sofa(14, 35, 1, 1, 'left', 'armchair', 'sage')
+  sofa(14, 38, 1, 1, 'left', 'armchair', 'periwinkle')
   block('coffeetable', 9, 36, 2, 2)
   block('sidetable', 14, 36) // with a lamp, between the armchairs
   for (const [x, y] of [[6, 34], [6, 39], [13, 34], [21, 35], [16, 40]]) block('plant', x, y)
@@ -226,12 +226,12 @@ export const buildStudio = () => {
   // things on the floor that are walked over: rugs and mats (a rug lies under the furniture on it), and
   // pools of light, in tiles from the middle (a lamp lights the floor round it)
   const rugs = [
-    { kind: 'rug', x: 7, y: 35, w: 7, h: 4 },
+    { kind: 'rug', shape: 'rect', pattern: 'diamond', x: 7, y: 35, w: 7, h: 4 },
     { kind: 'rug', tone: 'periwinkle', x: 33, y: 23, w: 7, h: 6 },
-    { kind: 'rug', tone: 'periwinkle', x: 34, y: 36, w: 6, h: 3 },
+    { kind: 'rug', tone: 'sage', shape: 'rect', pattern: 'stripes', x: 34, y: 36, w: 6, h: 3 },
     { kind: 'mat', x: 24, y: 42, w: 2, h: 1 },
-    { kind: 'rug', tone: 'carpet', x: 24, y: 5, w: 6, h: 4 }, // the CEO's, under the visitor chairs
-    { kind: 'rug', tone: 'periwinkle', x: 35, y: 4, w: 5, h: 3 }, // the foyer's
+    { kind: 'rug', tone: 'carpet', shape: 'rect', pattern: 'diamond', x: 24, y: 5, w: 6, h: 4 }, // the CEO's, under the visitor chairs
+    { kind: 'rug', tone: 'sage', shape: 'rect', pattern: 'check', x: 35, y: 4, w: 5, h: 3 }, // the foyer's
   ]
   const lights = [
     { x: 10.5, y: 37, rx: 4.6, ry: 2.6 },

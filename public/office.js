@@ -144,14 +144,6 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.drawImage(grounds[water], left, top, layout.width * tile, layout.height * tile)
   }
 
-  // a room's name goes in its top-left corner, over the furniture; small rooms and stairs have none
-  const drawNames = ({ tile, left, top }) => {
-    for (const room of layout.rooms)
-      if (tile >= 14 && room.w >= 4 && room.level !== 'stairs') label(room.name, left + (room.x + 0.4) * tile, top + (room.y + 0.55) * tile, Math.max(9, tile * 0.5), 'left')
-    const gate = layout.spots.entrance
-    label('Front gate', left + (gate.x + 0.5) * tile, top + (gate.y + 0.5) * tile, Math.max(8, tile * 0.4))
-  }
-
   const drawItem = (item, { tile, left, top }, open) => {
     ctx.imageSmoothingEnabled = false
     const lit = item.imageOn && open.has(`${item.x},${item.y}`)
@@ -444,7 +436,6 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     const draws = items.filter(item => !item.under).map(item => ({ key: item.y + item.h, run: () => drawItem(item, view, open) }))
     for (const person of [ceo, ...snap.workers]) draws.push({ key: person.y + 0.9, run: () => drawPerson(person, view, t, ink, tags) })
     for (const one of draws.sort((a, b) => a.key - b.key)) one.run()
-    drawNames(view)
 
     // the number of papers on the manager's tray, and then names, labels and bubbles
     const tray = layout.furniture.find(item => item.kind === 'tray')
