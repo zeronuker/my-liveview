@@ -214,6 +214,8 @@ export const buildStudio = () => {
   for (const x of [28, 29, 30]) block('vending', x, 33)
   block('cooler', 33, 33)
   block('bin', 35, 33)
+  // hanging lamps over the island, the reception counter, the meeting table and the CEO's rug (where the floor has its pool of light)
+  for (const [x, y] of [[31, 37], [32, 37], [33, 37], [18, 42], [19, 40], [29, 13], [31, 13], [27, 7]]) lay('pendant', x, y)
   // the lounge and pantry: two more machines, an island with stools, the counter along the south wall, a fridge
   for (const x of [28, 29]) block('vending', x, 35)
   block('island', 31, 37, 3, 1)

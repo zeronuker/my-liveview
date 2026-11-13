@@ -199,3 +199,12 @@ test('a parasol is drawn inside its three tiles and its rise, striped, and is dr
   const parasols = itemsOf(layout).filter(item => item.kind === 'parasol')
   assert.ok(parasols.length >= 2 && parasols.every(item => item.over && !item.solid))
 })
+
+test('a hanging lamp is drawn inside its tile and its rise, is over the people, and its bulb flickers', () => {
+  const art = overheadArts.pendant
+  assert.ok(art.over && art.rise > 0)
+  checkOps(art.ops({ kind: 'pendant', x: 31, y: 37, w: 1, h: 1 }), TILE, TILE + art.rise, 'the hanging lamp')
+  const [bulb] = art.lights()
+  assert.ok(bulb.pattern === 'flicker' && bulb.y + bulb.h <= TILE + art.rise)
+  assert.ok(itemsOf(layout).filter(item => item.kind === 'pendant').length >= 8)
+})

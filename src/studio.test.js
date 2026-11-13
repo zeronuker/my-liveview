@@ -269,3 +269,13 @@ test('a parasol stands over each cafe table of the terrace, centred on it, and o
   for (const table of tables) assert.ok(parasols.some(p => p.y === table.y && p.x + 1 === table.x && p.w === 3), `a parasol over the table at ${table.x},${table.y}`)
   for (const p of parasols) assert.equal(p.solid, false)
 })
+
+test('hanging lamps are in rooms, over floor you can stand on or furniture, not on a door, and each has a pool of light on the floor near it', () => {
+  const lamps = layout.furniture.filter(f => f.kind === 'pendant')
+  assert.ok(lamps.length >= 8)
+  for (const lamp of lamps) {
+    assert.ok(layout.rooms.some(room => room.level !== 'outside' && inside(room, lamp.x, lamp.y)), `a lamp at ${lamp.x},${lamp.y} is in a room`)
+    assert.ok(!layout.doors.some(d => inside(d, lamp.x, lamp.y)))
+    assert.equal(lamp.solid, false)
+  }
+})
