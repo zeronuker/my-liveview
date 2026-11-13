@@ -471,6 +471,31 @@ test('walking starts slowly and never goes faster than that person\'s own top sp
   assert.ok(Math.max(...steps) <= 4 * personality('w1').speed * 0.1 + 0.001)
 })
 
+test('ticked once a frame (sixty a second) a walker glides: small steps, none bigger than their speed allows, no standing still mid-walk', () => {
+  const { hire, doStep, run, person } = setup()
+  hire('w1')
+  doStep('w1', 'fetch', { path: 'a.js' })
+  run(1, 16)
+  let last = [person('w1').x, person('w1').y]
+  let still = 0
+  let longestStill = 0
+  let biggest = 0
+  for (let i = 0; i < 600; i++) {
+    run(0.016, 16)
+    const now = [person('w1').x, person('w1').y]
+    const moved = Math.hypot(now[0] - last[0], now[1] - last[1])
+    if (person('w1').pose === 'walk') {
+      biggest = Math.max(biggest, moved)
+      still = moved === 0 ? still + 1 : 0
+      longestStill = Math.max(longestStill, still)
+    }
+    last = now
+  }
+
+  assert.ok(biggest <= 4 * personality('w1').speed * 0.016 + 0.001, `a step of ${biggest}`)
+  assert.ok(longestStill <= 1, `stood still for ${longestStill} frames while walking`)
+})
+
 test('someone standing in the way is gone round, not walked through', () => {
   const floor = corridor(['.......', '.......', '.......'], { entrance: { x: 0, y: 1 }, files: [{ x: 3, y: 1 }], seats: [{ x: 6, y: 1 }] })
   const { stage, run, now } = setup({ layout: floor })
@@ -490,6 +515,30 @@ test('someone standing in the way is gone round, not walked through', () => {
 
   assert.deepEqual([who('b').x, who('b').y], [6, 1]) // got there
   assert.ok(closest >= 0.9, `came within ${closest}`) // without going through a
+})
+
+test('two workers walking at each other: one gives way and the other walks straight on, so they do not dodge the same way for good', () => {
+  const floor = corridor(['.......', '.......', '.......'], { entrance: { x: 0, y: 1 }, files: [{ x: 6, y: 1 }], seats: [{ x: 0, y: 1 }] })
+  const { stage, run, now } = setup({ layout: floor })
+  const who = id => stage.snapshot().workers.find(w => w.id === id)
+  const hireAt = id => stage.apply({ cmd: 'hire', worker: { id, name: id, color: '#fff', kind: 'worker', sessionId: 's' } }, now())
+
+  hireAt('b')
+  stage.apply({ cmd: 'do', worker: 'b', step: 'search' }, now())
+  run(15) // b waits at the far end
+  stage.apply({ cmd: 'do', worker: 'b', step: 'arrive' }, now()) // and starts back to the door...
+  hireAt('a')
+  stage.apply({ cmd: 'do', worker: 'a', step: 'search' }, now()) // as a sets off for where b was
+  let closest = Infinity
+  let done = null
+  for (let i = 0; i < 400 && done === null; i++) {
+    run(0.1)
+    if (who('a') && who('b')) closest = Math.min(closest, Math.hypot(who('a').x - who('b').x, who('a').y - who('b').y))
+    if (who('a').x === 6 && who('b').x === 0) done = i / 10
+  }
+
+  assert.ok(done !== null && done < 12, `took ${done} seconds`)
+  assert.ok(closest >= 0.9, `came within ${closest}: walked through each other`)
 })
 
 test('with no way round, a worker waits, and after a few seconds walks through rather than stand there for good', () => {

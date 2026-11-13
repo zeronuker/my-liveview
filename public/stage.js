@@ -72,7 +72,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     wait: null, // { left, then }: a moment of hesitating or settling, then carry on
     warm: false, // already busy, so the next job is started without hesitating
     v: 0, stall: 0, ghost: 0, rerouted: false, // walking: speed, time held up, time walking through people
-    ...personality(info.id), ...info,
+    ...personality(info.id), rank: hashOf(info.id), ...info, // the lower rank gives way (see walk)
   })
 
   const manager = makeWorker({ id: 'manager', name: 'Manager', color: '#8d6e63', kind: 'manager', sessionId: null }, spots.managerSeat.x, spots.managerSeat.y, true)
@@ -228,11 +228,13 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     else if (dy !== 0) worker.dir = dy > 0 ? 'down' : 'up'
   }
 
-  // someone is in the way: go round them, by a new path that leaves their cells out
-  const reroute = (worker, occupied) => {
+  // someone is in the way: go round them, by a new path that leaves out their cells and the next few cells of any
+  // of them who is walking, so the way round does not cross where they are going
+  const reroute = (worker, occupied, held) => {
     const goal = worker.cells.at(-1)
     const here = [Math.round(worker.x), Math.round(worker.y)]
     const avoid = new Set(occupied.keys())
+    for (const other of held) for (const [x, y] of other.cells.slice(0, 3)) avoid.add(`${x},${y}`)
     avoid.delete(`${here[0]},${here[1]}`)
     avoid.delete(`${goal[0]},${goal[1]}`)
     const path = findPath(grid, here, goal, avoid)
@@ -242,23 +244,29 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
   // Walking: up to speed and down again, and never into someone else's cell.
   // In the way: wait a moment, go round, and if that cannot be done for a few
   // seconds, walk through them for a while rather than stand there for good.
+  // Of two walkers in each other's way only one goes round: the one with the lower rank. The
+  // other waits for the way to clear, so they never both dodge the same way and meet again.
   const walk = (worker, dt, occupied) => {
-    // is the next cell, which is not the last, taken by someone else?
-    const isBlocked = () => {
+    // who is in the next cell, which is not the last?
+    const holdingUp = () => {
+      if (worker.cells.length <= 1) return []
       const [nx, ny] = worker.cells[0]
-      const others = (occupied.get(`${nx},${ny}`) ?? 0) - (Math.round(worker.x) === nx && Math.round(worker.y) === ny ? 1 : 0)
-      return worker.cells.length > 1 && others > 0
+      return (occupied.get(`${nx},${ny}`) ?? []).filter(other => other !== worker)
     }
+    const isBlocked = () => holdingUp().length > 0
     if (worker.ghost > 0) worker.ghost -= dt
     else if (isBlocked()) {
+      const held = holdingUp()
+      const allWalking = held.every(other => other.cells.length > 0)
       worker.v = 0
-      worker.pose = 'idle'
       worker.stall += dt
-      if (worker.stall >= REROUTE && !worker.rerouted) {
+      worker.pose = worker.stall > 0.25 ? 'idle' : 'walk' // a very short hold-up is not a stop, which would look like stuttering
+      // goes round: held up by someone standing still, or by walkers who all rank higher
+      if (worker.stall >= REROUTE && !worker.rerouted && (!allWalking || held.every(other => other.rank > worker.rank))) {
         worker.rerouted = true
-        reroute(worker, occupied)
+        reroute(worker, occupied, held)
       }
-      if (worker.stall >= STUCK) {
+      if (worker.stall >= (allWalking ? STUCK / 2 : STUCK)) {
         worker.ghost = GHOST
         worker.stall = 0
         worker.rerouted = false
@@ -366,7 +374,7 @@ export const createStage = ({ layout, getMult = () => 1 }) => {
     for (const w of workers.values()) {
       if (!w.present) continue
       const key = `${Math.round(w.x)},${Math.round(w.y)}`
-      occupied.set(key, (occupied.get(key) ?? 0) + 1)
+      occupied.set(key, [...(occupied.get(key) ?? []), w])
     }
     for (const worker of [...workers.values()]) update(worker, dt, instant, occupied)
     if (ceo.bubble && ceo.bubble.until <= clock) ceo.bubble = null

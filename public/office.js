@@ -397,6 +397,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   const draw = () => {
     frame = 0
     if (!visible) return
+    tick() // every frame, so people glide; the timer above only keeps the stage going while nobody is looking
     const snap = stage.snapshot()
     const view = manual ? keepInView(manual, layout, width, height) : fit(width, height, layout)
     const t = performance.now() / 1000
