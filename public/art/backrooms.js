@@ -1,5 +1,5 @@
 // The back rooms: the file room's shelves, the test lab's machine and benches, the server room's racks,
-// the bathrooms' stalls and basins, and the meeting room's board table. Rectangles ['r', x, y, w, h, colour]
+// the bathrooms' cubicles, urinals and sink counters, and the meeting room's board table. Rectangles ['r', x, y, w, h, colour]
 // in pixels, palette colours only, light from the top-left.
 import { RAMPS } from '../palette.js'
 import { ellipseOps, hash } from '../pixel.js'
@@ -83,32 +83,43 @@ const rackOps = ({ x, y = 0, face }) => {
   return ops
 }
 
-// a wall urinal, one tile: a ceramic bowl with a flush pipe and valve, and a privacy screen to each side
+// A wall urinal on a west wall, one tile, seen from the side: a privacy screen along its north edge, a ceramic bowl
+// against the wall with a flush valve and pipe, and a drain. The bowl faces east, into the room.
 const urinalOps = () => [
-  r(0, 2, 2, 11, frost[2]), r(0, 2, 2, 1, frost[3]), r(14, 2, 2, 11, frost[1]), r(15, 3, 1, 10, frost[0]), // the screens either side
-  r(7, 0, 2, 4, metal[2]), r(6, 3, 4, 2, metal[1]), r(6, 3, 4, 1, metal[3]), // the pipe and flush valve
-  ...ellipseOps(8, 9, 5, 6, plaster[1]), ...ellipseOps(8, 9, 4, 5, plaster[3]), ...ellipseOps(8, 11, 2, 3, slate[1]), r(5, 6, 2, 1, plaster[3]), // the bowl, its hollow and a highlight
-  r(7, 13, 2, 1, slate[0]), // the drain
+  r(0, 0, 11, 5, frost[2]), r(0, 0, 11, 1, frost[3]), r(0, 4, 11, 1, frost[1]), // the privacy screen
+  ...ellipseOps(5, 10, 5, 5, plaster[1]), ...ellipseOps(5, 10, 4, 4, plaster[3]), ...ellipseOps(4, 10, 2, 3, slate[1]), r(3, 7, 2, 1, plaster[3]), // the bowl, its hollow and a highlight
+  r(0, 6, 2, 4, metal[1]), r(0, 6, 1, 4, metal[3]), r(1, 5, 3, 1, metal[2]), // the flush valve and pipe on the wall
+  r(5, 13, 2, 1, slate[0]), // the drain
 ]
 
-// a bathroom stall, one tile wide and two tall: its top edge and its door, with a gap under it
-const stallOps = ({ x, tone }) => {
-  const door = x % 2 === 0 ? leaf[2] : brick[2]
-  const [dark, mid, lit] = tone ? [RAMPS[tone][1], RAMPS[tone][2], RAMPS[tone][3]] : [frost[1], frost[2], frost[3]] // the door's own colour, if it has one
+// A cubicle on a west wall, one tile wide and two tall, seen from the side and a little above: its north partition, the
+// toilet inside it (a cistern against the wall, a bowl with its seat and water), and its door on the east side in the
+// cubicle's own colour (`tone`), with a lock and a gap under it.
+const cubicleOps = ({ y = 0, tone }) => {
+  const door = y % 4 === 0 ? leaf[2] : brick[2]
+  const [dark, mid, lit] = tone ? [RAMPS[tone][1], RAMPS[tone][2], RAMPS[tone][3]] : [frost[1], frost[2], frost[3]]
   return [
-    r(0, 0, TILE, 3, frost[3]), r(0, 0, TILE, 1, plaster[3]), r(0, 2, TILE, 1, frost[1]), // the top edge
-    r(1, 3, 14, 23, mid), r(1, 3, 1, 23, lit), r(14, 4, 1, 22, dark), // the door
-    r(3, 6, 10, 1, dark), r(3, 20, 10, 1, dark), r(11, 12, 2, 3, metal[2]), r(11, 10, 2, 1, door), // panels, the handle and the lock
-    r(1, 26, 14, 6, slate[0]), r(3, 28, 3, 4, slate[1]), r(10, 28, 3, 4, slate[1]), // the gap under it, and feet
+    r(0, 0, 14, 5, mid), r(0, 0, 14, 1, lit), r(0, 4, 14, 1, dark), // the partition on the north side
+    r(0, 31, 14, 1, dark), // and the foot of the next one
+    r(1, 9, 4, 6, plaster[2]), r(1, 9, 4, 1, plaster[3]), r(1, 14, 4, 1, plaster[1]), // the cistern
+    ...ellipseOps(8, 17, 5, 6, plaster[1]), ...ellipseOps(8, 17, 4, 5, plaster[3]), ...ellipseOps(8, 18, 3, 3, glass[2]), r(6, 13, 3, 1, plaster[3]), // the bowl, its seat and the water
+    r(1, 22, 2, 2, plaster[3]), r(1, 22, 2, 1, plaster[2]), // a roll of paper
+    r(13, 5, 3, 22, mid), r(13, 5, 1, 22, lit), r(15, 6, 1, 21, dark), r(13, 14, 2, 3, metal[2]), r(14, 12, 1, 1, door), // the door, its handle and the lock
+    r(13, 25, 3, 2, slate[0]), r(0, 27, 13, 4, frost[1]), r(0, 27, 13, 1, frost[2]), // the gap under it, and the near partition's edge
   ]
 }
 
-// a pedestal basin with a tap
-const basinOps = () => [
-  r(6, 9, 4, 6, plaster[2]), r(6, 9, 1, 6, plaster[3]), r(5, 14, 6, 2, plaster[1]), // the pedestal
-  r(3, 4, 10, 5, plaster[3]), r(3, 4, 10, 1, plaster[3]), r(3, 8, 10, 1, plaster[1]), r(4, 5, 8, 3, frost[1]), r(4, 5, 8, 1, frost[0]), // the bowl
-  r(7, 2, 2, 3, metal[3]), r(7, 2, 2, 1, plaster[3]), r(6, 3, 1, 2, metal[2]), // the tap
-]
+// A sink counter against an east wall, `h` tiles long, with a basin to every two tiles: a stone top, the cabinet's front
+// to the west, basins with a tap at the wall, and the end of the cabinet at the south.
+const vanityOps = ({ h }) => {
+  const H = h * TILE
+  const ops = [r(0, 0, 3, H - 3, wood[1]), r(0, 0, 1, H - 3, wood[2]), r(0, H - 6, 16, 6, wood[1]), r(0, H - 6, 16, 1, wood[2]), r(0, H - 1, 16, 1, wood[0]), r(3, 0, 13, H - 6, slate[3]), r(3, 0, 1, H - 6, plaster[3]), r(15, 0, 1, H - 6, slate[1])]
+  for (let i = 0; i < Math.floor(h / 2); i++) {
+    const cy = i * 32 + 16
+    ops.push(...ellipseOps(9, cy, 5, 6, slate[1]), ...ellipseOps(9, cy, 4, 5, plaster[3]), ...ellipseOps(9, cy, 3, 4, frost[2]), r(9, cy, 1, 1, slate[0]), r(13, cy - 2, 2, 5, metal[3]), r(11, cy - 1, 3, 1, metal[2])) // a basin, its drain and its tap
+  }
+  return ops
+}
 
 // the board table, three or five tiles by two: a polished top with an inlaid line, the edge, and what is on it
 const boardTableOps = ({ w }) => {
@@ -129,8 +140,8 @@ export const backroomArts = {
   machine: { under: false, ops: machineOps },
   labbench: { under: false, ops: labBenchOps },
   rack: { under: false, ops: rackOps },
-  stall: { under: false, ops: stallOps },
+  cubicle: { under: false, ops: cubicleOps },
   urinal: { under: false, ops: urinalOps },
-  basin: { under: false, ops: basinOps },
+  vanity: { under: false, ops: vanityOps },
   boardtable: { under: false, ops: boardTableOps },
 }

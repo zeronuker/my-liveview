@@ -7,7 +7,7 @@
 
 const TREES = [
   // the lawn at the top left, and the west edge
-  ['round', 7, 5], ['pine', 10, 8], ['round', 2, 5], ['pine', 3, 12], ['round', 2, 19], ['pine', 3, 27], ['round', 2, 34],
+  ['round', 7, 5], ['pine', 10, 8], ['round', 2, 5], ['pine', 2, 8], ['round', 2, 21], ['pine', 3, 27], ['round', 2, 34],
   // the lawn in front of the lobby
   ['pine', 3, 41], ['pine', 3, 46], ['round', 9, 47], ['round', 16, 48], ['pine', 5, 52], ['round', 12, 52], ['pine', 19, 52],
   // the east edge, and the bottom right

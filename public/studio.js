@@ -54,17 +54,18 @@ export const buildStudio = () => {
   door('swing', 33, 8, 1, 1, 'first') // foyer to office, swings into the office
 
   // ground floor: the back rooms (rows 11 to 16), each with a door in the wall at row 17
-  room('File room', 6, 11, 4, 6, 'gray')
-  room('Test lab', 11, 11, 4, 6, 'teal')
-  room('Server room', 16, 11, 3, 6, 'dark')
-  room("Men's bathroom", 20, 11, 2, 6, 'tile')
-  room("Women's bathroom", 23, 11, 2, 6, 'tile')
+  // the row reaches two tiles further west than it did, so each bathroom is three wide: fixtures along a wall, an aisle, a counter
+  room('File room', 4, 11, 4, 6, 'gray')
+  room('Test lab', 9, 11, 4, 6, 'teal')
+  room('Server room', 14, 11, 3, 6, 'dark')
+  room("Men's bathroom", 18, 11, 3, 6, 'tile')
+  room("Women's bathroom", 22, 11, 3, 6, 'tile')
   room('Meeting room', 26, 11, 10, 6, 'glass')
   room('CEO stairwell', 37, 16, 4, 1, 'stone')
-  door('swing', 6, 17) // file room, left end
-  door('swing', 14, 17) // test lab, right end
-  door('swing', 16, 17) // server room, left end
-  door('swing', 20, 17) // men, left end
+  door('swing', 7, 17) // file room, right end
+  door('swing', 12, 17) // test lab, right end
+  door('swing', 14, 17) // server room, left end
+  door('swing', 18, 17) // men, left end
   door('swing', 24, 17) // women, right end
   door('swing', 26, 17) // meeting room, left end
   door('double', 37, 17, 4, 1) // the CEO stairs: in the middle, across the whole width
@@ -151,16 +152,16 @@ export const buildStudio = () => {
   for (const [x, y] of [[13, 2], [13, 9]]) block('plant', x, y)
 
   // the file room: shelves down the sides, an aisle between
-  block('shelf', 6, 11, 1, 5)
-  block('shelf', 9, 11, 1, 6)
+  block('shelf', 4, 11, 1, 6)
+  block('shelf', 7, 11, 1, 5)
   const files = []
-  for (const y of [11, 12, 13, 14, 15, 16]) for (const x of [7, 8]) files.push({ x, y })
+  for (const y of [11, 12, 13, 14, 15, 16]) for (const x of [5, 6]) files.push({ x, y })
 
   // the test lab: a machine with a place on every side
-  block('machine', 12, 13, 2, 2)
+  block('machine', 10, 13, 2, 2)
   const lab = [
-    { x: 12, y: 12 }, { x: 13, y: 12 }, { x: 12, y: 15 }, { x: 13, y: 15 },
-    { x: 11, y: 13 }, { x: 11, y: 14 }, { x: 14, y: 13 }, { x: 14, y: 14 },
+    { x: 10, y: 12 }, { x: 11, y: 12 }, { x: 10, y: 15 }, { x: 11, y: 15 },
+    { x: 9, y: 13 }, { x: 9, y: 14 }, { x: 12, y: 13 }, { x: 12, y: 14 },
   ]
 
   // sofa seats, the nearest first: the hub, the lounge, then the lobby's waiting lounge
@@ -190,15 +191,16 @@ export const buildStudio = () => {
 
   // other things that are in the way
   // the server room: two rows of racks with an aisle between, the back row facing it, and a free column from the door
-  for (const x of [16, 17, 18]) block('rack', x, 11, 1, 2)
-  for (const x of [17, 18]) block('rack', x, 14, 1, 2, 'up')
-  // the men's: two urinals, a stall and two basins; the women's: three cubicles and two basins
-  for (const x of [20, 21]) block('urinal', x, 11)
-  block('stall', 21, 13, 1, 2, undefined, 'glass')
-  for (const [x, y] of [[23, 11], [24, 11], [23, 13]]) block('stall', x, y, 1, 2, undefined, 'lilac')
-  for (const [x, y] of [[21, 15], [21, 16], [23, 15], [23, 16]]) block('basin', x, y)
-  block('labbench', 11, 11, 2, 1) // the test lab: benches along the north wall
-  block('labbench', 13, 11, 2, 1)
+  for (const x of [14, 15, 16]) block('rack', x, 11, 1, 2)
+  for (const x of [15, 16]) block('rack', x, 14, 1, 2, 'up')
+  // the men's: four urinals along the west wall and a sink counter along the east one; the women's: three cubicles with
+  // a toilet each along the west wall and the same counter on the east. The aisle between stays clear, and so does the way in.
+  for (const y of [11, 12, 13, 14]) block('urinal', 18, y)
+  block('vanity', 20, 11, 1, 4, 'left')
+  for (const y of [11, 13, 15]) block('cubicle', 22, y, 1, 2, 'right', 'lilac')
+  block('vanity', 24, 11, 1, 4, 'left')
+  block('labbench', 9, 11, 2, 1) // the test lab: benches along the north wall
+  block('labbench', 11, 11, 2, 1)
   // the meeting room: a board table with five chairs a side, a TV on the east wall, plants, and a whiteboard
   block('boardtable', 28, 13, 5, 2)
   for (let x = 28; x < 33; x++) lay('chair', x, 12, 1, 1, 'down'), lay('chair', x, 15, 1, 1, 'up')
@@ -259,8 +261,8 @@ export const buildStudio = () => {
   win(29, 1, 3)
   win(41, 3, 1, 3) // the foyer, east wall
   win(14, 10, 6, 1, 'glass') // the conference room's glass wall
-  win(12, 10, 2) // north walls of the back rooms: lab, bathrooms, meeting room
-  win(20, 10, 2)
+  win(11, 10, 2) // north walls of the back rooms: lab, bathrooms, meeting room
+  win(20, 10, 1)
   win(23, 10, 2)
   win(27, 10, 3)
   win(32, 10, 3)

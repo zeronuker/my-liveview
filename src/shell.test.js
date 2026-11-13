@@ -76,10 +76,10 @@ test('a thin wall is six pixels of cap in the middle of its cell, with the rooms
 
   const inCell = (cx, cy) => shellOps(layout).filter(([, x, y]) => x >= cx * TILE && x < (cx + 1) * TILE && y >= cy * TILE && y < (cy + 1) * TILE)
   const capWidth = ops => Math.max(0, ...ops.filter(([, , , , , color]) => RAMPS.wallcap.includes(color)).map(([, , , w]) => w))
-  assert.equal(capWidth(inCell(10, 12)), 6) // between the file room and the test lab
+  assert.equal(capWidth(inCell(8, 12)), 6) // between the file room and the test lab
   assert.equal(capWidth(inCell(5, 25)), TILE) // the open office's west wall stays thick
-  assert.equal(capWidth(inCell(15, 17)), TILE) // and so does a post of the wall with the back rooms' doors, between two doors
-  assert.ok(inCell(10, 12).some(([, x, , , , color]) => x < 5 * TILE + 10 * TILE && RAMPS.stone.includes(color))) // the file room's floor carries on to the wall
+  assert.equal(capWidth(inCell(13, 17)), TILE) // and so does a post of the wall with the back rooms' doors, between two doors
+  assert.ok(inCell(8, 12).some(([, x, , , , color]) => x < 5 * TILE + 8 * TILE && RAMPS.stone.includes(color))) // the file room's floor carries on to the wall
 })
 
 test('the first floor and back rooms have thin vertical walls and thin door posts and windows; a whiteboard fits its cells', () => {

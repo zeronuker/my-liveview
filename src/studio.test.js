@@ -211,12 +211,22 @@ test('the plan is the same every time', () => {
   assert.deepEqual(buildStudio(), buildStudio())
 })
 
-test('the men\'s bathroom has urinals, the women\'s only cubicles, and the server room has two rows of racks with an aisle', () => {
+test('the men\'s bathroom has urinals along one wall, the women\'s cubicles along one wall, a sink counter on the opposite wall of each, and the server room has two rows of racks with an aisle', () => {
   const inRoom = (name, kind) => layout.furniture.filter(f => f.kind === kind && f.x >= roomNamed(name).x && f.x < roomNamed(name).x + roomNamed(name).w && f.y >= roomNamed(name).y && f.y < roomNamed(name).y + roomNamed(name).h)
-  assert.ok(inRoom("Men's bathroom", 'urinal').length >= 2)
+  const men = roomNamed("Men's bathroom")
+  const women = roomNamed("Women's bathroom")
+  assert.equal(men.w, 3)
+  assert.equal(women.w, 3)
+  assert.ok(inRoom("Men's bathroom", 'urinal').length >= 3)
+  assert.ok(inRoom("Men's bathroom", 'urinal').every(u => u.x === men.x), 'urinals along the west wall')
   assert.equal(inRoom("Women's bathroom", 'urinal').length, 0)
-  assert.ok(inRoom("Women's bathroom", 'stall').length >= 3)
-  assert.ok(inRoom("Men's bathroom", 'stall').length >= 1)
+  assert.ok(inRoom("Women's bathroom", 'cubicle').length >= 3)
+  assert.ok(inRoom("Women's bathroom", 'cubicle').every(c => c.x === women.x), 'cubicles along the west wall')
+  for (const room of [men, women]) {
+    const counter = inRoom(room.name, 'vanity')
+    assert.equal(counter.length, 1, `${room.name} has a sink counter`)
+    assert.equal(counter[0].x, room.x + room.w - 1, 'on the opposite wall')
+  }
   const racks = inRoom('Server room', 'rack')
   const rows = new Set(racks.map(rack => rack.y))
   assert.ok(rows.size >= 2 && racks.length >= 5, 'two rows of racks')

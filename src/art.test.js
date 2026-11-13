@@ -108,7 +108,7 @@ test('every kind of furniture in the social wing is drawn, at every size it is u
 })
 
 test('every piece of furniture in the back rooms is drawn, at every size it is used, inside its cells, with palette colours', () => {
-  const sizes = { shelf: [[1, 4], [1, 5], [1, 6]], machine: [[2, 2]], labbench: [[2, 1]], rack: [[1, 2]], stall: [[1, 2]], urinal: [[1, 1]], basin: [[1, 1]], boardtable: [[3, 2], [5, 2]] }
+  const sizes = { shelf: [[1, 4], [1, 5], [1, 6]], machine: [[2, 2]], labbench: [[2, 1]], rack: [[1, 2]], cubicle: [[1, 2]], urinal: [[1, 1]], vanity: [[1, 4]], boardtable: [[3, 2], [5, 2]] }
   assert.deepEqual(Object.keys(backroomArts).sort(), Object.keys(sizes).sort())
   for (const [kind, list] of Object.entries(sizes))
     for (const [w, h] of list) for (const x of [11, 13, 16, 17]) checkOps(backroomArts[kind].ops({ kind, x, y: 11, w, h }), w * TILE, h * TILE, `${kind} ${w} by ${h} at ${x}`)
@@ -127,13 +127,12 @@ test('the CEO desk and the drinks cabinet are drawn inside their cells with pale
   assert.ok(itemsOf(layout).some(item => item.kind === 'ceodesk'))
 })
 
-test('shelves differ from place to place, the two lab benches and the stalls are not all alike', () => {
+test('shelves differ from place to place, and the two lab benches are not alike', () => {
   const look = (kind, x, y, w, h) => JSON.stringify(backroomArts[kind].ops({ kind, x, y, w, h }))
   assert.notEqual(look('shelf', 6, 11, 1, 5), look('shelf', 9, 11, 1, 6))
   assert.notEqual(look('labbench', 11, 11, 2, 1), look('labbench', 13, 11, 2, 1))
-  assert.notEqual(look('stall', 20, 11, 1, 2), look('stall', 21, 11, 1, 2))
-  const coloured = tone => JSON.stringify(backroomArts.stall.ops({ kind: 'stall', x: 23, y: 11, w: 1, h: 2, tone }))
-  assert.notEqual(coloured('lilac'), coloured(undefined)) // the women's cubicles have doors of their own colour
+  const coloured = tone => JSON.stringify(backroomArts.cubicle.ops({ kind: 'cubicle', x: 22, y: 11, w: 1, h: 2, tone }))
+  assert.notEqual(coloured('lilac'), coloured(undefined)) // the women's cubicles are of their own colour
   const rack = face => backroomArts.rack.ops({ kind: 'rack', x: 17, y: 14, w: 1, h: 2, face })
   assert.notDeepEqual(rack('up'), rack(undefined)) // the back row shows its back
   checkOps(rack('up'), TILE, 2 * TILE, 'the back of a rack')
