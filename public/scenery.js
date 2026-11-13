@@ -4,103 +4,28 @@
 // scaled up with no smoothing. Plain data in, plain data out, so it can be
 // tested. People are in sprites.js.
 //
-// Much of this is still plain placeholder art for the Garden Studio plan (a box of
-// one colour for most furniture); the detailed art comes room by room, drawn with
-// the pixel-art skill and the palette in palette.js.
+// The shell (floors, walls, doors, windows, stairs) is drawn in art/shell.js. Much of the
+// furniture is still plain placeholder art (a box of one colour); the detailed art comes
+// room by room, drawn with the pixel-art skill and the palette in palette.js.
+import { shellOps } from './art/shell.js'
 import { ramp, shade } from './palette.js'
-import { levelAt } from './studio.js'
+import { hash } from './pixel.js'
 
 export const TILE = 16
 
-const hash = (x, y) => {
-  let h = (x * 374761393 + y * 668265263) | 0
-  h = Math.imul(h ^ (h >>> 13), 1274126177)
-  return (h ^ (h >>> 16)) >>> 0
-}
-
 const r = (x, y, w, h, color) => ['r', x, y, w, h, color]
-
-// how each room's floor looks: two shades, a line colour and a pattern
-const FLOORS = {
-  gray: { base: '#c8cdd6', alt: '#bfc5cf', line: '#aab1bd', style: 'tile' },
-  teal: { base: '#b7d4d8', alt: '#adcbd0', line: '#98b8be', style: 'tile' },
-  dark: { base: '#3c3c56', alt: '#363650', line: '#2d2d44', style: 'tile' },
-  tile: { base: '#dfe9ec', alt: '#d5e1e5', line: '#c3d1d6', style: 'tile' },
-  glass: { base: '#cfe6f0', alt: '#c5dfeb', line: '#b0cfdf', style: 'tile' },
-  stone: { base: '#b4b2a9', alt: '#aaa8a0', line: '#999790', style: 'tile' },
-  path: { base: '#c9b79a', alt: '#bfad8f', line: '#ab9a7e', style: 'tile' },
-  honey: { base: '#dcc59c', alt: '#d3bb90', line: '#bfa577', style: 'plank' },
-  street: { base: '#f2e6cc', alt: '#eadcbd', line: '#d9c9a5', style: 'plank' },
-  wood: { base: '#b98a5a', alt: '#af8052', line: '#9a6e45', style: 'plank' },
-  sage: { base: '#dde6d0', alt: '#d3ddc4', line: '#bccaa8', style: 'carpet' },
-  blue: { base: '#b9c5e0', alt: '#afbcd9', line: '#9aa8c9', style: 'carpet' },
-  lilac: { base: '#ccd3ea', alt: '#c2cae5', line: '#aeb7d4', style: 'carpet' },
-}
-
-// one tile of floor; `x`, `y` are the tile's place, so neighbours differ a little
-const floorTile = (tone, x, y) => {
-  const f = FLOORS[tone] ?? FLOORS.gray
-  const h = hash(x, y)
-  const ops = [r(0, 0, TILE, TILE, h % 5 === 0 ? f.alt : f.base)]
-  if (f.style === 'plank') {
-    for (const row of [3, 7, 11, 15]) ops.push(r(0, row, TILE, 1, f.line))
-    ops.push(r(4 + (h % 8), (h >>> 3) % 2 ? 0 : 8, 1, 3, f.line))
-  } else if (f.style === 'tile') {
-    ops.push(r(0, 0, TILE, 1, f.line), r(0, 0, 1, TILE, f.line))
-  } else {
-    for (let i = 0; i < 4; i++) ops.push(r((h >>> (i * 4)) % TILE, (h >>> (i * 4 + 2)) % TILE, 1, 1, f.alt))
-    ops.push(r((h >>> 5) % TILE, (h >>> 9) % TILE, 1, 1, f.line))
-  }
-  return ops
-}
 
 const grassTile = (x, y) => {
   const h = hash(x, y)
   return h % 3 === 0 ? [r((h >>> 4) % TILE, (h >>> 8) % TILE, 1, 1, shade('grass', 3)), r((h >>> 12) % TILE, (h >>> 16) % TILE, 1, 1, shade('grass', 1))] : []
 }
 
-// a flight of stairs: a step every four pixels
-const stairTile = () => [r(0, 0, TILE, TILE, '#d3d1c7'), ...[0, 4, 8, 12].map(y => r(0, y, TILE, 1, '#888780'))]
-
-// a wall block: its lighter top, and a darker foot
-const wallTile = () => {
-  const [dark, mid, base, light] = ramp('#4a4468')
-  return [r(0, 0, TILE, TILE, base), r(0, 0, TILE, 3, light), r(0, TILE - 3, TILE, 3, mid), r(0, TILE - 1, TILE, 1, dark)]
-}
-
-const DOORS = { sliding: '#9ec9e4', double: '#8d4c2a', swing: '#8d4c2a' }
-
-// the floor, walls and doors of the whole plan: ops in plan pixels (tile * 16)
+// the garden, and over it the shell of the plan: ops in plan pixels (tile * 16)
 export const groundOps = layout => {
   const ops = [r(0, 0, layout.width * TILE, layout.height * TILE, shade('grass', 2))]
-  const put = (tx, ty, tileOps) => {
-    for (const [, x, y, w, h, color] of tileOps) ops.push(r(tx * TILE + x, ty * TILE + y, w, h, color))
-  }
-  const open = (x, y) => (layout.grid[y]?.[x] ?? '#') !== '#'
-  const indoors = (x, y) => open(x, y) && levelAt(layout, x, y) !== 'outside'
-  const solidFurniture = new Set(layout.furniture.filter(f => f.solid).flatMap(f => Array.from({ length: f.w * f.h }, (_, i) => `${f.x + (i % f.w)},${f.y + Math.floor(i / f.w)}`)))
-
-  for (let ty = 0; ty < layout.height; ty++) for (let tx = 0; tx < layout.width; tx++) put(tx, ty, grassTile(tx, ty))
-  for (const room of layout.rooms)
-    for (let ty = room.y; ty < room.y + room.h; ty++)
-      for (let tx = room.x; tx < room.x + room.w; tx++) put(tx, ty, room.level === 'stairs' ? stairTile() : floorTile(room.tone, tx, ty))
-
-  for (const door of layout.doors)
-    for (let ty = door.y; ty < door.y + door.h; ty++)
-      for (let tx = door.x; tx < door.x + door.w; tx++) {
-        put(tx, ty, floorTile('street', tx, ty))
-        if (DOORS[door.kind]) put(tx, ty, [r(0, 7, TILE, 2, DOORS[door.kind])])
-      }
-
-  // a wall is a solid cell, with no furniture on it, that has some floor indoors beside it
   for (let ty = 0; ty < layout.height; ty++)
-    for (let tx = 0; tx < layout.width; tx++) {
-      if (open(tx, ty) || solidFurniture.has(`${tx},${ty}`)) continue
-      let beside = false
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) beside ||= indoors(tx + dx, ty + dy)
-      if (beside) put(tx, ty, wallTile())
-    }
-  return ops
+    for (let tx = 0; tx < layout.width; tx++) for (const [, x, y, w, h, color] of grassTile(tx, ty)) ops.push(r(tx * TILE + x, ty * TILE + y, w, h, color))
+  return [...ops, ...shellOps(layout)]
 }
 
 const SHADOW = 'rgba(0,0,0,0.28)'

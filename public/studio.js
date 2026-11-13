@@ -12,6 +12,7 @@
 //
 // rooms: [{ name, x, y, w, h, tone, level }]  the floor to draw (inside the walls)
 // doors: [{ kind, x, y, w, h, level }]        open cells in a wall: swing, double, sliding, arch
+// windows: [{ kind, x, y, w, h }]             on solid wall cells: 'window' or a 'glass' wall
 // furniture: [{ kind, x, y, w, h, solid }]    solid ones are '#' in the grid (a desk, a rail)
 // spots: where people stand for each kind of job. A seat also says which way it faces and,
 //        for a desk seat, which desk cell is in front of it.
@@ -168,6 +169,37 @@ export const buildStudio = () => {
   block('counter', 17, 42, 3, 1) // reception: the long side, and the short arm
   block('counter', 19, 40, 1, 2)
 
+  // windows: on solid wall cells. A window one cell high is seen on the face of a wall that runs
+  // east to west; one more than one cell high on the cap of a wall that runs north to south.
+  // 'glass' is a clear glass wall.
+  const windows = []
+  const win = (x, y, w, h = 1, kind = 'window') => windows.push({ x, y, w, h, kind })
+  win(14, 1, 2) // the top wall of the first floor: conference room
+  win(17, 1, 2)
+  win(22, 1, 3) // and the CEO office
+  win(29, 1, 3)
+  win(41, 3, 1, 3) // the foyer, east wall
+  win(14, 10, 6, 1, 'glass') // the conference room's glass wall
+  win(12, 10, 2) // north walls of the back rooms: lab, bathrooms, meeting room
+  win(20, 10, 2)
+  win(23, 10, 2)
+  win(27, 10, 3)
+  win(32, 10, 3)
+  win(27, 17, 9, 1, 'glass') // the meeting room's glass wall toward the street
+  win(5, 22, 1, 3) // the open office, west wall
+  win(5, 26, 1, 3)
+  win(5, 30, 1, 3)
+  win(5, 35, 1, 2) // the lobby, west wall
+  win(5, 38, 1, 2)
+  win(7, 40, 3) // the lobby, south wall
+  win(12, 40, 3)
+  win(16, 43, 8, 1, 'glass') // the glass front of the entrance
+  win(41, 21, 1, 4) // the social hub, east wall
+  win(41, 27, 1, 4)
+  win(41, 36, 1, 3) // the lounge, east wall
+  win(31, 41, 3) // and its south wall, over the pantry counter
+  win(35, 41, 2)
+
   return {
     width,
     height,
@@ -175,6 +207,7 @@ export const buildStudio = () => {
     grid: cells.map(row => row.join('')),
     rooms,
     doors,
+    windows,
     furniture,
     spots: {
       entrance: { x: 24, y: 48 },

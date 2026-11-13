@@ -25,15 +25,22 @@
 <h2>Furniture: each kind at 1x and 8x</h2>
 <div id="pieces" class="row"></div>
 
+<h2>Floors: each kind as 4 by 4 tiles at 3x (look for seams)</h2>
+<div id="floors" class="row"></div>
+
+<h2>Close-ups of the shell</h2>
+<div id="crops" class="row"></div>
+
 <h2>The floor and walls of the whole plan, at 2x</h2>
 <canvas id="ground"></canvas>
 
 <script type="module">
-import { buildLayout } from '/layout.js'
+import { FLOOR_TONES, floorTileOps } from '/art/shell.js'
 import { RAMPS } from '/palette.js'
 import { groundOps, itemsOf, paint, TILE } from '/scenery.js'
+import { buildStudio } from '/studio.js'
 
-const layout = buildLayout()
+const layout = buildStudio()
 
 for (const [name, shades] of Object.entries(RAMPS)) {
   const row = document.createElement('div')
@@ -79,6 +86,31 @@ ground.height = layout.height * TILE
 ground.style.width = `${ground.width * 2}px`
 ground.style.height = `${ground.height * 2}px`
 paint(ground.getContext('2d'), groundOps(layout))
+
+for (const tone of FLOOR_TONES) {
+  const ops = []
+  for (let y = 0; y < 4; y++)
+    for (let x = 0; x < 4; x++) for (const [kind, ox, oy, w, h, color] of floorTileOps(tone, x + 3, y + 5)) ops.push([kind, x * TILE + ox, y * TILE + oy, w, h, color])
+  show(document.getElementById('floors'), tone, ops, 4 * TILE, 4 * TILE, [3])
+}
+
+// a part of the plan, in tiles, copied from the big canvas and shown big
+const crop = (label, tx, ty, tw, th, scale) => {
+  const canvas = document.createElement('canvas')
+  canvas.width = tw * TILE
+  canvas.height = th * TILE
+  canvas.getContext('2d').drawImage(ground, tx * TILE, ty * TILE, tw * TILE, th * TILE, 0, 0, tw * TILE, th * TILE)
+  canvas.style.width = `${tw * TILE * scale}px`
+  canvas.style.height = `${th * TILE * scale}px`
+  const figure = document.createElement('figure')
+  const caption = document.createElement('figcaption')
+  caption.textContent = label
+  figure.append(canvas, caption)
+  document.getElementById('crops').append(figure)
+}
+crop('Back rooms and their doors (rows 9 to 20)', 4, 9, 40, 12, 3)
+crop('Lobby and entrance', 4, 33, 24, 13, 4)
+crop('Social wing: lounge, terrace doors, archway', 25, 31, 18, 13, 4)
 </script>
 </body>
 </html>

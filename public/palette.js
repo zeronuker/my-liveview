@@ -60,6 +60,15 @@ export const MATERIALS = {
   carpet: '#43386f',
   tile: '#6b4b4d',
   light: '#f2c94c',
+  // floors, one for each kind of room, and the cap of a wall
+  honey: '#d6bb88',
+  sage: '#c5d5b4',
+  periwinkle: '#aab8de',
+  lilac: '#c8cce6',
+  slate: '#b0b8c6',
+  frost: '#cfe0e6',
+  stone: '#b6b3a9',
+  wallcap: '#7d7898',
 }
 
 export const RAMPS = Object.fromEntries(Object.entries(MATERIALS).map(([name, base]) => [name, ramp(base)]))

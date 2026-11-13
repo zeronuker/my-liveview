@@ -168,6 +168,24 @@ test('there are enough desks, seats, shelves and lab places to share around, and
     assert.equal(new Set(spots.map(s => key(s.x, s.y))).size, spots.length)
 })
 
+test('every window is on a bare wall, with floor beside it to be seen from, and none overlap', () => {
+  const furnished = new Set(layout.furniture.flatMap(f => cellsOf(f).map(([x, y]) => key(x, y))))
+  const seen = new Set()
+  assert.ok(layout.windows.length > 0)
+  for (const w of layout.windows) {
+    const vertical = w.h > w.w
+    for (const [x, y] of cellsOf(w)) {
+      assert.equal(cell(x, y), '#', `${w.kind} at ${x},${y} is not on a wall`)
+      assert.ok(!furnished.has(key(x, y)), `${w.kind} at ${x},${y} is on furniture`)
+      assert.ok(!layout.doors.some(d => inside(d, x, y)), `${w.kind} at ${x},${y} is on a door`)
+      assert.ok(!seen.has(key(x, y)), `windows overlap at ${x},${y}`)
+      seen.add(key(x, y))
+      const sides = vertical ? [[x - 1, y], [x + 1, y]] : [[x, y - 1], [x, y + 1]]
+      assert.ok(sides.some(([sx, sy]) => isOpen(sx, sy) || furnished.has(key(sx, sy))), `${w.kind} at ${x},${y} has nothing to see it from`)
+    }
+  }
+})
+
 test('the plan is the same every time', () => {
   assert.deepEqual(buildStudio(), buildStudio())
 })

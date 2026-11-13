@@ -22,7 +22,7 @@ The Office is drawn in code, on a 16-pixel tile, with no image files. This skill
 1. Decide the piece's size in tiles and which materials it uses (look up shades with `shade('wood', 2)`).
 2. Block in the big flat shapes first. Then light and shadow. Then the outline. Then small details last.
 3. Add it to `PIECES` in `public/art-preview.html` and look at it (see "The check loop").
-4. Wire it in: `public/scenery.js` for places and furniture, `public/sprites.js` for people and animals, `public/layout.js` for where it goes. Keep the existing tests green.
+4. Wire it in. The art lives in `public/art/<part>.js`, one file for each part of the place (`shell.js` has the floors, walls, doors, windows and stairs; the server serves any `/art/<name>.js`). Furniture and props are registered in `ARTS` in `public/scenery.js`, people and animals in `public/sprites.js`, and where things go in `public/studio.js` (the plan). Windows are data in `studio.js` (`windows`). Keep the existing tests green, and test every new art file the way `src/shell.test.js` does: whole pixels, inside its size, palette colours only, the same every time.
 
 ## The check loop (do not skip)
 

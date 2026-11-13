@@ -129,7 +129,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.drawImage(ground, left, top, layout.width * tile, layout.height * tile)
     // a room's name goes in its top-left corner; small rooms and stairs have none
     for (const room of layout.rooms)
-      if (tile >= 9 && room.w >= 4 && room.level !== 'stairs') label(room.name, left + (room.x + 0.4) * tile, top + (room.y + 0.55) * tile, Math.max(9, tile * 0.5), 'left')
+      if (tile >= 14 && room.w >= 4 && room.level !== 'stairs') label(room.name, left + (room.x + 0.4) * tile, top + (room.y + 0.55) * tile, Math.max(9, tile * 0.5), 'left')
     const gate = layout.spots.entrance
     label('Front gate', left + (gate.x + 0.5) * tile, top + (gate.y + 0.5) * tile, Math.max(8, tile * 0.4))
   }

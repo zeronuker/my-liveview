@@ -83,6 +83,26 @@ test('the art preview page and the palette it uses are served', () =>
     assert.match(palette.headers.get('content-type'), /text\/javascript/)
   }))
 
+test('every file in the public folder is served, so a page never finds a missing import', () =>
+  withServer(async () => {
+    for (const name of fs.readdirSync(path.join(root, 'public'), { withFileTypes: true }).filter(e => e.isFile()).map(e => e.name)) {
+      const url = name === 'index.html' ? '/' : `/${name}`
+      assert.equal((await fetch(`${base}${url}`)).status, 200, name)
+    }
+    for (const name of fs.readdirSync(path.join(root, 'public', 'art'))) assert.equal((await fetch(`${base}/art/${name}`)).status, 200, `art/${name}`)
+  }))
+
+test('the art files are served from /art/<name>.js, and nothing else from that folder', () =>
+  withServer(async () => {
+    const shell = await fetch(`${base}/art/shell.js`)
+
+    assert.equal(shell.status, 200)
+    assert.match(shell.headers.get('content-type'), /text\/javascript/)
+    assert.equal((await fetch(`${base}/art/nope.js`)).status, 404)
+    assert.equal((await fetch(`${base}/art/..%2Fserver.js`)).status, 404)
+    assert.equal((await fetch(`${base}/art/shell.txt`)).status, 404)
+  }))
+
 test('stopping needs the token', () =>
   withServer(async () => {
     const stop = await fetch(`${base}/stop`, { method: 'POST' })
