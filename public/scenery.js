@@ -14,6 +14,7 @@ import { commonArts, decalOps } from './art/common.js'
 import { flowerOps, gardenHighOps, gardenLowOps } from './art/garden.js'
 import { lobbyArts } from './art/lobby.js'
 import { officeArts } from './art/office.js'
+import { overheadArts } from './art/overhead.js'
 import { shellOps } from './art/shell.js'
 import { socialArts } from './art/social.js'
 import { buildGarden } from './garden.js'
@@ -63,6 +64,7 @@ const boxOps = ({ w, h }, color) => {
 // what to draw for each kind of furniture; `under` things are drawn below the
 // people (a chair, a sofa sat on), the rest are in front of whoever is behind them. A piece taller than its
 // tile has a `rise`: that many pixels of its picture stand above its box, so the picture is `rise` taller than the box.
+// An `over` piece (a parasol, a hanging lamp) is above people's heads, so it is drawn after the people.
 const ARTS = {
   rail: { under: false, ops: railOps },
   ...backroomArts,
@@ -70,6 +72,7 @@ const ARTS = {
   ...commonArts,
   ...lobbyArts,
   ...officeArts,
+  ...overheadArts,
   ...socialArts,
 }
 
@@ -77,7 +80,7 @@ const ARTS = {
 export const itemsOf = layout =>
   layout.furniture.map(item => {
     const art = ARTS[item.kind] ?? { under: false, ops: () => boxOps(item, '#888780') }
-    return { ...item, under: art.under, rise: art.rise ?? 0, ops: art.ops(item), lights: art.lights?.(item) ?? [] }
+    return { ...item, under: art.under, over: art.over ?? false, rise: art.rise ?? 0, ops: art.ops(item), lights: art.lights?.(item) ?? [] }
   })
 
 // the lights that are not on a piece of furniture: a blinking sensor over each sliding door, in plan pixels

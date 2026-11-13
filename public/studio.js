@@ -226,6 +226,7 @@ export const buildStudio = () => {
   for (const [x, y] of [[40, 35], [27, 40]]) block('plant', x, y)
   // the terrace: two tables with chairs, plants, and a railing round the deck's edge
   for (const x of [34, 38]) block('cafetable', x, 44)
+  for (const x of [34, 38]) lay('parasol', x - 1, 44, 3, 1) // a parasol over each table, over the heads of whoever sits there
   for (const [x, y, face] of [[33, 44, 'right'], [35, 44, 'left'], [37, 44, 'right'], [39, 44, 'left']]) lay('chair', x, y, 1, 1, face)
   for (const [x, y] of [[31, 42], [40, 42]]) block('plant', x, y)
   block('deckrail', 31, 47, 10, 1)

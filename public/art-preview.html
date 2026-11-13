@@ -94,10 +94,10 @@ paint(ground.getContext('2d'), groundOps(layout))
 // the furniture on top, the pieces people sit on first, then the rest from the back of the plan to the front
 const placed = itemsOf(layout)
 const gctx = ground.getContext('2d')
-for (const item of placed.filter(i => i.under)) paint(gctx, item.ops, item.x * TILE, item.y * TILE)
+for (const item of placed.filter(i => i.under)) paint(gctx, item.ops, item.x * TILE, item.y * TILE - item.rise)
 // and a person at every desk seat, typing, reading or sitting, so the seated views can be checked (a desk hides the legs of whoever is behind it)
 const SHIRTS = ['#e24b4a', '#378add', '#639922', '#ef9f27', '#7f77dd', '#d4537e']
-const draws = placed.filter(i => !i.under).map(item => ({ key: item.y + item.h, run: () => paint(gctx, item.ops, item.x * TILE, item.y * TILE) }))
+const draws = placed.filter(i => !i.under && !i.over).map(item => ({ key: item.y + item.h, run: () => paint(gctx, item.ops, item.x * TILE, item.y * TILE - item.rise) }))
 ;[...layout.spots.desks, layout.spots.ceoSeat].forEach((seat, i) =>
   draws.push({
     key: seat.y + 0.9,
@@ -111,6 +111,7 @@ const draws = placed.filter(i => !i.under).map(item => ({ key: item.y + item.h, 
     },
   }))
 for (const one of draws.sort((a, b) => a.key - b.key)) one.run()
+for (const item of placed.filter(i => i.over)) paint(gctx, item.ops, item.x * TILE, item.y * TILE - item.rise) // what hangs over people goes over them
 
 for (const [kind, states] of Object.entries(PET_STATES))
   for (const state of states)

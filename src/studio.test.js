@@ -157,8 +157,8 @@ test('rugs lie on the floor inside the building, and pools of light are over the
   }
 })
 
-test('solid furniture is in the way on the grid and the rest is not', () => {
-  for (const f of layout.furniture)
+test('solid furniture is in the way on the grid and the rest is not (what hangs overhead is over whatever is below it)', () => {
+  for (const f of layout.furniture.filter(f => !['parasol', 'pendant'].includes(f.kind)))
     for (const [x, y] of cellsOf(f)) assert.equal(layout.grid[y][x] === '#', f.solid, `${f.kind} at ${x},${y}`)
 })
 
@@ -260,4 +260,12 @@ test('the huddle places are the meeting room\'s chairs, facing the table, and ca
     assert.ok(isOpen(h.x, h.y))
     assert.ok(layout.furniture.some(f => f.kind === 'chair' && !f.solid && f.x === h.x && f.y === h.y && f.face === h.face), 'a chair facing that way')
   }
+})
+
+test('a parasol stands over each cafe table of the terrace, centred on it, and over nothing solid', () => {
+  const tables = layout.furniture.filter(f => f.kind === 'cafetable')
+  const parasols = layout.furniture.filter(f => f.kind === 'parasol')
+  assert.ok(tables.length >= 2)
+  for (const table of tables) assert.ok(parasols.some(p => p.y === table.y && p.x + 1 === table.x && p.w === 3), `a parasol over the table at ${table.x},${table.y}`)
+  for (const p of parasols) assert.equal(p.solid, false)
 })

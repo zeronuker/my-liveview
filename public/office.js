@@ -445,9 +445,10 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     const here = [...new Set(snap.workers.map(w => w.sessionId).filter(Boolean))]
     multiChat = here.length > 1
     const tags = []
-    const draws = items.filter(item => !item.under).map(item => ({ key: item.y + item.h, run: () => drawItem(item, view, open, t) }))
+    const draws = items.filter(item => !item.under && !item.over).map(item => ({ key: item.y + item.h, run: () => drawItem(item, view, open, t) }))
     for (const person of [ceo, ...snap.workers]) draws.push({ key: person.y + 0.9, run: () => drawPerson(person, view, t, ink, tags) })
     for (const one of draws.sort((a, b) => a.key - b.key)) one.run()
+    for (const item of items) if (item.over) drawItem(item, view, open, t) // what is overhead goes over the people
 
     // the number of papers on the manager's tray, and then names, labels and bubbles
     const tray = layout.furniture.find(item => item.kind === 'tray')

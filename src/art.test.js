@@ -6,6 +6,7 @@ import { ceoArts } from '../public/art/ceo.js'
 import { commonArts, decalOps } from '../public/art/common.js'
 import { lobbyArts } from '../public/art/lobby.js'
 import { deskOnOps, officeArts } from '../public/art/office.js'
+import { overheadArts } from '../public/art/overhead.js'
 import { socialArts } from '../public/art/social.js'
 import { inPalette } from '../public/palette.js'
 import { ellipseOps, glowOps, gridOps, ringOps } from '../public/pixel.js'
@@ -187,4 +188,14 @@ test('plants come in several kinds, sofas in several styles and colours, and rug
   assert.equal(new Set(samePlace).size, 4, 'the four patterns look different')
   assert.ok(rugs.size >= 9)
   assert.ok(new Set(layout.rugs.filter(r => r.kind === 'rug').map(r => r.shape ?? 'oval')).size >= 2, 'some round, some rectangular')
+})
+
+test('a parasol is drawn inside its three tiles and its rise, striped, and is drawn over the people', () => {
+  const art = overheadArts.parasol
+  assert.ok(art.over && !art.under && art.rise > 0)
+  const ops = art.ops({ kind: 'parasol', x: 33, y: 44, w: 3, h: 1 })
+  checkOps(ops, 3 * TILE, TILE + art.rise, 'the parasol')
+  assert.ok(new Set(ops.map(([, , , , , color]) => color)).size >= 5, 'stripes and shading')
+  const parasols = itemsOf(layout).filter(item => item.kind === 'parasol')
+  assert.ok(parasols.length >= 2 && parasols.every(item => item.over && !item.solid))
 })
