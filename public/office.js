@@ -245,31 +245,35 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     return image
   }
 
-  // the pets, on the grass: small, so a whole number of screen pixels to a pixel of theirs at a sixteenth of a tile. They
+  // where each pet is drawn now, gliding after where it is (once a frame: the glide moves on each time it is asked)
+  const placedPets = () =>
+    pets
+      .snapshot()
+      .sort((a, b) => a.y - b.y)
+      .map(pet => ({ pet, g: reduced ? { x: pet.x, y: pet.y, vx: 0, stride: 0, moving: false } : glide.place(pet.id, pet.x, pet.y, frameDt) }))
+
+  // a pet, on the grass: small, so a whole number of screen pixels to a pixel of theirs at a sixteenth of a tile. They
   // glide, with a step that goes with the distance gone; a pet that is moving is drawn between pixels, one that is still on them.
-  const drawPets = (view, t) => {
+  const drawPet = ({ pet, g }, view, t) => {
     const { tile } = view
     const unit = Math.max(1, Math.round((tile * ratio) / 16)) / ratio
-    for (const pet of pets.snapshot().sort((a, b) => a.y - b.y)) {
-      const g = reduced ? { x: pet.x, y: pet.y, vx: 0, stride: 0, moving: false } : glide.place(pet.id, pet.x, pet.y, frameDt)
-      const state = g.moving ? 'walk' : pet.state === 'walk' ? 'rest' : pet.state
-      const sprite = petSprite(pet.kind, state, reduced ? 0 : state === 'walk' ? g.stride / 1.5 : t)
-      const spot = centre(view, g.x, g.y)
-      const cx = spot.x
-      const feet = spot.y + tile * 0.4
-      const hop = g.moving ? -(Math.sin((g.stride * Math.PI) / 0.5) ** 2) * tile * 0.07 : 0
-      const at = value => (g.moving ? value : Math.round(value * ratio) / ratio)
-      ctx.fillStyle = 'rgba(0,0,0,0.25)'
-      ctx.beginPath()
-      ctx.ellipse(cx, feet, sprite.width * unit * 0.4, tile * 0.07, 0, 0, Math.PI * 2)
-      ctx.fill()
-      ctx.save()
-      ctx.imageSmoothingEnabled = g.moving
-      ctx.translate(at(cx), at(feet + hop) - sprite.height * unit)
-      ctx.scale((Math.abs(g.vx) > 0.15 ? g.vx : pet.facing) < 0 ? -1 : 1, 1)
-      ctx.drawImage(imageOf(sprite), (-sprite.width * unit) / 2, 0, sprite.width * unit, sprite.height * unit)
-      ctx.restore()
-    }
+    const state = g.moving ? 'walk' : pet.state === 'walk' ? 'rest' : pet.state
+    const sprite = petSprite(pet.kind, state, reduced ? 0 : state === 'walk' ? g.stride / 1.5 : t)
+    const spot = centre(view, g.x, g.y)
+    const cx = spot.x
+    const feet = spot.y + tile * 0.4
+    const hop = g.moving ? -(Math.sin((g.stride * Math.PI) / 0.5) ** 2) * tile * 0.07 : 0
+    const at = value => (g.moving ? value : Math.round(value * ratio) / ratio)
+    ctx.fillStyle = 'rgba(0,0,0,0.25)'
+    ctx.beginPath()
+    ctx.ellipse(cx, feet, sprite.width * unit * 0.4, tile * 0.07, 0, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.save()
+    ctx.imageSmoothingEnabled = g.moving
+    ctx.translate(at(cx), at(feet + hop) - sprite.height * unit)
+    ctx.scale((Math.abs(g.vx) > 0.15 ? g.vx : pet.facing) < 0 ? -1 : 1, 1)
+    ctx.drawImage(imageOf(sprite), (-sprite.width * unit) / 2, 0, sprite.width * unit, sprite.height * unit)
+    ctx.restore()
   }
 
   // the pond's koi: a body, a tail that wags with the swimming, a fin and an eye, turned to the way the fish is heading
@@ -534,7 +538,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     glide.keep([...people.map(p => p.id), ...pets.snapshot().map(pet => pet.id)])
     hits.length = 0
     drawFish(view)
-    drawPets(view, t)
+    if (!angled) for (const placed of placedPets()) drawPet(placed, view, t) // all before the furniture; the angled view draws them in their rows
     if (!angled) for (const light of fixedLights) drawLight(light, view.left, view.top, view.tile, t)
 
     // who is writing where: that desk's screen is lit
@@ -552,12 +556,14 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     multiChat = here.length > 1
     const tags = []
     if (angled) {
-      // back to front by diagonal row: a row's walls and furniture, then the people standing in it
+      // back to front by diagonal row: a row's walls and furniture, then the people and pets standing in it
       const rows = Array.from({ length: isoScene.bandCount }, () => [])
-      for (const person of people) rows[Math.min(rows.length - 1, Math.max(0, Math.floor(person.x + person.y + 0.5)))].push(person)
+      const put = ({ x, y }, run) => rows[Math.min(rows.length - 1, Math.max(0, Math.floor(x + y + 0.5)))].push(run)
+      for (const person of people) put(person, () => drawPerson(person, view, t, ink, tags))
+      for (const placed of placedPets()) put(placed.g, () => drawPet(placed, view, t))
       rows.forEach((row, d) => {
         isoScene.drawBand(ctx, view, d, open, t, reduced)
-        for (const person of row) drawPerson(person, view, t, ink, tags)
+        for (const run of row) run()
       })
     } else {
       for (const item of items) if (item.under) drawItem(item, view, open, t)
