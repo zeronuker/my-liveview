@@ -18,6 +18,7 @@
   --num: #fcd34d;
   --com: #6670a8;
   --key: #93c5fd;
+  --fn: #60a5fa;
 }
 
 :root[data-theme='dark'] {
@@ -38,6 +39,7 @@
   --num: #fbbf24;
   --com: #6b7280;
   --key: #7dd3fc;
+  --fn: #60a5fa;
 }
 
 :root[data-theme='light'] {
@@ -58,6 +60,7 @@
   --num: #b45309;
   --com: #9ca3af;
   --key: #0369a1;
+  --fn: #1d4ed8;
 }
 
 :root[data-theme='terminal'] {
@@ -78,6 +81,7 @@
   --num: #ffd866;
   --com: #3f7a52;
   --key: #7dffa8;
+  --fn: #6ee7ff;
 }
 
 /* blue and orange instead of green and red, for colorblind eyes */
@@ -99,6 +103,7 @@
   --num: #ffb066;
   --com: #c8c8c8;
   --key: #ffd400;
+  --fn: #5ec8ff;
 }
 
 * {
@@ -726,6 +731,12 @@ body.wrap .row .t {
   visibility: hidden;
 }
 
+.row .t {
+  justify-self: start; /* the highlight stops where the code stops */
+  padding: 0 0.5em;
+  border-radius: 3px;
+}
+
 .row .n {
   padding-right: 1em;
   text-align: right;
@@ -754,18 +765,42 @@ body.wrap .row .t {
 }
 
 .row.add {
-  background: var(--abg);
   color: var(--afg);
 }
 
 .row.del {
-  background: var(--dbg);
   color: var(--dfg);
 }
 
 .row.add.new {
-  background: var(--nbg);
   color: var(--nfg);
+}
+
+/* the colour of a changed line is its background; the code keeps its syntax colours */
+.row.add .t,
+.row.del .t {
+  color: var(--fg);
+}
+
+.row.add .t {
+  background: var(--abg);
+}
+
+.row.del .t {
+  background: var(--dbg);
+}
+
+.row.add.new .t {
+  background: var(--nbg);
+}
+
+/* old code that is about to go looks like any other line until it does */
+.row.del.old {
+  color: var(--dim);
+}
+
+.row.del.old .t {
+  background: none;
 }
 
 /* the words that changed inside a changed line */
@@ -786,7 +821,7 @@ body.wrap .row .t {
 }
 
 /* the newest line: an accent bar, a soft glow and a caret */
-.row.nw {
+.row.nw .t {
   box-shadow: inset 3px 0 0 var(--acc), 0 0 14px -2px color-mix(in srgb, var(--acc) 70%, transparent);
 }
 
@@ -797,6 +832,16 @@ body.wrap .row .t {
 
 .t-kw {
   color: var(--kw);
+}
+
+.t-fn {
+  color: var(--fn);
+}
+
+/* a stretch of a line selected by the typing (the changed words, before they are replaced) */
+.t .pick {
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--acc) 38%, transparent);
 }
 
 .t-str {
@@ -816,21 +861,12 @@ body.wrap .row .t {
   color: var(--key);
 }
 
-/* the dim background blinks while the edit is live, then stays steady */
-.rows.live .row.add,
-.rows.live .row.del {
-  animation: blink 1s steps(1) infinite;
-}
-
-/* 10s after an edit is done the add/del row colour fades away (pane.js adds .faded) */
-.row.add,
-.row.del {
-  transition: background 1.2s;
-}
-
-.rows.faded .row.add,
-.rows.faded .row.del {
+/* 10s after an edit is done the add/del colour fades away (pane.js adds .faded) */
+.rows.faded .row.add .t,
+.rows.faded .row.del .t,
+.rows.faded .chg {
   background: transparent;
+  transition: background 1.2s;
 }
 
 body.paused .row,
@@ -878,12 +914,6 @@ body.paused .dot {
   border-radius: 3px;
   background: color-mix(in srgb, var(--fg) 22%, transparent);
   pointer-events: none;
-}
-
-@keyframes blink {
-  50% {
-    background: transparent;
-  }
 }
 
 @keyframes caret {
@@ -961,8 +991,6 @@ body.paused .dot {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .rows.live .row.add,
-  .rows.live .row.del,
   .caret,
   .dot {
     animation: none;

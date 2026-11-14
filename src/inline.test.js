@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { inlineDiff, withInlineDiff } from '../public/inline.js'
+import { blockKind, changedRanges, editOf, inlineDiff, withInlineDiff } from '../public/inline.js'
 
 const changed = parts => parts.filter(p => p.isChanged).map(p => p.text)
 
@@ -59,4 +59,29 @@ test('withInlineDiff leaves the rows it was given alone', () => {
   withInlineDiff(rows)
 
   assert.deepEqual(rows, copy)
+})
+
+test('editOf says what two lines share at both ends and what lies between', () => {
+  assert.deepEqual(editOf('const LIMIT = 50', 'const LIMIT = 75'), { head: 'const LIMIT = ', tail: '', oldMid: '50', newMid: '75' })
+  assert.deepEqual(editOf('run(a)', 'run(a, b)'), { head: 'run(a', tail: ')', oldMid: '', newMid: ', b' })
+  assert.equal(editOf('alpha beta gamma delta', 'one two three four five six'), null)
+})
+
+test('a change is told apart by what it does to the lines', () => {
+  assert.equal(blockKind(['old'], []), 'del')
+  assert.equal(blockKind([], ['new']), 'new')
+  assert.equal(blockKind(['const LIMIT = 50'], ['const LIMIT = 75']), 'minor')
+  assert.equal(blockKind(['a = 1', 'b = 2'], ['a = 9', 'b = 8']), 'minor')
+  assert.equal(blockKind(['const LIMIT = 50'], ['export function total() {']), 'replace')
+  assert.equal(blockKind(['a = 1'], ['a = 9', 'b = 8']), 'replace') // different number of lines
+  assert.equal(blockKind(['a = 1', 'return x + y'], ['a = 9', 'function go() {']), 'replace') // one pair is a rewrite
+})
+
+test('changedRanges gives the character ranges of the brightened words', () => {
+  const diff = inlineDiff('const LIMIT = 50', 'const LIMIT = 750')
+
+  assert.deepEqual(changedRanges(diff.after), [[14, 17]])
+  assert.deepEqual(changedRanges(diff.before), [[14, 16]])
+  assert.deepEqual(changedRanges(undefined), [])
+  assert.deepEqual(changedRanges([{ text: 'x', isChanged: false }]), [])
 })
