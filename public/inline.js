@@ -2,11 +2,12 @@
 // changed, so the page can brighten just those. Plain code, no library.
 const tokens = text => text.match(/\w+|\s+|[^\w\s]/g) ?? []
 
-// A changed line is told apart only where it differs: what the two lines both
-// start with and both end with is shared, the part between is the change.
+// Where two lines differ: what both start with (head) and both end with (tail)
+// is shared, the part between is the change. Null when the lines share almost
+// nothing: that is a rewrite, and brightening all of it says nothing.
 // ponytail: one changed stretch per line (the first difference to the last);
 // two far-apart changes in one line brighten everything between them too.
-export const inlineDiff = (before, after) => {
+export const editOf = (before, after) => {
   const a = tokens(before)
   const b = tokens(after)
   let top = 0
@@ -14,24 +15,43 @@ export const inlineDiff = (before, after) => {
   let bot = 0
   while (bot < a.length - top && bot < b.length - top && a[a.length - 1 - bot] === b[b.length - 1 - bot]) bot++
 
-  const parts = (list, other) => {
-    const head = list.slice(0, top).join('')
-    const middle = list.slice(top, list.length - bot).join('')
-    const tail = list.slice(list.length - bot).join('')
-    return { head, middle, tail, isWhole: head.length + tail.length < other.join('').length * 0.3 }
-  }
-  const x = parts(a, b)
-  const y = parts(b, a)
-  // lines that share almost nothing are a rewrite: brightening all of it says nothing
-  if (x.isWhole && y.isWhole) return null
+  const head = a.slice(0, top).join('')
+  const tail = a.slice(a.length - bot).join('')
+  if (head.length + tail.length < before.length * 0.3 && head.length + tail.length < after.length * 0.3) return null
+  return { head, tail, oldMid: a.slice(top, a.length - bot).join(''), newMid: b.slice(top, b.length - bot).join('') }
+}
 
-  const pieces = ({ head, middle, tail }) =>
+export const inlineDiff = (before, after) => {
+  const edit = editOf(before, after)
+  if (!edit) return null
+  const pieces = middle =>
     [
-      { text: head, isChanged: false },
+      { text: edit.head, isChanged: false },
       { text: middle, isChanged: true },
-      { text: tail, isChanged: false },
+      { text: edit.tail, isChanged: false },
     ].filter(piece => piece.text !== '')
-  return { before: pieces(x), after: pieces(y) }
+  return { before: pieces(edit.oldMid), after: pieces(edit.newMid) }
+}
+
+// What a change is, from the lines it takes out and the lines it puts in:
+// 'del' takes code out and puts nothing back, 'new' only adds, 'minor' changes
+// a few words in each line (same number of lines, each pair alike), and
+// 'replace' is anything else.
+export const blockKind = (dels, adds) => {
+  if (adds.length === 0) return 'del'
+  if (dels.length === 0) return 'new'
+  return dels.length === adds.length && dels.every((text, i) => editOf(text, adds[i])) ? 'minor' : 'replace'
+}
+
+// The [from, to) character ranges of a line's changed words, from its `parts`.
+export const changedRanges = parts => {
+  const ranges = []
+  let at = 0
+  for (const part of parts ?? []) {
+    if (part.isChanged) ranges.push([at, at + part.text.length])
+    at += part.text.length
+  }
+  return ranges
 }
 
 // The rows of an edit with each removed line paired to the added line that

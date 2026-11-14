@@ -1,5 +1,5 @@
-import { highlight, langOf } from './highlight.js'
-import { withInlineDiff } from './inline.js'
+import { langOf, segments } from './highlight.js'
+import { changedRanges, withInlineDiff } from './inline.js'
 import { typingPlan } from './typing.js'
 
 const MARKS = { add: '+', del: '-', ctx: ' ' }
@@ -14,21 +14,26 @@ const make = (tag, className, ...children) => {
 
 const baseName = path => path.split(/[\\/]/).filter(Boolean).pop() ?? path
 
-const buildRow = (row, { isNew, lang }) => {
-  const el = make('div', `row ${row.kind}${row.kind === 'add' && isNew ? ' new' : ''}`)
+// Draws `text` into a row's text span: syntax colours, the changed words
+// (`row.parts`, unless `chg` says which), what is selected and the caret.
+const drawText = (t, row, text, lang, { chg, sel, caret } = {}) => {
+  t.replaceChildren()
+  for (const piece of segments(text, lang, { chg: chg ?? changedRanges(row.parts), sel, caret })) {
+    const classes = [piece.cls && `t-${piece.cls}`, piece.chg && 'chg', piece.sel && 'pick'].filter(Boolean).join(' ')
+    if (piece.caret) t.append(make('span', CARET, '▍'))
+    else t.append(classes ? make('span', classes, piece.text) : piece.text)
+  }
+}
+
+const buildRow = (row, { isNew, isOld, lang }) => {
+  const el = make('div', `row ${row.kind}${row.kind === 'add' && isNew ? ' new' : ''}${row.kind === 'del' && isOld ? ' old' : ''}`)
   el.dataset.kind = row.kind
   if (row.kind === 'gap') {
     el.textContent = row.text
     return el
   }
   const text = make('span', 't')
-  if (row.kind === 'ctx')
-    for (const part of highlight(row.text, lang))
-      text.append(part.cls ? make('span', `t-${part.cls}`, part.text) : part.text)
-  else if (row.parts)
-    // a line that replaced another: only the words that changed are brightened
-    for (const part of row.parts) text.append(part.isChanged ? make('span', 'chg', part.text) : part.text)
-  else text.textContent = row.text ?? ''
+  drawText(text, row, row.text ?? '', lang)
   el.append(make('span', 'n', String(row.n ?? '')), make('span', 'm', MARKS[row.kind] ?? ''), text)
   return el
 }
@@ -65,8 +70,9 @@ const buildSide = (rows, opts) => {
   return { node: split, all: [...left, ...right], adds: right.filter(el => el.dataset.kind === 'add'), shown }
 }
 
-const build = (rows, event, isSide) => {
-  const opts = { isNew: event.isNew, lang: langOf(event.path) }
+// `isOld`: removed lines look like any other until the animation takes them out
+const build = (rows, event, isSide, isOld) => {
+  const opts = { isNew: event.isNew, isOld, lang: langOf(event.path) }
   if (isSide) return buildSide(rows, opts)
   const shown = withInlineDiff(rows)
   const all = shown.map(row => buildRow(row, opts))
@@ -88,19 +94,8 @@ const blocksOf = rows => {
   return blocks
 }
 
-// A line showing the first part of its text; a line that replaced another
-// keeps its changed words brightened as far as they have been typed.
-const paintLine = (el, row, text) => {
-  const t = el.querySelector('.t')
-  t.replaceChildren()
-  if (!row.parts || !row.text.startsWith(text)) return t.append(text)
-  let left = text.length
-  for (const part of row.parts) {
-    const piece = part.text.slice(0, left)
-    left -= piece.length
-    if (piece) t.append(part.isChanged ? make('span', 'chg', piece) : piece)
-  }
-}
+// A line showing the first part of its text, or what the plan says it shows now.
+const paintLine = (el, row, text, lang, opts) => drawText(el.querySelector('.t'), row, text, lang, opts)
 
 let uses = 0 // a counter, so "used longest ago" is never a tie
 
@@ -203,7 +198,7 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
     current.newest = el
     if (!el) return
     el.classList.add('nw')
-    el.querySelector('.t').append(make('span', CARET, '▍'))
+    if (!el.querySelector(`.${CARET}`)) el.querySelector('.t').append(make('span', CARET, '▍'))
   }
 
   const stop = () => {
@@ -235,7 +230,9 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
     const prefs = getPrefs()
     nameEl.textContent = baseName(event.path)
     nameEl.title = event.path
-    const built = build(rows, event, prefs.side)
+    const lang = langOf(event.path)
+    // side by side keeps the removed lines red, for they stay
+    const built = build(rows, event, prefs.side, animate && !prefs.side)
     if (built.node) rowsEl.replaceChildren(built.node)
     else rowsEl.replaceChildren(...built.all)
     const { all, adds } = built
@@ -249,7 +246,6 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
     renderMini()
 
     const settle = () => {
-      rowsEl.classList.remove('live')
       markNewest(null)
       current.phase = 'edited'
       fadeLater()
@@ -257,7 +253,6 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
       onSettle(pane)
     }
     if (!animate) {
-      rowsEl.classList.remove('live')
       current.phase = 'edited'
       fadeLater()
       refresh()
@@ -265,14 +260,13 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
       return
     }
 
-    // the new lines are typed, the removed ones selected first; the real edit is
+    // the new code is written first and the old code goes last; the real edit is
     // already decided, only the way it is written is staged
-    const { steps } = typingPlan(blocksOf(built.shown))
+    const { steps } = typingPlan(blocksOf(built.shown), { keepRemoved: prefs.side })
     const dels = all.filter(el => el.dataset.kind === 'del')
     const delRows = built.shown.filter(row => row.kind === 'del')
     const addRows = built.shown.filter(row => row.kind === 'add')
     adds.forEach(el => reveal(el, false))
-    rowsEl.classList.add('live')
     refresh()
     if (prefs.follow && firstChanged) keepCentered(firstChanged, false)
     let at = 0 // ms of the plan played so far, at the normal pace
@@ -290,12 +284,16 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
         const s = steps[next++]
         if ('add' in s) {
           reveal(adds[s.add], true)
-          paintLine(adds[s.add], addRows[s.add], s.text)
-          moved = adds[s.add]
+          paintLine(adds[s.add], addRows[s.add], s.text, lang, {
+            chg: 'chg' in s ? (s.chg ? [s.chg] : []) : undefined,
+            sel: s.sel && [s.sel],
+            caret: s.caret,
+          })
+          if (s.at > 0) moved = adds[s.add] // a step at 0 only sets the line up
         } else if ('del' in s) {
           reveal(dels[s.del], !s.gone)
-          paintLine(dels[s.del], delRows[s.del], s.text)
-          moved = s.gone ? false : dels[s.del]
+          paintLine(dels[s.del], delRows[s.del], s.text, lang)
+          if (s.at > 0) moved = s.gone ? false : dels[s.del]
         } else dels.forEach((el, i) => el.classList.toggle('sel', s.select !== null && i >= s.select[0] && i < s.select[1]))
       }
       if (moved !== null) {
@@ -318,14 +316,14 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
       markNewest(null)
       adds.forEach((el, i) => {
         reveal(el, true)
-        paintLine(el, addRows[i], addRows[i].text ?? '')
+        paintLine(el, addRows[i], addRows[i].text ?? '', lang)
       })
+      // skipped: the removed lines are shown again, in red, as a record of the edit
       dels.forEach((el, i) => {
         reveal(el, true)
-        paintLine(el, delRows[i], delRows[i].text ?? '')
-        el.classList.remove('sel')
+        paintLine(el, delRows[i], delRows[i].text ?? '', lang)
+        el.classList.remove('sel', 'old')
       })
-      rowsEl.classList.remove('live')
       current.phase = 'edited'
       fadeLater()
       refresh()
@@ -337,7 +335,6 @@ export const createPane = ({ index, getPrefs, isPaused, didFail, onSettle, onSta
     stop()
     current = null
     rowsEl.replaceChildren()
-    rowsEl.classList.remove('live')
     nameEl.textContent = 'Waiting for an edit...'
     nameEl.removeAttribute('title')
     chatEl.textContent = ''
