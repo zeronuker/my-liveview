@@ -1,0 +1,297 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Angled Office concept</title>
+<style>
+  :root { --bg: #1e1e24; --fg: #ddd; --panel: #2a2a32; }
+  body { margin: 16px; background: var(--bg); color: var(--fg); font: 14px system-ui, sans-serif; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  h2 { font-size: 15px; margin: 24px 0 6px; }
+  p { margin: 4px 0; opacity: 0.75; max-width: 70ch; }
+  canvas { display: block; width: 100%; image-rendering: pixelated; background: var(--panel); }
+</style>
+</head>
+<body>
+<h1>Angled Office: concept picture</h1>
+<p>A static mock-up, not the real view. It reads the real floor plan (<code>studio.js</code>) and the real palette, and draws it as a 2:1 diamond view, light from the top-left. Walls facing you are cut low, walls at the back stand tall, people stand upright.</p>
+
+<h2>The whole office</h2>
+<canvas id="whole"></canvas>
+
+<h2>One room in full detail: the open office</h2>
+<canvas id="room"></canvas>
+
+<script type="module">
+import { buildStudio, levelAt } from '/studio.js'
+import { shade } from '/palette.js'
+
+const layout = buildStudio()
+const { rooms, furniture, windows, spots } = layout
+
+// the floor colour of each kind of room (the same materials as art/shell.js)
+const FLOOR = {
+  honey: ['honey', 2], street: ['honey', 3], wood: ['wood', 2], sage: ['sage', 2], blue: ['periwinkle', 2],
+  lilac: ['lilac', 2], glass: ['frost', 2], gray: ['stone', 2], teal: ['slate', 2], tile: ['frost', 2],
+  stone: ['stone', 2], path: ['stone', 1], dark: ['metal', 1],
+}
+// what each piece of furniture is made of and how tall it stands, in pixels
+const STYLE = {
+  ceodesk: ['leather', 6], plant: ['leaf', 12], coffeetable: ['wood', 3], shelf: ['wood', 18], cabinet: ['wood', 7],
+  sidetable: ['wood', 5], boardtable: ['wood', 5], tv: ['metal', 12], machine: ['metal', 12], rail: ['metal', 4],
+  pingpong: ['leaf', 5], rack: ['metal', 14], vending: ['fabricCool', 16], fridge: ['frost', 14], counter: ['wood', 6],
+  island: ['wood', 6], coffeebar: ['wood', 6], cafetable: ['wood', 4], stool: ['wood', 3], reception: ['wood', 7],
+  labbench: ['metal', 6], cubicle: ['tile', 10], urinal: ['frost', 8], vanity: ['frost', 6], sink: ['frost', 6],
+  cooler: ['glass', 9], bin: ['metal', 4], coatstand: ['wood', 14], umbrella: ['fabricCool', 4], parasol: ['fabricWarm', 3],
+  deckrail: ['wood', 3],
+}
+const TONES = new Set(['leather', 'fabricWarm', 'fabricCool', 'terracotta', 'sage'])
+const TABLES = new Set(['desk', 'ceodesk', 'boardtable', 'cafetable', 'coffeetable', 'sidetable'])
+const SOFAS = new Set(['sofa', 'armchair'])
+
+const inside = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
+const isFloor = (x, y) => levelAt(layout, x, y) !== null
+const inGrid = (x, y) => x >= 0 && y >= 0 && x < layout.width && y < layout.height
+const near = (x, y, n, test) => {
+  for (let j = -n; j <= n; j++) for (let i = -n; i <= n; i++) if ((i || j) && inGrid(x + i, y + j) && test(x + i, y + j)) return true
+  return false
+}
+const isWall = (x, y) => inGrid(x, y) && !isFloor(x, y) && near(x, y, 1, isFloor)
+const isBuilding = (x, y) => inGrid(x, y) && (isFloor(x, y) || isWall(x, y))
+const toneAt = (x, y) => (rooms.findLast(r => inside(r, x, y)) ?? { tone: 'stone' }).tone
+const furnAt = (x, y) => furniture.find(f => f.kind !== 'pendant' && inside(f, x, y))
+const hash = (x, y) => ((x * 73856093) ^ (y * 19349663)) >>> 0
+
+const rect = (c, x, y, w, h, color) => { c.fillStyle = color; c.fillRect(x, y, w, h) }
+
+// A 16 by 8 diamond, drawn a row at a time so the edges stay crisp (a path would be smoothed).
+// Corners: top (x, y), right (x+1, y), left (x, y+1), bottom (x+1, y+1).
+const WIDTHS = [4, 8, 12, 16, 16, 12, 8, 4]
+const diamond = (c, sx, sy, color) => WIDTHS.forEach((w, j) => rect(c, sx + 8 - w / 2, sy + j, w, 1, color))
+// the top and bottom edge of the diamond in a column 0 to 7 (the right half mirrors it)
+const topEdge = col => 3 - (col >> 1)
+const bottomEdge = col => 5 + (col >> 1)
+
+// A box on a cell: top, left face (towards +y) and right face (towards +x), `h` pixels tall. The top
+// has a lit rim along its top-left edge. (sx, sy) is the top corner of the cell's floor diamond.
+const block = (c, sx, sy, h, mat, skirt = false) => {
+  for (let col = 0; col < 8; col++) {
+    rect(c, sx + col, sy - h + bottomEdge(col), 1, h, shade(mat, 2))
+    rect(c, sx + 15 - col, sy - h + bottomEdge(col), 1, h, shade(mat, 1))
+    if (skirt) {
+      rect(c, sx + col, sy + bottomEdge(col) - 2, 1, 2, shade('wood', 1))
+      rect(c, sx + 15 - col, sy + bottomEdge(col) - 2, 1, 2, shade('wood', 0))
+    }
+  }
+  diamond(c, sx, sy - h, shade(mat, 3))
+}
+
+// the thin slab under the building: brick faces on the sides that face the viewer
+const slab = (c, sx, sy, leftOpen, rightOpen) => {
+  for (let col = 0; col < 8; col++) {
+    if (leftOpen) {
+      rect(c, sx + col, sy + bottomEdge(col), 1, 5, shade('brick', 2))
+      rect(c, sx + col, sy + bottomEdge(col), 1, 1, shade('brick', 3))
+    }
+    if (rightOpen) {
+      rect(c, sx + 15 - col, sy + bottomEdge(col), 1, 5, shade('brick', 1))
+      rect(c, sx + 15 - col, sy + bottomEdge(col), 1, 1, shade('brick', 2))
+    }
+  }
+}
+
+// a window on a wall's face, with curtains at its ends
+const windowOn = (c, px, py, h, side, curtainA, curtainB) => {
+  for (let col = 1; col < 7; col++) {
+    const x = side === 'left' ? px + col : px + 15 - col
+    const y = py - h + bottomEdge(col) + 3
+    rect(c, x, y, 1, 3, shade('glass', 3))
+    rect(c, x, y + 3, 1, 5, shade('glass', side === 'left' ? 2 : 1))
+  }
+  const cur = (col, w) => {
+    for (let i = 0; i < w; i++) {
+      const cc = col + i
+      const x = side === 'left' ? px + cc : px + 15 - cc
+      rect(c, x, py - h + bottomEdge(cc) + 2, 1, 10, shade('carpet', side === 'left' ? 2 : 1))
+    }
+  }
+  if (curtainA) cur(0, 2)
+  if (curtainB) cur(6, 2)
+}
+
+// a seat's backrest along one edge of the cell: 'ur' (upper right), 'ul', 'll' or 'lr'
+const backrest = (c, px, py, z, side, hh, color, rim) => {
+  for (let i = 0; i < 6; i++) {
+    const col = side === 'ur' || side === 'lr' ? 8 + i : 2 + i
+    const edge = side === 'ur' ? topEdge(15 - col) : side === 'ul' ? topEdge(col) : side === 'll' ? bottomEdge(col) - 1 : bottomEdge(15 - col) - 1
+    rect(c, px + col, py - z + edge - hh + 1, 1, hh, color)
+    rect(c, px + col, py - z + edge - hh + 1, 1, 1, rim)
+  }
+}
+const BACK = { down: 'ur', up: 'll', right: 'ul', left: 'lr' } // the edge behind someone facing this way
+const seatTop = (c, px, py, z, color) => {
+  ;[4, 8, 8, 4].forEach((w, j) => rect(c, px + 8 - w / 2, py + 2 + j - z, w, 1, color))
+}
+
+// a desk: a thick top on thin legs
+const table = (c, px, py, h, mat) => {
+  rect(c, px + 1, py + bottomEdge(1) - h + 2, 1, h - 2, shade('metal', 1))
+  rect(c, px + 14, py + bottomEdge(1) - h + 2, 1, h - 2, shade('metal', 0))
+  rect(c, px + 7, py + 8 - h + 2, 2, h - 2, shade('metal', 1))
+  for (let col = 0; col < 8; col++) {
+    rect(c, px + col, py - h + bottomEdge(col), 1, 2, shade(mat, 2))
+    rect(c, px + 15 - col, py - h + bottomEdge(col), 1, 2, shade(mat, 1))
+  }
+  diamond(c, px, py - h, shade(mat, 3))
+}
+
+// a monitor on its stand, a keyboard in front; lit when someone is at work
+const monitor = (c, px, py, h, lit, v) => {
+  rect(c, px + 7, py - h - 1, 2, 2, shade('metal', 0))
+  rect(c, px + 4, py - h - 6, 8, 5, shade('metal', 0))
+  rect(c, px + 5, py - h - 5, 6, 3, lit ? [shade('glass', 3), shade('light', 3), shade('leaf', 3)][v % 3] : shade('metal', 1))
+  if (lit) rect(c, px + 6, py - h - 4, 3, 1, shade('plaster', 3))
+  rect(c, px + 5, py - h + 2, 6, 1, shade('plaster', 3))
+}
+
+const SHIRTS = ['fabricCool', 'fabricWarm', 'leaf', 'terracotta', 'leather', 'periwinkle']
+const HAIR = [shade('tile', 0), shade('wood', 1), shade('light', 1), shade('leather', 0), shade('metal', 0)]
+const SKIN = [shade('wood', 3), shade('wood', 2), shade('terracotta', 3), shade('terracotta', 2)]
+const PANTS = [shade('metal', 0), shade('tile', 1), shade('fabricCool', 0), shade('carpet', 1)]
+
+// a person, 4 wide: standing or walking (feet on the cell's centre) or sitting (on a seat at height 3)
+const person = (c, px, py, v, mode) => {
+  const shirt = shade(SHIRTS[v % SHIRTS.length], 2)
+  const skin = SKIN[(v >> 3) % SKIN.length]
+  const hair = HAIR[(v >> 5) % HAIR.length]
+  const pants = PANTS[(v >> 7) % PANTS.length]
+  const sit = mode === 'sit'
+  const y0 = sit ? py - 12 : py - 6
+  if (!sit) {
+    c.globalAlpha = 0.25
+    rect(c, px + 5, py + 5, 6, 1, shade('metal', 0))
+    c.globalAlpha = 1
+  }
+  rect(c, px + 6, y0, 4, 1, hair)
+  rect(c, px + 6, y0 + 1, 4, 3, skin)
+  rect(c, px + 6, y0 + 4, 4, 4, shirt)
+  rect(c, px + 6, y0 + 4, 1, 4, shade(SHIRTS[v % SHIRTS.length], 3))
+  if (mode === 'walk') {
+    const flip = v & 1
+    rect(c, px + 5, y0 + 5 + flip, 1, 3, skin)
+    rect(c, px + 10, y0 + 5 + (1 - flip), 1, 3, skin)
+    rect(c, px + 6, y0 + 8, 2, 3 - flip, pants)
+    rect(c, px + 8, y0 + 8, 2, 2 + flip, pants)
+  } else if (sit) {
+    rect(c, px + 5, y0 + 6, 1, 2, skin)
+    rect(c, px + 10, y0 + 6, 1, 2, skin)
+    rect(c, px + 6, y0 + 8, 4, 2, pants)
+  } else {
+    rect(c, px + 6, y0 + 8, 2, 3, pants)
+    rect(c, px + 8, y0 + 8, 2, 3, shade('metal', 0))
+  }
+}
+
+const draw = (canvas, region, detail) => {
+  const { x0, y0, x1, y1 } = region // cells, x1 and y1 included
+  const wallTall = 16
+  const top = wallTall + 30
+  const width = (x1 - x0 + y1 - y0 + 2) * 8 + 16
+  const height = (x1 - x0 + y1 - y0 + 2) * 4 + top + 24
+  canvas.width = width
+  canvas.height = height
+  const c = canvas.getContext('2d')
+  c.imageSmoothingEnabled = false
+  const sx = (x, y) => (x - x0) * 8 - (y - y1) * 8 + 8 - 8
+  const sy = (x, y) => top + (x + y - x0 - y0) * 4
+  const cells = []
+  for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (inGrid(x, y)) cells.push([x, y])
+  cells.sort((a, b) => a[0] + a[1] - (b[0] + b[1]) || a[1] - b[1])
+
+  // pass 1: grass and floors (all flat), then the slab under the building, then rugs
+  for (const [x, y] of cells) {
+    if (isFloor(x, y)) {
+      const [mat, step] = FLOOR[toneAt(x, y)] ?? FLOOR.stone
+      diamond(c, sx(x, y), sy(x, y), shade(mat, (x + y) % 2 ? step : Math.min(3, step + 1)))
+    } else if (!isBuilding(x, y) && near(x, y, 3, isFloor)) {
+      diamond(c, sx(x, y), sy(x, y), shade('grass', hash(x, y) % 3 ? 2 : 1))
+    }
+  }
+  for (const [x, y] of cells) if (isBuilding(x, y)) slab(c, sx(x, y), sy(x, y), !isBuilding(x, y + 1), !isBuilding(x + 1, y))
+  for (const r of layout.rugs) {
+    for (let j = r.y; j < r.y + r.h; j++) for (let i = r.x; i < r.x + r.w; i++) {
+      if (i < x0 || i > x1 || j < y0 || j > y1) continue
+      diamond(c, sx(i, j), sy(i, j), shade(r.tone ?? 'terracotta', (i + j) % 2 ? 1 : 2))
+    }
+  }
+
+  // who sits where: about every other desk seat has someone at work, and that desk's monitor is lit
+  const seatAt = new Map(spots.desks.map(d => [`${d.x},${d.y}`, d]))
+  const busy = new Set(spots.desks.filter(d => hash(d.x, d.y) % 3 !== 0).map(d => `${d.x},${d.y}`))
+  const monitors = new Map(spots.desks.map(d => [`${d.desk.x},${d.desk.y}`, busy.has(`${d.x},${d.y}`)]))
+
+  // pass 2: walls, furniture and people, back to front
+  for (const [x, y] of cells) {
+    const px = sx(x, y), py = sy(x, y)
+    const furn = furnAt(x, y)
+    if (isWall(x, y)) {
+      // tall at the back, cut low at the front, half between rooms
+      const behind = isFloor(x + 1, y) || isFloor(x, y + 1)
+      const front = isFloor(x - 1, y) || isFloor(x, y - 1)
+      const h = behind && front ? 8 : behind ? wallTall : front ? 3 : 8
+      block(c, px, py, h, 'plaster', true)
+      diamond(c, px, py - h, shade('wallcap', 2))
+      for (let col = 0; col < 8; col++) rect(c, px + col, py - h + topEdge(col), 1, 1, shade('wallcap', 3))
+      if (h > 8) {
+        const w = windows.find(win => inside(win, x, y))
+        if (w) {
+          const side = isFloor(x, y + 1) ? 'left' : 'right'
+          const [a, b] = side === 'left' ? [x === w.x, x === w.x + w.w - 1] : [y === w.y, y === w.y + w.h - 1]
+          windowOn(c, px, py, h, side, a, b)
+        }
+      }
+    } else if (furn && furn.kind === 'chair') {
+      const mat = furn.tone === 'leather' ? 'leather' : 'metal'
+      const back = BACK[furn.face] ?? 'ur'
+      const behind = back === 'ur' || back === 'ul'
+      if (behind) backrest(c, px, py, 3, back, 7, shade(mat, 1), shade(mat, 3))
+      seatTop(c, px, py, 3, shade(mat, 2))
+      rect(c, px + 6, py + 4, 4, 2, shade(mat, 0))
+      if (seatAt.has(`${x},${y}`) && busy.has(`${x},${y}`)) person(c, px, py, hash(x, y), 'sit')
+      if (!behind) backrest(c, px, py, 3, back, 7, shade(mat, 1), shade(mat, 3))
+    } else if (furn && furn.kind === 'tray') {
+      block(c, px, py, 2, 'metal')
+    } else if (furn && SOFAS.has(furn.kind)) {
+      const mat = furn.tone && TONES.has(furn.tone) ? furn.tone : furn.kind === 'sofa' ? 'fabricWarm' : 'fabricCool'
+      const back = BACK[furn.face] ?? 'ur'
+      const behind = back === 'ur' || back === 'ul'
+      block(c, px, py, 4, mat)
+      backrest(c, px, py, 4, back, 6, shade(mat, 1), shade(mat, 3))
+      if (!behind) rect(c, px + 1, py - 2, 1, 1, shade(mat, 0)) // arm cap, so a front-facing back still reads
+    } else if (furn && TABLES.has(furn.kind)) {
+      table(c, px, py, STYLE[furn.kind]?.[1] ?? 5, furn.kind === 'ceodesk' ? 'leather' : 'wood')
+      if (furn.kind === 'desk' && monitors.has(`${x},${y}`)) monitor(c, px, py, 5, monitors.get(`${x},${y}`), hash(x, y))
+      if (detail && furn.kind === 'desk' && hash(x, y) % 2) rect(c, px + 11, py - 6, 2, 2, shade('fabricWarm', 3))
+    } else if (furn && furn.kind === 'plant') {
+      rect(c, px + 6, py + 1, 4, 3, shade('terracotta', 1))
+      rect(c, px + 7, py - 1, 2, 2, shade('wood', 1))
+      for (const [dx, dy, s] of [[3, -9, 6], [6, -12, 5], [8, -8, 5], [5, -6, 6]]) rect(c, px + dx, py + dy, s, s - 1, shade('leaf', (dx + dy) & 1 ? 2 : 3))
+    } else if (furn) {
+      const [mat, h] = STYLE[furn.kind] ?? ['wood', 6]
+      block(c, px, py, h, furn.tone && TONES.has(furn.tone) ? furn.tone : mat)
+    }
+  }
+  // people in the corridors, the lobby and the hub: some standing, some walking
+  for (const [x, y] of [[10, 18], [15, 19], [30, 18], [35, 19], [31, 22], [38, 25], [12, 36], [20, 37], [24, 24], [13, 23], [10, 27], [27, 5], [33, 12], [24, 33]]) {
+    if (x < x0 || x > x1 || y < y0 || y > y1 || !isFloor(x, y) || furnAt(x, y)) continue
+    person(c, sx(x, y), sy(x, y), hash(x, y), hash(y, x) % 2 ? 'walk' : 'stand')
+  }
+  canvas.style.aspectRatio = `${width} / ${height}`
+}
+
+draw(document.getElementById('whole'), { x0: 0, y0: 0, x1: layout.width - 1, y1: layout.height - 1 }, false)
+draw(document.getElementById('room'), { x0: 5, y0: 19, x1: 23, y1: 34 }, true)
+</script>
+</body>
+</html>

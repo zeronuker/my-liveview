@@ -209,6 +209,7 @@ const files = {
   '/vendor/three.module.min.js': ['vendor/three.module.min.js', 'text/javascript; charset=utf-8'],
   '/vendor/OrbitControls.js': ['vendor/OrbitControls.js', 'text/javascript; charset=utf-8'],
   '/art-preview.html': ['art-preview.html', 'text/html; charset=utf-8'],
+  '/angled-concept.html': ['angled-concept.html', 'text/html; charset=utf-8'],
   '/sound.js': ['sound.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
 }
