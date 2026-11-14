@@ -3,7 +3,7 @@
 // ({ x, y }). Pieces are drawn a tile at a time, back to front, so a tile's neighbours in the same piece cover its
 // inner faces; only the outer faces and what stands on top need care. Heights are in pixels (a person is 11 tall).
 // Light is from the top-left: left faces (towards +y) are lighter than right faces (towards +x). Palette colours only.
-import { BACK, BEHIND, block, blockTop, bottomEdge, cellHash, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
+import { BACK, BEHIND, block, blockTop, bottomEdge, cellHash, diamond, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
 import { RAMPS, shade } from './palette.js'
 
 // the material a piece is made of: its tone if it has one, else the usual
@@ -126,6 +126,81 @@ const umbrella = (c, px, py) => {
   rect(c, px + 9, py - 9, 2, 1, shade('brick', 2))
 }
 
+// ---- back rooms ----
+
+// a server rack: bays with a blinking light each on the front, vents on the side
+const rack = (c, px, py) => {
+  block(c, px, py, 14, 'metal')
+  for (let col = 1; col < 7; col++) for (let k = 0; k < 4; k++) rect(c, px + col, py - 14 + bottomEdge(col) + 2 + k * 3, 1, 2, shade('metal', 0))
+  for (let k = 0; k < 4; k++) rect(c, px + 5, py - 14 + bottomEdge(5) + 2 + k * 3, 1, 1, shade(k % 2 ? 'leaf' : 'light', 3))
+  for (let col = 9; col < 15; col += 2) rect(c, px + col, py - 14 + bottomEdge(15 - col) + 3, 1, 8, shade('metal', 0))
+}
+
+// the test machine: a block with a control panel on its front and a tank on top at the back
+const machine = (c, px, py, furn, part) => {
+  block(c, px, py, 10, 'metal')
+  if (part.j === furn.h - 1) {
+    for (let col = 1; col < 7; col++) rect(c, px + col, py - 10 + bottomEdge(col) + 2, 1, 5, shade('metal', 0))
+    rect(c, px + 2, py - 10 + bottomEdge(2) + 3, 3, 2, shade('glass', 3))
+    rect(c, px + 5, py - 10 + bottomEdge(5) + 3, 1, 1, shade('light', 3))
+    rect(c, px + 5, py - 10 + bottomEdge(5) + 5, 1, 1, shade('leaf', 3))
+  }
+  if (part.i === 0 && part.j === 0) {
+    rect(c, px + 4, py - 15, 8, 8, shade('glass', 2))
+    rect(c, px + 4, py - 15, 2, 8, shade('glass', 3))
+    rect(c, px + 5, py - 16, 6, 1, shade('metal', 1))
+  }
+}
+
+const labbench = (c, px, py, furn, part) =>
+  counter(c, px, py, furn, part, (c2, x, mid) => {
+    if (part.i === 0) {
+      rect(c2, x + 5, mid - 6, 4, 6, shade('glass', 2)) // a beaker with something in it
+      rect(c2, x + 5, mid - 3, 4, 3, shade('brick', 2))
+      rect(c2, x + 5, mid - 7, 4, 1, shade('glass', 3))
+    } else {
+      for (const dx of [4, 7, 10]) rect(c2, x + dx, mid - 5, 1, 5, shade('glass', 2)) // test tubes
+      rect(c2, x + 4, mid - 2, 7, 1, shade('metal', 1))
+    }
+  }, { h: 6, mat: 'metal', topMat: 'stone' })
+
+// a toilet cubicle: a partition with its door on the +x face
+const cubicle = (c, px, py, furn, part) => {
+  const mat = toneOf(furn, 'tile')
+  block(c, px, py, 10, mat)
+  if (part.j === 0)
+    for (let col = 9; col < 14; col++) {
+      const y = py - 10 + bottomEdge(15 - col)
+      rect(c, px + col, y + 1, 1, 8, shade(mat, 2))
+      rect(c, px + col, y + 9, 1, 1, shade(mat, 0))
+    }
+  if (part.j === 0) rect(c, px + 9, py - 10 + bottomEdge(6) + 4, 1, 1, shade('metal', 1))
+}
+
+const urinal = (c, px, py) => {
+  rect(c, px + 4, py + 3, 8, 1, shade('frost', 1))
+  rect(c, px + 5, py - 5, 6, 8, shade('frost', 2))
+  rect(c, px + 5, py - 5, 2, 8, shade('frost', 3))
+  rect(c, px + 9, py - 5, 2, 8, shade('frost', 1))
+  rect(c, px + 6, py - 2, 4, 3, shade('frost', 0))
+  rect(c, px + 7, py - 8, 2, 3, shade('metal', 1))
+}
+
+const vanity = (c, px, py, furn, part) =>
+  counter(c, px, py, furn, part, (c2, x, mid) => part.j % 2 === 0 && basin(c2, x, mid), { h: 6, mat: 'frost', topMat: 'stone' })
+
+// ---- outdoors ----
+
+// a parasol: a pole, and a striped canopy high above the table
+const parasol = (c, px, py, furn, part) => {
+  if (part.i === 1) rect(c, px + 7, py - 12, 2, 16, shade('metal', 2))
+  diamond(c, px, py - 18, shade('fabricWarm', part.i % 2 ? 2 : 3))
+  for (let col = 0; col < 8; col++) {
+    rect(c, px + col, py - 18 + bottomEdge(col), 1, 1, shade('fabricWarm', 1))
+    rect(c, px + 15 - col, py - 18 + bottomEdge(col), 1, 1, shade('fabricWarm', 0))
+  }
+}
+
 // ---- railings ----
 
 // posts with two rails between them, along the run of the piece (a single tile is just a post)
@@ -239,12 +314,6 @@ const fridge = (c, px, py) => {
   rect(c, px + 6, py - 14 + bottomEdge(6) + 7, 1, 3, shade('metal', 1))
 }
 
-// kinds that have no drawer yet: a plain box of this material and height
-export const PLAIN = {
-  machine: ['metal', 12], rack: ['metal', 14], labbench: ['metal', 6], cubicle: ['tile', 10], urinal: ['frost', 8],
-  vanity: ['frost', 6], parasol: ['fabricWarm', 3],
-}
-
 export const PIECES = {
   sofa: seating('fabricWarm'),
   armchair: seating('fabricCool'),
@@ -269,6 +338,13 @@ export const PIECES = {
   reception,
   coatstand,
   umbrella,
+  machine,
+  rack,
+  labbench,
+  cubicle,
+  urinal,
+  vanity,
+  parasol,
   rail: railing('metal', 5),
   deckrail: railing('wood', 4),
 }

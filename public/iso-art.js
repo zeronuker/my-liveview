@@ -5,7 +5,7 @@
 // comes from the top-left. The tile at (x, y) has its corners at: top (x, y), right (x + 1, y), left
 // (x, y + 1), bottom (x + 1, y + 1). Used by iso-scene.js (the Office) and angled-concept.html.
 import { BACK, BEHIND, bottomEdge, block, cellHash, diamond, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
-import { PIECES, PLAIN } from './iso-furniture.js'
+import { PIECES } from './iso-furniture.js'
 import { shade } from './palette.js'
 import { levelAt } from './studio.js'
 
@@ -122,8 +122,7 @@ const furnitureTile = (c, px, py, furn, x, y, { sitter, detail }) => {
   } else if (PIECES[furn.kind]) {
     PIECES[furn.kind](c, px, py, furn, part, { x, y })
   } else {
-    const [mat, h] = PLAIN[furn.kind] ?? ['wood', 6]
-    block(c, px, py, h, mat)
+    block(c, px, py, 6, 'wood') // a kind with no drawer: a plain box
   }
 }
 
