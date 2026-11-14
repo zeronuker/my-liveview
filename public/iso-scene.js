@@ -7,9 +7,8 @@
 // the rows too, so a raised floor hides the ground and the people behind it. Desk monitors are separate, as they light up, and so are the blinking lights (lights.js) and the hanging lamps,
 // which are drawn over everyone.
 import { overheadArts } from './art/overhead.js'
-import { buildGarden } from './garden.js'
 import { cellHash, groundTile, lightsOf, makeWorld, monitor, podiumTile, slabTile, structureTile } from './iso-art.js'
-import { fenceTile, gardenPieces, gardenTile, grassDetail, isFence } from './iso-garden.js'
+import { fenceTile, gardenPieces, gardenTile, grassDetail, isFence, isoGarden } from './iso-garden.js'
 import { ISO_RISE, isoExtent } from './iso.js'
 import { lightColor } from './lights.js'
 import { paint } from './scenery.js'
@@ -21,7 +20,9 @@ const canvasOf = (width, height) => Object.assign(document.createElement('canvas
 
 export const createIsoScene = layout => {
   const world = makeWorld(layout)
-  const garden = buildGarden(layout)
+  const garden = isoGarden(layout)
+  // the plan as it is has the desks the stage lights up (office.js), so a monitor is known by its place there
+  const originalKey = (x, y) => (layout.toOriginal ? layout.toOriginal(x, y) : [x, y]).join(',')
   const { width: W, height: H } = layout
   // where a tile's diamond starts, in the pixels of the pictures below
   const left = (x, y) => (x - y + H) * 8 - 8
@@ -112,7 +113,7 @@ export const createIsoScene = layout => {
           monitor(small.getContext('2d'), 0, MONITOR.base, lit, cellHash(x, y))
           return small
         })
-        return { key: `${x},${y}`, off, on, left: left(x, y), top: top(x, y) - MONITOR.base - liftOf(x, y) }
+        return { key: originalKey(x, y), off, on, left: left(x, y), top: top(x, y) - MONITOR.base - liftOf(x, y) }
       })
     bands.push({ image, left: origin, top: d * 4 + ISO_RISE * 16 - up, monitors, standing, lights })
   }

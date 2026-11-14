@@ -17,7 +17,7 @@ const walk = (glide, steps, dt = 1 / 60) => {
 test('the first time something is seen it is drawn where it is, not moving', () => {
   const glide = createGlide()
 
-  assert.deepEqual(glide.place('a', 5, 7, 0.016), { x: 5, y: 7, vx: 0, speed: 0, stride: 0, moving: false })
+  assert.deepEqual(glide.place('a', 5, 7, 0.016), { x: 5, y: 7, vx: 0, vy: 0, speed: 0, stride: 0, moving: false })
 })
 
 test('it follows a jump in small steps, behind the true place, and gets there', () => {
@@ -89,7 +89,7 @@ test('every thing has its own place, and one that has gone is forgotten', () => 
   glide.keep(['b'])
 
   assert.equal(glide.place('b', 9, 9, 0.016).x, 9)
-  assert.deepEqual(glide.place('a', 4, 4, 0.016), { x: 4, y: 4, vx: 0, speed: 0, stride: 0, moving: false }) // new again
+  assert.deepEqual(glide.place('a', 4, 4, 0.016), { x: 4, y: 4, vx: 0, vy: 0, speed: 0, stride: 0, moving: false }) // new again
 })
 
 test('with no time passed it stays where it was, and a long wait does not overshoot', () => {

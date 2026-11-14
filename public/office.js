@@ -13,6 +13,7 @@ import { shownNames } from './names.js'
 import { createFish } from './fish.js'
 import { createGlide } from './glide.js'
 import { createIsoScene } from './iso-scene.js'
+import { rotateLayout, turnCell, turnDir, turnPoint, turnVector } from './iso-rotate.js'
 import { ISO_RISE, isoExtent, liftAt, screenAt } from './iso.js'
 import { createPets } from './pets.js'
 import { buildStudio } from './studio.js'
@@ -64,14 +65,36 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   let paused = false
   let manual = null // a zoomed and panned view { tile, left, top }; null while the whole plan is fitted
   let angled = false // the angled view (iso.js) in place of the flat one
-  let isoScene = null // its walls and furniture, painted the first time it is shown
-  const isoBox = isoExtent(layout)
+  let rotation = 0 // the angled view turned this many quarter turns (iso-rotate.js)
+  const isoBox = isoExtent(layout) // the same size whichever way the plan is turned
   const extent = () => (angled ? isoBox : layout) // the size of the plan in tiles, for fitting, zooming and panning
+  // The plan turned for the angled view, and what is painted from it (walls, furniture, ground), made the first time that side is
+  // shown. The two most recently used are kept.
+  const turned = new Map()
+  const turnedFor = k => {
+    let side = turned.get(k)
+    if (!side) {
+      const plan = rotateLayout(layout, k)
+      side = { layout: plan, scene: createIsoScene(plan) }
+    }
+    turned.delete(k)
+    turned.set(k, side)
+    if (turned.size > 2) turned.delete(turned.keys().next().value)
+    return side
+  }
+  let current = null
+  const side = () => (current?.k === rotation ? current.side : (current = { k: rotation, side: turnedFor(rotation) }).side)
+  // where a tile of the plan is in the turned one, as a place (people glide between tiles)
+  const turnedCell = (x, y) => turnCell(rotation, layout.width, layout.height, x, y)
+  // which way someone facing `dir` in the plan faces on the screen
+  const dirOf = p => (angled ? turnDir(rotation, p.dir) : p.dir)
   // where the middle of a tile is on the screen, as a person is placed: feet a little below it when flat, on it when angled,
-  // and a storey higher on the first floor (or part of one on the stairs)
+  // and higher on the first floor, the mezzanine and the stairs
   const centre = (view, x, y) => {
-    const p = screenAt(view, layout, x + 0.5, y + 0.5, angled)
-    return angled ? { x: p.x, y: p.y - view.tile * 0.42 - (liftAt(layout, x, y) * view.tile) / 16 } : p
+    if (!angled) return screenAt(view, layout, x + 0.5, y + 0.5, false)
+    const [tx, ty] = turnedCell(x, y)
+    const p = screenAt(view, side().layout, tx + 0.5, ty + 0.5, true)
+    return { x: p.x, y: p.y - view.tile * 0.42 - (liftAt(layout, x, y) * view.tile) / 16 }
   }
   let selected = '' // the chat picked in the list, whose workers stand out; '' for all
   let multiChat = false // more than one chat at work: tag every name with its chat's colour
@@ -190,7 +213,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     const { tile, left, top } = view
     ctx.imageSmoothingEnabled = false
     const water = reduced ? 0 : Math.floor(performance.now() / WATER_MS) % 2
-    if (angled) return isoScene.drawGround(ctx, view, water)
+    if (angled) return side().scene.drawGround(ctx, view, water)
     ctx.drawImage(grounds[water], left, top, layout.width * tile, layout.height * tile)
   }
 
@@ -272,7 +295,9 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.save()
     ctx.imageSmoothingEnabled = g.moving
     ctx.translate(at(cx), at(feet + hop) - sprite.height * unit)
-    ctx.scale((Math.abs(g.vx) > 0.15 ? g.vx : pet.facing) < 0 ? -1 : 1, 1)
+    const [vx] = angled ? turnVector(rotation, g.vx, g.vy ?? 0) : [g.vx] // which way it goes on the screen
+    const [facing] = angled ? turnVector(rotation, pet.facing, 0) : [pet.facing]
+    ctx.scale((Math.abs(vx) > 0.15 ? vx : facing) < 0 ? -1 : 1, 1)
     ctx.drawImage(imageOf(sprite), (-sprite.width * unit) / 2, 0, sprite.width * unit, sprite.height * unit)
     ctx.restore()
   }
@@ -283,13 +308,13 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.imageSmoothingEnabled = true
     // angled: drawn in tiles of the plan under the angled projection, so a fish lies flat on the water
     const unit = angled ? 1 : tile
-    if (angled) ctx.transform(tile / 2, tile / 4, -tile / 2, tile / 4, left + (layout.height * tile) / 2, top + ISO_RISE * tile)
+    if (angled) ctx.transform(tile / 2, tile / 4, -tile / 2, tile / 4, left + (side().layout.height * tile) / 2, top + ISO_RISE * tile)
     for (const f of fish.snapshot()) {
       const length = unit * 0.75 * f.size
       ctx.save()
-      if (angled) ctx.translate(f.x + 0.5, f.y + 0.5)
+      if (angled) ctx.translate(...turnPoint(rotation, layout.width, layout.height, f.x + 0.5, f.y + 0.5))
       else ctx.translate(left + (f.x + 0.5) * tile, top + (f.y + 0.5) * tile)
-      ctx.rotate(f.heading)
+      ctx.rotate(angled ? f.heading + (rotation * Math.PI) / 2 : f.heading)
       ctx.globalAlpha = 0.9
       const wag = reduced ? 0 : Math.sin(f.phase * 3) * 0.3 * length
       ctx.fillStyle = f.color
@@ -324,7 +349,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.save()
     ctx.imageSmoothingEnabled = !!p.moving
     ctx.translate(at(cx), feet - h)
-    ctx.scale((angled ? flipsAngled(sprite.view, p.dir) : p.facing < 0) ? -1 : 1, 1)
+    ctx.scale((angled ? flipsAngled(sprite.view, dirOf(p)) : p.facing < 0) ? -1 : 1, 1)
     ctx.drawImage(imageOf(sprite), (-sprite.width * unit) / 2, 0, sprite.width * unit, h)
     // what is carried is held at the side, unless the hands are busy
     const carried = ['read', 'type', 'review', 'sit'].includes(p.pose) ? null : carrySprite(p.carry)
@@ -360,7 +385,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
 
     // the pixel-art person, and the plain shapes for a pose that has no sprite
     // with less motion, a resting person stays in one frame; walking still walks
-    const sprite = spriteFor({ pose: p.pose, t: reduced && !walking ? 0 : walking && !reduced ? p.stride / 4 : t, id: p.id, kind: p.kind, color: p.color, dir: p.dir, still: reduced, angled })
+    const sprite = spriteFor({ pose: p.pose, t: reduced && !walking ? 0 : walking && !reduced ? p.stride / 4 : t, id: p.id, kind: p.kind, color: p.color, dir: dirOf(p), still: reduced, angled })
     let headTop = cy - tile * 0.5 // where a bubble goes
     if (sprite) headTop = drawSprite(sprite, p, cx, cy, tile)
     else {
@@ -512,7 +537,6 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     if (!visible) return
     tick() // every frame, so people glide; the timer above only keeps the stage going while nobody is looking
     const snap = stage.snapshot()
-    if (angled) isoScene ||= createIsoScene(layout)
     const view = manual ? keepInView(manual, extent(), width, height) : fit(width, height, extent())
     const t = performance.now() / 1000
     const ink = {
@@ -558,12 +582,16 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     const tags = []
     if (angled) {
       // back to front by diagonal row: a row's walls and furniture, then the people and pets standing in it
-      const rows = Array.from({ length: isoScene.bandCount }, () => [])
-      const put = ({ x, y }, run) => rows[Math.min(rows.length - 1, Math.max(0, Math.floor(x + y + 0.5)))].push(run)
+      const { scene } = side()
+      const rows = Array.from({ length: scene.bandCount }, () => [])
+      const put = (place, run) => {
+        const [x, y] = turnedCell(place.x, place.y)
+        rows[Math.min(rows.length - 1, Math.max(0, Math.floor(x + y + 0.5)))].push(run)
+      }
       for (const person of people) put(person, () => drawPerson(person, view, t, ink, tags))
       for (const placed of placedPets()) put(placed.g, () => drawPet(placed, view, t))
       rows.forEach((row, d) => {
-        isoScene.drawBand(ctx, view, d, open, t, reduced)
+        scene.drawBand(ctx, view, d, open, t, reduced)
         for (const run of row) run()
       })
     } else {
@@ -582,7 +610,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
       if (!who) inspected = ''
     }
     // what is overhead goes over the people
-    if (angled) isoScene.drawOver(ctx, view, t, reduced)
+    if (angled) side().scene.drawOver(ctx, view, t, reduced)
     else for (const item of items) if (item.over) drawItem(item, view, open, t)
 
     // the number of papers on each manager's tray, and then names, labels and bubbles
@@ -689,6 +717,11 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     setManual(null)
   }
 
+  // the angled view turned `k` quarter turns (0 to 3); the zoom stays where it is
+  const setRotation = k => {
+    rotation = ((Math.round(k) % 4) + 4) % 4
+  }
+
   const setSelected = id => {
     selected = id
   }
@@ -701,5 +734,5 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   // what a chat is doing, for its card: its phase, how many of its team are on work, and whether it is waiting on a permission
   const chatInfo = sessionId => ({ phase: director.phaseOf(sessionId), asking: director.isAsking(sessionId), ...stage.teamOf(sessionId) })
 
-  return { feed, chatInfo, zoomBy, setAngled, setVisible, setPaused, setSelected, setSound: sound.setOn, resetView: () => setManual(null), isZoomed: () => manual !== null, skip: stage.skip, isIdle: stage.isIdle }
+  return { feed, chatInfo, zoomBy, setAngled, setRotation, setVisible, setPaused, setSelected, setSound: sound.setOn, resetView: () => setManual(null), isZoomed: () => manual !== null, skip: stage.skip, isIdle: stage.isIdle }
 }

@@ -37,12 +37,18 @@ export const makeWorld = layout => {
   }
   const isWall = (x, y) => inGrid(x, y) && !isFloor(x, y) && near(x, y, 1, isFloor)
   const floorZ = (x, y) => levelHeight(levelAt(layout, x, y))
-  const stairs = stairsOf(layout)
-  const entrances = entrancesOf(layout)
+  // the stairs and the steps outside are worked out in the plan as it is (iso.js), whichever way it is turned
+  const original = layout.original ?? layout
+  const toOriginal = layout.toOriginal ?? ((x, y) => [x, y])
+  const stairs = stairsOf(original)
+  const entrances = entrancesOf(original)
   const furn = new Map()
   for (const f of furniture.filter(f => f.kind !== 'pendant').reverse()) for (let j = f.y; j < f.y + f.h; j++) for (let i = f.x; i < f.x + f.w; i++) furn.set(`${i},${j}`, f)
   // how high the stairs stand beside a tile (x, y) that runs along them: the side of a staircase rises with it
-  const rampZ = (x, y) => Math.max(0, ...stairs.filter(({ room }) => y >= room.y && y < room.y + room.h && (x === room.x - 1 || x === room.x + room.w)).map(stair => stepHeight(stair, y)))
+  const rampZ = (x, y) => {
+    const [ox, oy] = toOriginal(x, y)
+    return Math.max(0, ...stairs.filter(({ room }) => oy >= room.y && oy < room.y + room.h && (ox === room.x - 1 || ox === room.x + room.w)).map(stair => stepHeight(stair, oy)))
+  }
   // A wall: a guardrail stands on the edge of the higher floor; a wall between floors of one height stands on that height; a wall
   // between floors of different heights (a podium wall) stands on the ground and reaches the higher floor and a low rail more.
   const walls = new Map()
@@ -75,9 +81,10 @@ export const makeWorld = layout => {
     rampZ,
     // a step of a staircase, or of the steps down outside the entrance, or null: how high it stands, and whether the runner is on it
     stairsAt: (x, y) => {
-      const stair = stairs.find(({ room }) => inside(room, x, y))
-      if (stair) return { z: stepHeight(stair, y), rise: Math.abs(stair.zHigh - stair.zLow) / stair.room.h, runner: Boolean(stair.room.runner) && x > stair.room.x && x < stair.room.x + stair.room.w - 1 }
-      const entrance = entrances.find(e => x >= e.x && x < e.x + e.w && y === e.y + 1)
+      const [ox, oy] = toOriginal(x, y)
+      const stair = stairs.find(({ room }) => inside(room, ox, oy))
+      if (stair) return { z: stepHeight(stair, oy), rise: Math.abs(stair.zHigh - stair.zLow) / stair.room.h, runner: Boolean(stair.room.runner) && ox > stair.room.x && ox < stair.room.x + stair.room.w - 1 }
+      const entrance = entrances.find(e => ox >= e.x && ox < e.x + e.w && oy === e.y + 1)
       return entrance ? { z: entrance.z / 2, rise: entrance.z / 2, runner: false } : null
     },
     pendants: furniture.filter(f => f.kind === 'pendant'),

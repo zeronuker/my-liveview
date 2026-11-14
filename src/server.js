@@ -211,6 +211,7 @@ const files = {
   '/art-preview.html': ['art-preview.html', 'text/html; charset=utf-8'],
   '/angled-concept.html': ['angled-concept.html', 'text/html; charset=utf-8'],
   '/viewparam.js': ['viewparam.js', 'text/javascript; charset=utf-8'],
+  '/iso-rotate.js': ['iso-rotate.js', 'text/javascript; charset=utf-8'],
   '/iso.js': ['iso.js', 'text/javascript; charset=utf-8'],
   '/iso-art.js': ['iso-art.js', 'text/javascript; charset=utf-8'],
   '/iso-doors.js': ['iso-doors.js', 'text/javascript; charset=utf-8'],

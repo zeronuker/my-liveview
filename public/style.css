@@ -1227,6 +1227,10 @@ body.office nav #feed.shut ul {
 body.office #zoom,
 body.office #ticker { display: flex; }
 
+/* the buttons that turn the angled view show only in it */
+#zoom .turn { display: none; }
+body.angled #zoom .turn { display: block; }
+
 #banner {
   position: absolute;
   top: 12px;
@@ -1291,7 +1295,8 @@ body.office #ticker { display: flex; }
 }
 
 /* the links that open a view in a window of its own look like the toolbar's buttons */
-#open-views a {
+#open-views a,
+#open-turns a {
   padding: 3px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
@@ -1299,11 +1304,13 @@ body.office #ticker { display: flex; }
   text-decoration: none;
 }
 
-#open-views a:hover {
+#open-views a:hover,
+#open-turns a:hover {
   border-color: var(--dim);
 }
 
-#open-views a:focus-visible {
+#open-views a:focus-visible,
+#open-turns a:focus-visible {
   outline: 2px solid var(--acc);
   outline-offset: 2px;
 }

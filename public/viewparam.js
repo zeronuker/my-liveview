@@ -12,8 +12,16 @@ const CHOICES = {
 }
 
 // the view the address (its query string, `location.search`) pins the window to, as { name, office, map, angled }; null if it
-// pins none (no view, or one we do not have), and then the saved choices apply
+// pins none (no view, or one we do not have), and then the saved choices apply. For the angled view `turn` (0 to 3, quarter turns)
+// pins the side it is seen from too, as `rotation`; without it the saved turn applies.
 export const parseView = search => {
-  const view = new URLSearchParams(search).get('view')
-  return Object.hasOwn(CHOICES, view) ? { name: VIEW_NAMES[view], ...CHOICES[view] } : null
+  const query = new URLSearchParams(search)
+  const view = query.get('view')
+  if (!Object.hasOwn(CHOICES, view)) return null
+  const turn = view === 'angled' && /^[0-3]$/.test(query.get('turn') ?? '') ? Number(query.get('turn')) : null
+  return {
+    name: turn ? `${VIEW_NAMES[view]}, turned ${turn * 90}\u00b0` : VIEW_NAMES[view],
+    ...CHOICES[view],
+    ...(turn === null ? {} : { rotation: turn }),
+  }
 }

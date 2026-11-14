@@ -25,7 +25,7 @@ const ACTIVE_MS = 4000 // a chat that did something this recently counts as work
 
 // a window opened with /?view=... is pinned to that view: it shows it, and does not save the choice (viewparam.js)
 const pinned = parseView(location.search)
-const PINNED_CHOICES = new Set(['office', 'map', 'angled'])
+const PINNED_CHOICES = new Set(['office', 'map', 'angled', 'rotation'])
 
 // what the person chose, kept in this browser between visits
 const store = {
@@ -62,6 +62,7 @@ const prefs = {
   mapMode: pick(store.get('mapMode', 'sphere'), v => MAP_MODES.includes(v), 'sphere'),
   sound: store.get('sound', false) === true,
   angled: store.get('angled', false) === true, // the Office from an angle
+  rotation: pick(store.get('rotation', 0), v => Number.isInteger(v) && v >= 0 && v <= 3, 0), // and turned this many quarter turns
   folded: store.get('folded', false) === true,
 }
 if (pinned) {
@@ -725,6 +726,7 @@ const apply = () => {
   document.body.classList.toggle('office', prefs.office)
   const isMap = prefs.office && prefs.map
   document.body.classList.toggle('map', isMap)
+  document.body.classList.toggle('angled', prefs.office && !isMap && prefs.angled) // the buttons that turn the view
   office.setVisible(prefs.office && !isMap)
   map.setMode(prefs.mapMode)
   map.setVisible(isMap)
@@ -733,6 +735,7 @@ const apply = () => {
   else $('rz-aside').after($('feed'))
   office.setSound(prefs.sound)
   office.setAngled(prefs.angled)
+  office.setRotation(prefs.rotation)
   for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake'], ['b-sound', 'sound'], ['b-angled', 'angled'], ['b-folded', 'folded']])
     $(id).setAttribute('aria-pressed', String(prefs[key]))
   for (const [id, on] of [['v-code', !prefs.office], ['v-office', prefs.office && !isMap], ['v-map', isMap]]) $(id).setAttribute('aria-pressed', String(on))
@@ -800,6 +803,15 @@ document.addEventListener('click', event => {
   if (!$('settings').hidden && !event.target.closest('#settings, #b-gear')) setSettings(false)
 })
 document.addEventListener('keydown', event => event.key === 'Escape' && setSettings(false))
+// turn the angled view a quarter turn: the buttons, or [ and ] (not while typing in a field)
+const turnView = by => save('rotation', (prefs.rotation + by + 4) % 4)
+$('z-turn-left').onclick = () => turnView(-1)
+$('z-turn-right').onclick = () => turnView(1)
+document.addEventListener('keydown', event => {
+  if (event.ctrlKey || event.metaKey || event.altKey || !document.body.classList.contains('angled') || event.target.closest('input, select, textarea, [contenteditable]')) return
+  if (event.key === '[') turnView(-1)
+  else if (event.key === ']') turnView(1)
+})
 $('z-fit').onclick = () => (prefs.map ? map.resetView() : office.resetView())
 $('z-in').onclick = () => office.zoomBy(1.4)
 $('z-out').onclick = () => office.zoomBy(1 / 1.4)

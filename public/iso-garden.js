@@ -3,9 +3,10 @@
 // The standing art is the flat view's own upright pictures (art/garden.js); the plan is garden.js.
 // Drawn like iso-art.js: on a canvas context at (px, py), the left and top of the tile's diamond.
 import { HEADS, bushOps, rockOps, treeOps } from './art/garden.js'
-import { inPond, treeSize } from './garden.js'
+import { buildGarden, inPond, treeSize } from './garden.js'
 import { block, cellHash, diamond, rect } from './iso-art.js'
 import { railing } from './iso-furniture.js'
+import { rotateGarden } from './iso-rotate.js'
 import { shade } from './palette.js'
 
 const inRect = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
@@ -60,15 +61,28 @@ export const grassDetail = (c, px, py, x, y) => {
   }
 }
 
-// is this tile on the fence round the plot (which has a gap where the front path goes through)?
-export const isFence = ({ fence: { x0, y0, x1, y1, gate } }, x, y) =>
-  (x === x0 || x === x1 || y === y0 || y === y1) && x >= x0 && x <= x1 && y >= y0 && y <= y1 && !(y === y1 && x >= gate.x && x < gate.x + gate.w)
+// The garden of a plan, as this view draws it, turned with the plan: the fence is a rectangle with a gap (where the front path goes
+// through) and a post on each side of the gap; every tree, bush and rock also remembers its place in the plan as it is (`ox`, `oy`),
+// so what varies from one to the next stays the same whichever way the view is turned.
+export const isoGarden = layout => {
+  const original = layout.original ?? layout
+  const garden = buildGarden(original)
+  const { x0, y0, x1, y1, gate } = garden.fence
+  const flat = {
+    ...garden,
+    fence: { rect: { x: x0, y: y0, w: x1 - x0 + 1, h: y1 - y0 + 1 }, gap: { x: gate.x, y: y1, w: gate.w, h: 1 }, pillars: [{ x: gate.x - 1, y: y1 }, { x: gate.x + gate.w, y: y1 }] },
+  }
+  return rotateGarden(flat, layout.rotation ?? 0, original.width, original.height)
+}
 
-// a bit of fence: posts with two rails between them along the run of the fence; a stone post on each side of the gate
+// is this tile on the fence round the plot (which has a gap where the front path goes through)?
+export const isFence = ({ fence: { rect: r, gap } }, x, y) => inRect(r, x, y) && (x === r.x || x === r.x + r.w - 1 || y === r.y || y === r.y + r.h - 1) && !inRect(gap, x, y)
+
+// a bit of fence: posts with two rails between them along the run of the fence; a stone post on each side of the gap
 export const fenceTile = (c, garden, px, py, x, y) => {
-  const { gate, y0, y1 } = garden.fence
-  if (y === y1 && (x === gate.x - 1 || x === gate.x + gate.w)) return block(c, px, py, 10, 'stone')
-  const alongX = y === y0 || y === y1 // the top and bottom run east to west, the sides north to south
+  const { rect: r, pillars } = garden.fence
+  if (pillars.some(post => post.x === x && post.y === y)) return block(c, px, py, 10, 'stone')
+  const alongX = y === r.y || y === r.y + r.h - 1 // the top and bottom run east to west, the sides north to south
   railing('wood', 7)(c, px, py, alongX ? { w: 2, h: 1 } : { w: 1, h: 2 })
 }
 
@@ -80,8 +94,8 @@ const FEET = { tree: [26, 45], bigTree: [43, 75], small: [9, 13] }
 export const gardenPieces = garden => [
   ...garden.trees.map(t => {
     const size = treeSize(t) * 16
-    return { x: t.x, y: t.y, ops: treeOps(t), w: size, h: size, foot: t.kind.startsWith('big') ? FEET.bigTree : FEET.tree }
+    return { x: t.x, y: t.y, ops: treeOps({ ...t, x: t.ox, y: t.oy }), w: size, h: size, foot: t.kind.startsWith('big') ? FEET.bigTree : FEET.tree }
   }),
-  ...garden.bushes.map(b => ({ x: b.x, y: b.y, ops: bushOps(b), w: 16, h: 16, foot: FEET.small })),
+  ...garden.bushes.map(b => ({ x: b.x, y: b.y, ops: bushOps({ x: b.ox, y: b.oy }), w: 16, h: 16, foot: FEET.small })),
   ...garden.rocks.map(k => ({ x: k.x, y: k.y, ops: rockOps(), w: 16, h: 16, foot: FEET.small })),
 ]

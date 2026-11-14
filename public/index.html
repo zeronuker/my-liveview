@@ -78,6 +78,13 @@
             <a href="/?view=map" target="_blank" rel="noopener" title="The Map, in a window of its own">Map</a>
           </span>
         </div>
+        <div class="srow"><span>The angled Office from another side</span>
+          <span id="open-turns" class="group">
+            <a href="/?view=angled&amp;turn=1" target="_blank" rel="noopener" title="The angled Office turned a quarter turn right, in a window of its own">90&deg;</a>
+            <a href="/?view=angled&amp;turn=2" target="_blank" rel="noopener" title="The angled Office seen from the opposite side, in a window of its own">180&deg;</a>
+            <a href="/?view=angled&amp;turn=3" target="_blank" rel="noopener" title="The angled Office turned a quarter turn left, in a window of its own">270&deg;</a>
+          </span>
+        </div>
         <div class="srow"><span>Keep the screen on</span><button id="b-awake" type="button" aria-pressed="false" title="Keep the screen on while this window is visible">Stay awake</button></div>
         <div id="set-office">
           <h3>Office</h3>
@@ -108,6 +115,8 @@
         <div id="banner" role="status" hidden></div>
         <div id="inspector" hidden></div>
         <div id="zoom" role="group" aria-label="Zoom">
+          <button id="z-turn-left" class="turn" type="button" aria-label="Turn the view left" title="Turn the view a quarter turn left ( [ )">&#x27F2;</button>
+          <button id="z-turn-right" class="turn" type="button" aria-label="Turn the view right" title="Turn the view a quarter turn right ( ] )">&#x27F3;</button>
           <button id="z-in" type="button" aria-label="Zoom in">+</button>
           <button id="z-out" type="button" aria-label="Zoom out">&minus;</button>
           <button id="z-fit" type="button" aria-label="Show the whole office" title="Show the whole office (or double-click it)">Fit</button>

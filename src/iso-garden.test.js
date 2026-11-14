@@ -1,13 +1,14 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { buildGarden, inPond } from '../public/garden.js'
-import { fenceTile, gardenPieces, gardenTile, grassDetail, isFence } from '../public/iso-garden.js'
+import { inPond } from '../public/garden.js'
+import { fenceTile, gardenPieces, gardenTile, grassDetail, isFence, isoGarden } from '../public/iso-garden.js'
+import { rotateLayout } from '../public/iso-rotate.js'
 import { inPalette } from '../public/palette.js'
 import { buildStudio } from '../public/studio.js'
 
 const layout = buildStudio()
-const garden = buildGarden(layout)
+const garden = isoGarden(layout)
 
 // a canvas context that only remembers the rectangles it was asked to fill
 const recorder = () => {
@@ -16,12 +17,31 @@ const recorder = () => {
   return { c, rects }
 }
 
-test('the fence runs round the plot, with a gap at the gate', () => {
-  const { x0, y0, x1, y1, gate } = garden.fence
-  assert.ok(isFence(garden, x0, 20) && isFence(garden, x1, 20) && isFence(garden, 10, y0) && isFence(garden, 10, y1))
-  assert.ok(!isFence(garden, gate.x, y1) && !isFence(garden, gate.x + gate.w - 1, y1))
-  assert.ok(isFence(garden, gate.x - 1, y1) && isFence(garden, gate.x + gate.w, y1))
-  assert.ok(!isFence(garden, 10, 10))
+test('the fence runs round the plot, with a gap at the gate and a post each side of it, whichever way the plan is turned', () => {
+  for (const k of [0, 1, 2, 3]) {
+    const turned = isoGarden(rotateLayout(layout, k))
+    const { rect: r, gap, pillars } = turned.fence
+    assert.ok(isFence(turned, r.x, r.y + 5) && isFence(turned, r.x + r.w - 1, r.y + 5) && isFence(turned, r.x + 5, r.y) && isFence(turned, r.x + 5, r.y + r.h - 1), `${k}: round`)
+    for (let dy = 0; dy < gap.h; dy++) for (let dx = 0; dx < gap.w; dx++) assert.ok(!isFence(turned, gap.x + dx, gap.y + dy), `${k}: the gap`)
+    assert.equal(gap.w * gap.h, 2)
+    assert.equal(pillars.length, 2)
+    for (const post of pillars) assert.ok(isFence(turned, post.x, post.y), `${k}: a post on the fence`)
+    assert.ok(!isFence(turned, r.x + 5, r.y + 5))
+    const cells = []
+    for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) if (isFence(turned, x, y)) cells.push([x, y])
+    assert.equal(cells.length, 2 * (r.w + r.h) - 4 - 2, `${k}: the border less the gap`)
+  }
+})
+
+test('a turned garden has the same things, and each remembers its place in the plan as it is', () => {
+  const flat = isoGarden(layout)
+  for (const k of [1, 2, 3]) {
+    const turned = isoGarden(rotateLayout(layout, k))
+    for (const kind of ['trees', 'bushes', 'rocks', 'beds']) assert.equal(turned[kind].length, flat[kind].length, `${k} ${kind}`)
+    assert.deepEqual(turned.trees.map(t => [t.ox, t.oy]), flat.trees.map(t => [t.ox, t.oy]))
+    assert.equal(gardenPieces(turned).length, gardenPieces(flat).length)
+    assert.ok(inPond(turned, Math.floor(turned.pond.cx), Math.floor(turned.pond.cy))) // the pond is round its own middle
+  }
 })
 
 test('every tree, bush and rock is a picture standing on its tile, with its foot inside the picture', () => {

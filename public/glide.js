@@ -27,7 +27,7 @@ export const createGlide = ({ smooth = SMOOTH } = {}) => {
     if (!drawn || Math.hypot(x - drawn.x, y - drawn.y) > JUMP) {
       drawn = { x, y, vx: 0, vy: 0, stride: drawn?.stride ?? 0 }
       seen.set(id, drawn)
-      return { x, y, vx: 0, speed: 0, stride: drawn.stride, moving: false }
+      return { x, y, vx: 0, vy: 0, speed: 0, stride: drawn.stride, moving: false }
     }
     if (dt > 0) {
       const [nx, vx] = settle(drawn.x, drawn.vx, x, dt, smooth)
@@ -36,7 +36,7 @@ export const createGlide = ({ smooth = SMOOTH } = {}) => {
       Object.assign(drawn, { x: nx, y: ny, vx, vy })
     }
     const speed = Math.hypot(drawn.vx, drawn.vy)
-    return { x: drawn.x, y: drawn.y, vx: drawn.vx, speed, stride: drawn.stride, moving: speed > MOVING }
+    return { x: drawn.x, y: drawn.y, vx: drawn.vx, vy: drawn.vy, speed, stride: drawn.stride, moving: speed > MOVING }
   }
 
   // forget whatever is not in the list of ids that are still here
