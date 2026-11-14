@@ -3,7 +3,7 @@
 // ({ x, y }). Pieces are drawn a tile at a time, back to front, so a tile's neighbours in the same piece cover its
 // inner faces; only the outer faces and what stands on top need care. Heights are in pixels (a person is 11 tall).
 // Light is from the top-left: left faces (towards +y) are lighter than right faces (towards +x). Palette colours only.
-import { BACK, BEHIND, block, blockTop, bottomEdge, cellHash, diamond, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
+import { BACK, BEHIND, block, blockTop, bottomEdge, cellHash, diamond, edgeY, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
 import { RAMPS, shade } from './palette.js'
 
 // the material a piece is made of: its tone if it has one, else the usual
@@ -51,10 +51,13 @@ const pingpong = (c, px, py, furn, part) => {
   if (part.i === 1) slab(c, px, py, 5, 'ul', 3, shade('plaster', 3), shade('plaster', 3)) // the net
 }
 
-// a TV on a stand, seen from the side: a thin dark panel along the +x edge
+// A TV on a stand: a thin dark panel along the +x edge with its screen on the face the viewer sees. (The plan has TVs facing west
+// from the east wall; drawn so, the screen would turn its back on the viewer, so the picture is shown on the visible face.)
+const SCREEN = [9, 10, 11, 12]
 const tv = (c, px, py) => {
   block(c, px, py, 3, 'wood')
   slab(c, px, py, 3, 'lr', 9, shade('metal', 0), shade('metal', 2))
+  for (const col of SCREEN) rect(c, px + col, py + edgeY('lr', col) - 10, 1, 6, shade('glass', 2))
 }
 
 // ---- work and meeting ----
@@ -381,6 +384,12 @@ export const LIGHTS = {
     ...[2, 4, 6].map(col => lamp(col, -16 + bottomEdge(col), 'flicker', shade('light', 3), shade('light', 1), 2)),
     lamp(12, -16 + bottomEdge(3) + 4, 'slow', shade('light', 3), shade('metal', 1)),
   ],
+  // the picture changes colour, all of it together (and a TV out of step with the next)
+  tv: furn =>
+    SCREEN.map(col => ({
+      dx: col, dy: edgeY('lr', col) - 10, w: 1, h: 6, pattern: 'cycle', on: shade('glass', 2), off: shade('glass', 2),
+      colors: [shade('glass', 2), shade('glass', 3), shade('plaster', 3), shade('light', 2), shade('leaf', 2)], phase: (furn.x * 3 + furn.y) % 16,
+    })),
   coffeebar: (furn, part) => (part.i === 0 ? [lamp(10, -9, 'slow', shade('light', 3), shade('brick', 2))] : []),
   // the lamp's shade
   sidetable: () => [lamp(5, -10, 'flicker', shade('light', 2), shade('light', 1), 6, 4)],

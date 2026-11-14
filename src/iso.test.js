@@ -113,3 +113,18 @@ test('a swing door is hinged on the side the flat view mirrors it to: the far en
   assert.ok(leafColumns(12).length > 0 && leafColumns(12).every(px => px < 8)) // an even column: the leaf is at the near end
   assert.ok(leafColumns(7).length > 0 && leafColumns(7).every(px => px >= 8)) // an odd one: at the far end
 })
+
+test('a TV shows a picture that changes all together, and its two tiles stay in step', async () => {
+  const { lightsOf, makeWorld } = await import('../public/iso-art.js')
+  const { lightColor } = await import('../public/lights.js')
+  const world = makeWorld(layout)
+  const tv = layout.furniture.find(f => f.kind === 'tv')
+  const tiles = [0, 1].map(j => lightsOf(world, tv.x, tv.y + j))
+  assert.ok(tiles.every(lights => lights.length === 4 && lights.every(l => l.pattern === 'cycle')))
+  for (const seconds of [0, 1, 2.5, 7, 13.25]) {
+    const colors = new Set(tiles.flat().map(l => lightColor({ ...l, x: l.dx, y: l.dy }, seconds)))
+    assert.equal(colors.size, 1, `at ${seconds}s: ${[...colors]}`)
+  }
+  const seen = new Set([0, 1, 2, 3, 4, 5, 6, 7, 8, 9].map(i => lightColor({ ...tiles[0][0], x: 1, y: 1 }, i)))
+  assert.ok(seen.size > 2) // and it does change
+})
