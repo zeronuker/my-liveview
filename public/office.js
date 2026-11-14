@@ -13,7 +13,7 @@ import { shownNames } from './names.js'
 import { createFish } from './fish.js'
 import { createGlide } from './glide.js'
 import { createIsoScene } from './iso-scene.js'
-import { ISO_RISE, isoExtent, screenAt } from './iso.js'
+import { ISO_RISE, isoExtent, liftAt, screenAt } from './iso.js'
 import { createPets } from './pets.js'
 import { buildStudio } from './studio.js'
 import { deskOnOps } from './art/office.js'
@@ -67,10 +67,11 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   let isoScene = null // its walls and furniture, painted the first time it is shown
   const isoBox = isoExtent(layout)
   const extent = () => (angled ? isoBox : layout) // the size of the plan in tiles, for fitting, zooming and panning
-  // where the middle of a tile is on the screen, as a person is placed: feet a little below it when flat, on it when angled
+  // where the middle of a tile is on the screen, as a person is placed: feet a little below it when flat, on it when angled,
+  // and a storey higher on the first floor (or part of one on the stairs)
   const centre = (view, x, y) => {
     const p = screenAt(view, layout, x + 0.5, y + 0.5, angled)
-    return angled ? { x: p.x, y: p.y - view.tile * 0.42 } : p
+    return angled ? { x: p.x, y: p.y - view.tile * 0.42 - (liftAt(layout, x, y) * view.tile) / 16 } : p
   }
   let selected = '' // the chat picked in the list, whose workers stand out; '' for all
   let multiChat = false // more than one chat at work: tag every name with its chat's colour

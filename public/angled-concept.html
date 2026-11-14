@@ -47,7 +47,8 @@
 import { buildStudio } from '/studio.js'
 import { flipsAngled, lookOf, poses, spriteFor } from '/sprites.js'
 import { shade } from '/palette.js'
-import { cellHash, diamond, furnitureTile, groundTile, makeWorld, monitor, slabTile, structureTile } from '/iso-art.js'
+import { cellHash, diamond, furnitureTile, groundTile, makeWorld, monitor, podiumTile, slabTile, structureTile } from '/iso-art.js'
+import { STOREY } from '/iso.js'
 
 const layout = buildStudio()
 const world = makeWorld(layout)
@@ -95,7 +96,7 @@ const person = (c, px, py, v, mode) => {
 
 const draw = (canvas, region, detail) => {
   const { x0, y0, x1, y1 } = region // tiles, x1 and y1 included
-  const top = 46
+  const top = 46 + STOREY
   const span = x1 - x0 + y1 - y0 + 2
   canvas.width = span * 8 + 16
   canvas.height = span * 4 + top + 24
@@ -108,8 +109,10 @@ const draw = (canvas, region, detail) => {
   for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) if (world.inGrid(x, y)) cells.push([x, y])
   cells.sort((a, b) => a[0] + a[1] - (b[0] + b[1]) || a[1] - b[1])
 
-  for (const [x, y] of cells) groundTile(c, world, px(x, y), py(x, y), x, y, 3)
-  for (const [x, y] of cells) slabTile(c, world, px(x, y), py(x, y), x, y)
+  // the first floor stands a storey up, on a podium
+  for (const [x, y] of cells) (world.isUpper(x, y) ? podiumTile : groundTile)(c, world, px(x, y), py(x, y), x, y, 3)
+  for (const [x, y] of cells) if (!world.isUpper(x, y)) slabTile(c, world, px(x, y), py(x, y), x, y)
+  for (const [x, y] of cells) if (world.upperFloor(x, y)) groundTile(c, world, px(x, y), py(x, y) - STOREY, x, y, 3)
 
   // about two in three desk seats have someone at work, and that desk's monitor is lit
   const busy = new Set(spots.desks.filter(d => cellHash(d.x, d.y) % 3 !== 0).map(d => `${d.x},${d.y}`))
@@ -117,13 +120,13 @@ const draw = (canvas, region, detail) => {
 
   for (const [x, y] of cells) {
     const sitter = (cx, cy) => busy.has(`${cx},${cy}`) && person(c, px(cx, cy), py(cx, cy), cellHash(cx, cy), 'sit')
-    structureTile(c, world, px(x, y), py(x, y), x, y, { sitter, detail })
+    structureTile(c, world, px(x, y), py(x, y) - (world.isUpper(x, y) ? STOREY : 0), x, y, { sitter, detail })
     if (monitors.has(`${x},${y}`)) monitor(c, px(x, y), py(x, y), monitors.get(`${x},${y}`), cellHash(x, y))
   }
   // people in the corridors, the lobby and the hub: some standing, some walking
   for (const [x, y] of [[10, 18], [15, 19], [30, 18], [35, 19], [31, 22], [38, 25], [12, 36], [20, 37], [24, 24], [13, 23], [10, 27], [27, 5], [33, 12], [24, 33]]) {
     if (x < x0 || x > x1 || y < y0 || y > y1 || !world.isFloor(x, y) || world.furnAt(x, y)) continue
-    person(c, px(x, y), py(x, y), cellHash(x, y), cellHash(y, x) % 2 ? 'walk' : 'stand')
+    person(c, px(x, y), py(x, y) - (world.upperFloor(x, y) ? STOREY : 0), cellHash(x, y), cellHash(y, x) % 2 ? 'walk' : 'stand')
   }
   canvas.style.aspectRatio = `${canvas.width} / ${canvas.height}`
 }

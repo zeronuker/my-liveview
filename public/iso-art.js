@@ -4,9 +4,10 @@
 // (px, py), the left and top of its tile's 16 by 8 diamond, in whole pixels, with palette colours only. Light
 // comes from the top-left. The tile at (x, y) has its corners at: top (x, y), right (x + 1, y), left
 // (x, y + 1), bottom (x + 1, y + 1). Used by iso-scene.js (the Office) and angled-concept.html.
-import { BACK, BEHIND, bottomEdge, block, cellHash, diamond, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
+import { BACK, BEHIND, block, blockTop, bottomEdge, cellHash, diamond, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
 import { doorLights, doorTile } from './iso-doors.js'
 import { LIGHTS, PIECES } from './iso-furniture.js'
+import { risingStairs, stepHeight, STOREY } from './iso.js'
 import { shade } from './palette.js'
 import { levelAt } from './studio.js'
 
@@ -34,6 +35,20 @@ export const makeWorld = layout => {
     return false
   }
   const isWall = (x, y) => inGrid(x, y) && !isFloor(x, y) && near(x, y, 1, isFloor)
+  // the first floor stands a storey up (iso.js): its floors, the walls only it touches, and the walls it shares with the ground floor
+  const upperFloor = (x, y) => isFloor(x, y) && levelAt(layout, x, y) === 'first'
+  const groundFloor = (x, y) => isFloor(x, y) && !upperFloor(x, y)
+  const wallKinds = new Map()
+  const wallKind = (x, y) => {
+    if (!isWall(x, y)) return null
+    const key = `${x},${y}`
+    if (!wallKinds.has(key)) {
+      const [up, ground] = [near(x, y, 1, upperFloor), near(x, y, 1, groundFloor)]
+      wallKinds.set(key, up && ground ? 'shared' : up ? 'upper' : 'ground')
+    }
+    return wallKinds.get(key)
+  }
+  const stairs = risingStairs(layout)
   const furn = new Map()
   for (const f of furniture.filter(f => f.kind !== 'pendant').reverse()) for (let j = f.y; j < f.y + f.h; j++) for (let i = f.x; i < f.x + f.w; i++) furn.set(`${i},${j}`, f)
   // how strongly a pool of light (the plan's `lights`) falls on a tile: 0 none, 1 in the pool, 2 in its middle
@@ -43,7 +58,13 @@ export const makeWorld = layout => {
       return d < 0.35 ? 2 : d < 1 ? 1 : 0
     }))
   return {
-    layout, inGrid, isFloor, isWall, near, poolAt,
+    layout, inGrid, isFloor, isWall, near, poolAt, wallKind, upperFloor,
+    // a tile that is a storey up: a first-floor floor or a wall only the first floor touches
+    isUpper: (x, y) => upperFloor(x, y) || wallKind(x, y) === 'upper',
+    // a step of the stairs that rise to the first floor, or null: how high it stands, and whether the runner is on it
+    stairsAt: (x, y) => (stairs && inside(stairs, x, y) ? { z: stepHeight(stairs, y), runner: Boolean(stairs.runner) && x > stairs.x && x < stairs.x + stairs.w - 1 } : null),
+    // how high the stairs stand beside a wall tile (x, y) that runs along them, plus the wall's own cap
+    rampBeside: (x, y) => (stairs && y >= stairs.y && y < stairs.y + stairs.h && (x === stairs.x - 1 || x === stairs.x + stairs.w) ? stepHeight(stairs, y) + 3 : 0),
     pendants: furniture.filter(f => f.kind === 'pendant'),
     isBuilding: (x, y) => isFloor(x, y) || isWall(x, y),
     furnAt: (x, y) => furn.get(`${x},${y}`),
@@ -78,6 +99,22 @@ export const slabTile = (c, world, px, py, x, y) => {
     if (!world.isBuilding(x + 1, y)) {
       rect(c, px + 15 - col, py + bottomEdge(col), 1, 5, shade('brick', 1))
       rect(c, px + 15 - col, py + bottomEdge(col), 1, 1, shade('brick', 2))
+    }
+  }
+}
+
+// The podium the first floor stands on: plaster faces a storey tall, with a brick base, on the sides of an upper tile that
+// face the viewer and have no podium (or shared wall) beyond them. Drawn at the tile's place on the ground.
+export const podiumTile = (c, world, px, py, x, y) => {
+  const open = (nx, ny) => !world.isUpper(nx, ny) && world.wallKind(nx, ny) !== 'shared'
+  for (let col = 0; col < 8; col++) {
+    if (open(x, y + 1)) {
+      rect(c, px + col, py + bottomEdge(col) - STOREY, 1, STOREY, shade('plaster', 2))
+      rect(c, px + col, py + bottomEdge(col) - 4, 1, 4, shade('brick', 2))
+    }
+    if (open(x + 1, y)) {
+      rect(c, px + 15 - col, py + bottomEdge(col) - STOREY, 1, STOREY, shade('plaster', 1))
+      rect(c, px + 15 - col, py + bottomEdge(col) - 4, 1, 4, shade('brick', 1))
     }
   }
 }
@@ -138,9 +175,10 @@ const furnitureTile = (c, px, py, furn, x, y, { sitter, detail }) => {
 
 // how tall a wall stands: tall at the back, cut low at the front, half between rooms
 const wallHeight = (world, x, y) => {
+  if (world.wallKind(x, y) === 'shared') return STOREY + 3 // a podium wall: up to the first floor, and its low rail
   const behind = world.isFloor(x + 1, y) || world.isFloor(x, y + 1)
   const front = world.isFloor(x - 1, y) || world.isFloor(x, y - 1)
-  return behind && front ? 8 : behind ? WALL : front ? 3 : 8
+  return Math.max(world.rampBeside(x, y), behind && front ? 8 : behind ? WALL : front ? 3 : 8)
 }
 
 // A tile of a door, or null: its kind, its place in the opening, which way the wall runs round it and how tall that wall is.
@@ -183,6 +221,14 @@ export const structureTile = (c, world, px, py, x, y, options = {}) => {
       const side = world.isFloor(x, y + 1) ? 'left' : 'right'
       const [a, b] = side === 'left' ? [x === win.x, x === win.x + win.w - 1] : [y === win.y, y === win.y + win.h - 1]
       windowOn(c, px, py, h, side, a, b)
+    }
+  } else if (world.stairsAt(x, y)) {
+    const step = world.stairsAt(x, y)
+    const h = Math.round(step.z)
+    blockTop(c, px, py, h, 'stone', step.runner ? 'carpet' : 'stone')
+    for (let col = 0; col < 8; col++) {
+      rect(c, px + col, py - h + bottomEdge(col) - 1, 1, 1, shade(step.runner ? 'carpet' : 'stone', 1)) // the edge of the step
+      rect(c, px + 15 - col, py - h + bottomEdge(col) - 1, 1, 1, shade(step.runner ? 'carpet' : 'stone', 0))
     }
   } else if (world.doorAt(x, y)) {
     doorTile(c, px, py, doorOf(world, x, y))

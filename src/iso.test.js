@@ -84,3 +84,19 @@ test('doors: each knows which way its wall runs and how tall it is, and a slidin
   assert.equal(sensors.length, 1)
   assert.equal(sensors[0].pattern, 'slow')
 })
+
+test('the CEO suite is a storey up, the ground floor is not, and the stairs climb smoothly between', async () => {
+  const { STOREY, liftAt, risingStairs, stepHeight } = await import('../public/iso.js')
+  const stairs = risingStairs(layout)
+  assert.equal(stairs.name, 'CEO stairs')
+  assert.equal(liftAt(layout, 27, 5), STOREY) // the CEO's office
+  assert.equal(liftAt(layout, 38, 9), STOREY) // the foyer, at the top of the stairs
+  assert.equal(liftAt(layout, 30, 20), 0) // the hub
+  assert.equal(liftAt(layout, 10, 36), 0) // the lobby
+  const column = Array.from({ length: stairs.h + 2 }, (_, i) => liftAt(layout, 38, stairs.y + stairs.h - i)) // from the bottom up
+  for (let i = 1; i < column.length; i++) assert.ok(column[i] >= column[i - 1], `${column}`)
+  assert.equal(liftAt(layout, 38, stairs.y), STOREY) // the top step
+  assert.equal(stepHeight(stairs, stairs.y + stairs.h - 1), STOREY / stairs.h) // the bottom step: a sixth
+  assert.equal(liftAt(layout, 38, 16), 0) // the foot of the stairs
+  assert.ok(liftAt(layout, 38, 12.5) > liftAt(layout, 38, 14)) // half way up is higher than near the bottom
+})
