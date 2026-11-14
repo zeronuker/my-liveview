@@ -57,15 +57,95 @@ const tv = (c, px, py) => {
   slab(c, px, py, 3, 'lr', 9, shade('metal', 0), shade('metal', 2))
 }
 
+// ---- work and meeting ----
+
+const BOOKS = [shade('brick', 2), shade('leaf', 2), shade('periwinkle', 2), shade('light', 2), shade('fabricCool', 2), shade('lilac', 3), shade('terracotta', 2)]
+
+// a bookcase: three shelves of books of different heights on its +x face
+const shelf = (c, px, py, furn, part, at) => {
+  block(c, px, py, 18, 'wood')
+  for (let col = 8; col < 16; col++) {
+    const top = py - 18 + bottomEdge(15 - col)
+    for (let k = 0; k < 3; k++) {
+      const n = cellHash(at.x * 31 + col, at.y * 7 + k)
+      const height = 3 + (n % 2)
+      const y = top + 2 + k * 5
+      rect(c, px + col, y + 4 - height, 1, height, BOOKS[(n >>> 3) % BOOKS.length])
+      rect(c, px + col, y + 4, 1, 1, shade('wood', 0))
+    }
+  }
+}
+
+// the CEO's desk: a leather-topped block with drawers, a laptop and a name plate
+const ceodesk = (c, px, py, furn, part) => {
+  block(c, px, py, 6, 'leather')
+  for (let col = 1; col < 7; col++) rect(c, px + col, py - 6 + bottomEdge(col) + 2, 1, 1, shade('leather', 0))
+  rect(c, px + 3, py - 6 + bottomEdge(3) + 3, 2, 1, shade('light', 2))
+  const mid = py - 3
+  if (part.i === 1) {
+    rect(c, px + 4, mid - 6, 8, 5, shade('metal', 0))
+    rect(c, px + 5, mid - 5, 6, 3, shade('glass', 2))
+    rect(c, px + 4, mid - 1, 8, 1, shade('metal', 2))
+  } else if (part.i === 2) rect(c, px + 6, mid - 1, 4, 1, shade('light', 3))
+}
+
+const cabinet = (c, px, py, furn, part) =>
+  counter(c, px, py, furn, part, (c2, x, mid) => {
+    rect(c2, x + 4, mid - 5, 2, 5, shade('glass', 2)) // bottles
+    rect(c2, x + 4, mid - 6, 2, 1, shade('glass', 3))
+    rect(c2, x + 7, mid - 6, 2, 6, shade('brick', 2))
+    rect(c2, x + 10, mid - 4, 2, 4, shade('leaf', 2))
+  }, { h: 7, mat: 'wood', topMat: 'wood' })
+
+// a long meeting table: papers and a speakerphone
+const boardtable = (c, px, py, furn, part) => {
+  table(c, px, py, 5, 'wood', part)
+  if ((part.i + part.j) % 2 === 0) rect(c, px + 5, py - 3, 4, 2, shade('plaster', 3))
+  if (part.i === furn.w >> 1 && part.j === 0) rect(c, px + 6, py - 2, 4, 2, shade('metal', 0))
+}
+
+const reception = (c, px, py, furn, part) =>
+  counter(c, px, py, furn, part, (c2, x, mid) => part.i === 0 && part.j === 0 && rect(c2, x + 6, mid - 2, 4, 2, shade('light', 3)), { h: 7, mat: 'wood', topMat: 'plaster' })
+
+const coatstand = (c, px, py) => {
+  rect(c, px + 6, py + 4, 4, 1, shade('wood', 0))
+  rect(c, px + 7, py - 12, 2, 16, shade('wood', 2))
+  rect(c, px + 4, py - 12, 8, 1, shade('wood', 1))
+  rect(c, px + 9, py - 11, 3, 7, shade('fabricCool', 2)) // a coat
+  rect(c, px + 9, py - 11, 1, 7, shade('fabricCool', 3))
+  rect(c, px + 4, py - 13, 3, 2, shade('brick', 2)) // a hat
+}
+
+const umbrella = (c, px, py) => {
+  rect(c, px + 5, py - 4, 6, 6, shade('metal', 2))
+  rect(c, px + 5, py - 4, 2, 6, shade('metal', 3))
+  rect(c, px + 9, py - 4, 2, 6, shade('metal', 1))
+  rect(c, px + 6, py - 9, 1, 5, shade('fabricCool', 1))
+  rect(c, px + 6, py - 10, 2, 1, shade('fabricCool', 2))
+  rect(c, px + 9, py - 8, 1, 4, shade('brick', 1))
+  rect(c, px + 9, py - 9, 2, 1, shade('brick', 2))
+}
+
+// ---- railings ----
+
+// posts with two rails between them, along the run of the piece (a single tile is just a post)
+const railing = (mat, h) => (c, px, py, furn) => {
+  const alongX = furn.w >= furn.h
+  if (furn.w * furn.h > 1)
+    for (const z of [h, h >> 1])
+      for (let t = 0; t <= 8; t++) rect(c, alongX ? px + 4 + t : px + 12 - t, py + 2 + (t >> 1) - z, 1, 1, shade(mat, 1))
+  rect(c, px + 7, py + 4 - h, 2, h, shade(mat, 1))
+  rect(c, px + 7, py + 4 - h, 1, h, shade(mat, 2))
+}
+
 // ---- kitchen and drinks ----
 
 // a run of cabinets with a stone top: a seam between doors and a handle on each tile's faces
-const counter = (c, px, py, furn, part, extra) => {
-  const h = 6
-  blockTop(c, px, py, h, 'wood', 'stone')
-  rect(c, px + 4, py - h + bottomEdge(4) + 1, 1, h - 2, shade('wood', 0))
+const counter = (c, px, py, furn, part, extra, { h = 6, mat = 'wood', topMat = 'stone' } = {}) => {
+  blockTop(c, px, py, h, mat, topMat)
+  rect(c, px + 4, py - h + bottomEdge(4) + 1, 1, h - 2, shade(mat, 0))
   rect(c, px + 2, py - h + bottomEdge(2) + 2, 1, 2, shade('metal', 2))
-  rect(c, px + 12, py - h + bottomEdge(3) + 1, 1, h - 2, shade('wood', 0))
+  rect(c, px + 12, py - h + bottomEdge(3) + 1, 1, h - 2, shade(mat, 0))
   rect(c, px + 13, py - h + bottomEdge(2) + 2, 1, 2, shade('metal', 1))
   extra?.(c, px, py - h + 3, part)
 }
@@ -161,10 +241,8 @@ const fridge = (c, px, py) => {
 
 // kinds that have no drawer yet: a plain box of this material and height
 export const PLAIN = {
-  ceodesk: ['leather', 6], shelf: ['wood', 18], cabinet: ['wood', 7], boardtable: ['wood', 5], machine: ['metal', 12],
-  rail: ['metal', 4], rack: ['metal', 14], reception: ['wood', 7], labbench: ['metal', 6], cubicle: ['tile', 10],
-  urinal: ['frost', 8], vanity: ['frost', 6], coatstand: ['wood', 14], umbrella: ['fabricCool', 4], parasol: ['fabricWarm', 3],
-  deckrail: ['wood', 3],
+  machine: ['metal', 12], rack: ['metal', 14], labbench: ['metal', 6], cubicle: ['tile', 10], urinal: ['frost', 8],
+  vanity: ['frost', 6], parasol: ['fabricWarm', 3],
 }
 
 export const PIECES = {
@@ -184,4 +262,13 @@ export const PIECES = {
   bin,
   vending,
   fridge,
+  shelf,
+  ceodesk,
+  cabinet,
+  boardtable,
+  reception,
+  coatstand,
+  umbrella,
+  rail: railing('metal', 5),
+  deckrail: railing('wood', 4),
 }
