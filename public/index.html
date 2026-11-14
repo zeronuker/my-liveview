@@ -11,6 +11,7 @@
       } catch {}
     </script>
     <link rel="stylesheet" href="/style.css" />
+    <script type="importmap">{ "imports": { "three": "/vendor/three.module.min.js" } }</script>
   </head>
   <body>
     <header id="top">
@@ -28,7 +29,11 @@
         <input id="speed" type="range" min="1" max="4" step="1" value="2" />
         <output id="speed-out" for="speed">normal</output>
       </label>
-      <button id="b-office" type="button" title="Watch the session as an office">Office</button>
+      <span id="views" class="group" role="group" aria-label="View">
+        <button id="v-code" type="button" title="The code being written">Code</button>
+        <button id="v-office" type="button" title="Watch the session as an office">Office</button>
+        <button id="v-map" type="button" title="Watch the session on a 3D map of the repo">Map</button>
+      </span>
       <button id="b-record" type="button" aria-pressed="false" title="Record the Office to an mp4 file">Record</button>
       <button id="b-gear" type="button" class="gear" aria-label="Settings" aria-expanded="false" aria-controls="settings">&#9881; Settings</button>
       <div id="settings" hidden>
@@ -83,6 +88,8 @@
       </section>
       <section id="office" aria-label="The session as an office">
         <canvas id="office-canvas"></canvas>
+        <canvas id="map-canvas"></canvas>
+        <div id="map-tip" hidden></div>
         <div id="banner" role="status" hidden></div>
         <div id="inspector" hidden></div>
         <div id="zoom" role="group" aria-label="Zoom">

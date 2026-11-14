@@ -1,3 +1,4 @@
+import { createMap } from './map.js'
 import { createOffice } from './office.js'
 import { createPane } from './pane.js'
 import { nextInLine, placeEdit } from './place.js'
@@ -50,6 +51,7 @@ const prefs = {
   focus: store.get('focus', false) === true,
   awake: store.get('awake', false) === true,
   office: store.get('office', false) === true,
+  map: store.get('map', false) === true, // with office on: the Map in place of the Office
   sound: store.get('sound', false) === true,
   folded: store.get('folded', false) === true,
 }
@@ -124,6 +126,10 @@ function showInspector(who) {
   box.replaceChildren(item('div', 'who', dot, who.name), ...[who.chat, who.job].filter(Boolean).map(text => span('line', text)).map(line => item('div', '', line)))
 }
 const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[prefs.speed - 1].mult, getChatName: id => nameOfChat(id), onView: zoomed => ($('z-fit').disabled = !zoomed), onInspect: showInspector })
+
+const map = createMap({ canvas: $('map-canvas'), tip: $('map-tip') })
+// the Map shows the repo of the chat picked, else of the chat that was active last
+const mapCwd = () => chats.get(selected)?.cwd ?? [...chats.values()].sort((a, b) => b.lastAt - a.lastAt)[0]?.cwd ?? ''
 
 // the recording is a download, named after the day and time
 const download = (blob, name) => {
@@ -597,6 +603,7 @@ setInterval(renderElapsed, 1000)
 
 const renderLists = () => {
   isListsDue = false
+  map.setRepo(mapCwd())
   $('chat-list').replaceChildren(chatTree())
 
   $('feed-list').replaceChildren(
@@ -702,15 +709,16 @@ const apply = () => {
   document.body.classList.toggle('wrap', prefs.wrap)
   document.body.classList.toggle('focus', prefs.focus)
   document.body.classList.toggle('office', prefs.office)
-  office.setVisible(prefs.office)
+  const isMap = prefs.office && prefs.map
+  document.body.classList.toggle('map', isMap)
+  office.setVisible(prefs.office && !isMap)
+  map.setVisible(isMap)
   if (prefs.office) $('files').append($('feed'))
   else $('rz-aside').after($('feed'))
   office.setSound(prefs.sound)
   for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake'], ['b-sound', 'sound'], ['b-folded', 'folded']])
     $(id).setAttribute('aria-pressed', String(prefs[key]))
-  // the button names the view it switches to
-  $('b-office').textContent = prefs.office ? 'Code' : 'Office'
-  $('b-office').title = prefs.office ? 'Back to the code view' : 'Watch the session as an office'
+  for (const [id, on] of [['v-code', !prefs.office], ['v-office', prefs.office && !isMap], ['v-map', isMap]]) $(id).setAttribute('aria-pressed', String(on))
   for (const swatch of document.querySelectorAll('.swatch'))
     swatch.setAttribute('aria-pressed', String(swatch.dataset.theme === prefs.theme))
   $('speed').value = String(prefs.speed)
@@ -743,11 +751,20 @@ $('b-whole').onclick = () => {
 $('b-focus').onclick = () => save('focus', !prefs.focus)
 $('b-awake').onclick = () => save('awake', !prefs.awake)
 // leaving the Office is the one in-app way out of the picture, so it asks first
-$('b-office').onclick = () => {
-  if (recorder.isRecording && !window.confirm('Leave the Office and stop recording? The video so far is saved.')) return
+const setView = view => {
+  const leaving = prefs.office && !prefs.map && view !== 'office'
+  if (leaving && recorder.isRecording && !window.confirm('Leave the Office and stop recording? The video so far is saved.')) return
   recorder.stop()
-  save('office', !prefs.office)
+  prefs.office = view !== 'code'
+  prefs.map = view === 'map'
+  store.set('office', prefs.office)
+  store.set('map', prefs.map)
+  apply()
+  refreshState() // Skip is on in the Office and the Map, whatever the panes are doing
 }
+$('v-code').onclick = () => setView('code')
+$('v-office').onclick = () => setView('office')
+$('v-map').onclick = () => setView('map')
 $('b-sound').onclick = () => save('sound', !prefs.sound)
 $('b-folded').onclick = () => {
   save('folded', !prefs.folded)
@@ -764,7 +781,7 @@ document.addEventListener('click', event => {
   if (!$('settings').hidden && !event.target.closest('#settings, #b-gear')) setSettings(false)
 })
 document.addEventListener('keydown', event => event.key === 'Escape' && setSettings(false))
-$('z-fit').onclick = () => office.resetView()
+$('z-fit').onclick = () => (prefs.map ? map.resetView() : office.resetView())
 $('z-in').onclick = () => office.zoomBy(1.4)
 $('z-out').onclick = () => office.zoomBy(1 / 1.4)
 // in the Office the activity list sits under the chats, and can be folded away
@@ -831,6 +848,7 @@ source.onmessage = message => {
   const event = JSON.parse(message.data)
   // the office plays what happens now, not the history a new window is sent first
   if (!isReplaying && event.type !== 'close' && event.type !== 'ready') office.feed(event)
+  map.feed(event) // the history too: what was touched before this window opened stays lit
   if (event.type === 'close') {
     // the server is stopping: close this window, or say so where a tab may not close
     isStopped = true

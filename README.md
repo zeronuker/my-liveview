@@ -37,6 +37,15 @@ Press **Office** in the toolbar. The repo becomes an office: Claude is the manag
 
 What the Office does for each kind of event, and what is built, is listed in `docs/office-situations.md`. The plan, decisions and research are in `docs/office-plan.md`.
 
+## The Map
+
+Press **Map** in the toolbar (Code, Office and Map are the three views). The chat's repo becomes a 3D city: each folder is a district with its name over it, each file a building, taller the more lines it has. Files Claude reads light up blue, files it edits amber, and a file it creates green; they glow bright and then settle to a dim tint, so you can see everywhere Claude has been. The chat you pick in the left list sets the repo shown (else the chat that was active last).
+
+- **Move around:** drag to turn, right-drag to pan, wheel to zoom, **Fit** (or a double-click) to see the whole city again. Point at a building to see its path and length.
+- **Big repos:** past 5000 files the shortest ones are merged, one grey block per folder.
+- **Read-only:** the server reads the repo's file list for the Map, only for a folder a Claude hook has named, and skips `.git`, `node_modules` and build folders. The 3D drawing uses [three.js](https://threejs.org) (MIT), kept in `public/vendor/` so it works offline.
+- **Not yet:** replaying a past session on the map, and searches (Grep and Glob) lighting up folders.
+
 ## Try it without Claude
 
 Scripted mock sessions play the same hook events at the running server:

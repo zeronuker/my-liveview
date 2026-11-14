@@ -557,9 +557,28 @@ body.office #rz-split {
   display: none;
 }
 
-body.office #b-record {
+body.office:not(.map) #b-record {
   display: inline-block;
 }
+
+/* the Map: its own canvas in place of the Office's */
+#map-canvas { display: none; }
+body.map #office-canvas { display: none; }
+body.map #map-canvas { display: block; }
+body.map #z-in,
+body.map #z-out { display: none; }
+#map-tip {
+  position: absolute;
+  pointer-events: none;
+  padding: 3px 8px;
+  border-radius: 4px;
+  background: rgba(7, 11, 23, 0.92);
+  color: #dfe6ff;
+  font: 12px ui-monospace, Consolas, monospace;
+  white-space: nowrap;
+}
+#map-tip[hidden] { display: none; }
+#views button[aria-pressed='true'] { background: var(--accent, #3b6fd4); color: #fff; }
 
 #b-record[aria-pressed='true']::before {
   content: '';

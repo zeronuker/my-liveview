@@ -90,6 +90,7 @@ test('every file in the public folder is served, so a page never finds a missing
       assert.equal((await fetch(`${base}${url}`)).status, 200, name)
     }
     for (const name of fs.readdirSync(path.join(root, 'public', 'art'))) assert.equal((await fetch(`${base}/art/${name}`)).status, 200, `art/${name}`)
+    for (const name of fs.readdirSync(path.join(root, 'public', 'vendor')).filter(n => n.endsWith('.js'))) assert.equal((await fetch(`${base}/vendor/${name}`)).status, 200, `vendor/${name}`)
   }))
 
 test('the art files are served from /art/<name>.js, and nothing else from that folder', () =>
