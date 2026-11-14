@@ -8,6 +8,7 @@ import { applyEdit, makeRows } from './diff.js'
 import { gitKind, summarize, titleOf } from './summary.js'
 import { readStatuses } from './sessions.js'
 import { readAppTitle } from './titles.js'
+import { scanTree } from './tree-scan.js'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.PORT) || 4747
@@ -33,6 +34,7 @@ const transcripts = new Map() // chat -> { path, cwd }: where the app keeps its 
 const appTitles = new Map() // chat -> the name the app gave it, last sent
 const latestTitles = new Map() // chat -> the title event a newly opened window needs
 const statuses = new Map() // chat -> working or idle, as the app last said
+const seenCwds = new Set() // the chat folders hooks have named: the only ones /tree will read
 
 // to every open window, but not into the history a new window replays
 const broadcast = event => {
@@ -40,6 +42,7 @@ const broadcast = event => {
 }
 
 const publish = event => {
+  if (event.cwd) seenCwds.add(event.cwd)
   events.push(event)
   if (events.length > KEEP) events.shift()
   // the app's name beats the first message's; a new window is sent whichever wins
@@ -199,6 +202,9 @@ const files = {
   '/effects.js': ['effects.js', 'text/javascript; charset=utf-8'],
   '/scenery.js': ['scenery.js', 'text/javascript; charset=utf-8'],
   '/palette.js': ['palette.js', 'text/javascript; charset=utf-8'],
+  '/city.js': ['city.js', 'text/javascript; charset=utf-8'],
+  '/vendor/three.module.min.js': ['vendor/three.module.min.js', 'text/javascript; charset=utf-8'],
+  '/vendor/OrbitControls.js': ['vendor/OrbitControls.js', 'text/javascript; charset=utf-8'],
   '/art-preview.html': ['art-preview.html', 'text/html; charset=utf-8'],
   '/sound.js': ['sound.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
@@ -221,6 +227,17 @@ const server = http.createServer((req, res) => {
       return
     }
     res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' }).end(text)
+    return
+  }
+
+  if (req.method === 'GET' && pathname === '/tree') {
+    // the files and their lengths in a chat's folder, for the Map; only folders a hook has named
+    const cwd = url.searchParams.get('cwd')
+    if (!cwd || !seenCwds.has(cwd)) {
+      res.writeHead(404).end()
+      return
+    }
+    scanTree(cwd).then(tree => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(tree)))
     return
   }
 

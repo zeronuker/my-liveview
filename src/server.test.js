@@ -364,3 +364,19 @@ test('batches, tasks, an idle teammate, a command and a waiting notice reach the
     assert.equal(page.text.includes('permission'), false) // other notices are not passed on
     assert.equal(page.text.includes('secret'), false)
   }))
+
+test('/tree answers only for a folder a hook has named, with its files and their lengths', () =>
+  withServer(async ({ token }) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lv-tree-'))
+    try {
+      fs.writeFileSync(path.join(dir, 'a.txt'), 'one\ntwo\n')
+      const ask = () => fetch(`${base}/tree?cwd=${encodeURIComponent(dir)}`)
+      assert.equal((await ask()).status, 404)
+      await hook(token, { cwd: dir, hook_event_name: 'UserPromptSubmit' })
+      const res = await ask()
+      assert.equal(res.status, 200)
+      assert.deepEqual(await res.json(), [{ path: 'a.txt', lines: 2 }])
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }))
