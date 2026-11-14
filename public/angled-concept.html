@@ -15,6 +15,10 @@
   #gallery figure { margin: 0; }
   #gallery canvas { width: auto; }
   #gallery figcaption { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+  #doors { display: flex; flex-wrap: wrap; gap: 12px; }
+  #doors figure { margin: 0; }
+  #doors canvas { width: 520px; }
+  #doors figcaption { font-size: 12px; opacity: 0.7; margin-top: 2px; }
   #people { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; align-items: center; }
   #people .row { display: flex; gap: 6px; }
   #people canvas { width: auto; background: var(--panel); }
@@ -32,6 +36,9 @@
 
 <h2>Furniture gallery: every kind in the plan at 4x</h2>
 <div id="gallery"></div>
+
+<h2>Doors: every door of the plan with the walls round it</h2>
+<div id="doors"></div>
 
 <h2>People at the angle: each pose going lower right, lower left, upper right, upper left, at 5x (short hair, then long)</h2>
 <div id="people"></div>
@@ -144,6 +151,17 @@ for (const furn of [...layout.furniture].sort((a, b) => a.w * a.h - b.w * b.h)) 
   caption.textContent = label
   figure.append(canvas, caption)
   document.getElementById('gallery').append(figure)
+}
+
+// every door of the plan, with its walls round it
+for (const door of layout.doors) {
+  const figure = document.createElement('figure')
+  const canvas = document.createElement('canvas')
+  const caption = document.createElement('figcaption')
+  caption.textContent = `${door.kind} ${door.w}x${door.h} at ${door.x},${door.y}`
+  figure.append(canvas, caption)
+  document.getElementById('doors').append(figure)
+  draw(canvas, { x0: door.x - 3, y0: door.y - 3, x1: door.x + door.w + 2, y1: door.y + door.h + 2 }, false)
 }
 
 // every pose from the four directions, with a short-haired and a long-haired person

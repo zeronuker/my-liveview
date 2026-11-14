@@ -36,14 +36,17 @@ export const blockTop = (c, px, py, h, mat, topMat) => {
   diamond(c, px, py - h, shade(topMat, 3))
 }
 
+// The y of a tile's edge in a column of its box: 'ur' (upper right), 'ul', 'll' (lower left) or 'lr'. The upper edges run
+// from the tile's top corner, 'ul' along y and 'ur' along x; the lower ones 'll' along x and 'lr' along y.
+export const edgeY = (side, col) => (side === 'ur' ? topEdge(15 - col) : side === 'ul' ? topEdge(col) : side === 'll' ? bottomEdge(col) - 1 : bottomEdge(15 - col) - 1)
+
 // A thin upright slab along one edge of the tile, 'ur' (upper right), 'ul', 'll' or 'lr', standing on height z and `hh` tall:
 // a backrest, an arm, a panel, a screen seen edge on.
 export const slab = (c, px, py, z, side, hh, color, rim) => {
   for (let i = 0; i < 6; i++) {
     const col = side === 'ur' || side === 'lr' ? 8 + i : 2 + i
-    const edge = side === 'ur' ? topEdge(15 - col) : side === 'ul' ? topEdge(col) : side === 'll' ? bottomEdge(col) - 1 : bottomEdge(15 - col) - 1
-    rect(c, px + col, py - z + edge - hh + 1, 1, hh, color)
-    rect(c, px + col, py - z + edge - hh + 1, 1, 1, rim)
+    rect(c, px + col, py - z + edgeY(side, col) - hh + 1, 1, hh, color)
+    rect(c, px + col, py - z + edgeY(side, col) - hh + 1, 1, 1, rim)
   }
 }
 export const BACK = { down: 'ur', up: 'll', right: 'ul', left: 'lr' } // the edge behind someone facing this way

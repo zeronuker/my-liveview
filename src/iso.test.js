@@ -66,3 +66,21 @@ test('the plan has hanging lamps, and a pool of light lifts the floor under it',
   assert.equal(world.poolAt(Math.floor(pool.x), Math.floor(pool.y)), 2)
   assert.equal(world.poolAt(0, 0), 0)
 })
+
+test('doors: each knows which way its wall runs and how tall it is, and a sliding door has one blinking sensor', async () => {
+  const { doorOf, lightsOf, makeWorld } = await import('../public/iso-art.js')
+  const world = makeWorld(layout)
+  for (const door of layout.doors) {
+    const found = doorOf(world, door.x, door.y)
+    assert.equal(found.kind, door.kind)
+    assert.ok(found.axis === 'x' || found.axis === 'y')
+    assert.ok([3, 8, 16].includes(found.wall), `${door.kind} at ${door.x},${door.y}: wall ${found.wall}`)
+  }
+  assert.equal(doorOf(world, 7, 17).axis, 'x') // a door in a wall that runs east to west
+  assert.equal(doorOf(world, 20, 8).axis, 'y') // and one in a wall that runs north to south
+  assert.equal(doorOf(world, 0, 0), null)
+  const sliding = layout.doors.find(d => d.kind === 'sliding' && d.w === 3)
+  const sensors = [0, 1, 2].flatMap(i => lightsOf(world, sliding.x + i, sliding.y))
+  assert.equal(sensors.length, 1)
+  assert.equal(sensors[0].pattern, 'slow')
+})

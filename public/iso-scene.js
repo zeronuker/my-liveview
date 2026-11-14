@@ -75,7 +75,7 @@ export const createIsoScene = layout => {
     const tiles = []
     for (let x = Math.max(0, d - (H - 1)); x <= Math.min(W - 1, d); x++) {
       const y = d - x
-      if (world.isWall(x, y) || world.furnAt(x, y) || isFence(garden, x, y)) tiles.push([x, y])
+      if (world.isWall(x, y) || world.furnAt(x, y) || world.doorAt(x, y) || isFence(garden, x, y)) tiles.push([x, y])
     }
     const standing = pieces.filter(piece => piece.d === d)
     if (!tiles.length && !standing.length) {

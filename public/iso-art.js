@@ -5,6 +5,7 @@
 // comes from the top-left. The tile at (x, y) has its corners at: top (x, y), right (x + 1, y), left
 // (x, y + 1), bottom (x + 1, y + 1). Used by iso-scene.js (the Office) and angled-concept.html.
 import { BACK, BEHIND, bottomEdge, block, cellHash, diamond, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
+import { doorLights, doorTile } from './iso-doors.js'
 import { LIGHTS, PIECES } from './iso-furniture.js'
 import { shade } from './palette.js'
 import { levelAt } from './studio.js'
@@ -24,7 +25,7 @@ const inside = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r
 
 // What the plan has at each tile, worked out once: floor, wall (a solid tile touching a floor) or neither.
 export const makeWorld = layout => {
-  const { width, height, rooms, furniture, windows, rugs } = layout
+  const { width, height, rooms, furniture, windows, rugs, doors } = layout
   const inGrid = (x, y) => x >= 0 && y >= 0 && x < width && y < height
   const floor = Array.from({ length: height }, (_, y) => Array.from({ length: width }, (_, x) => levelAt(layout, x, y) !== null))
   const isFloor = (x, y) => inGrid(x, y) && floor[y][x]
@@ -48,6 +49,7 @@ export const makeWorld = layout => {
     furnAt: (x, y) => furn.get(`${x},${y}`),
     toneAt: (x, y) => (rooms.findLast(r => inside(r, x, y)) ?? { tone: 'stone' }).tone,
     windowAt: (x, y) => windows.find(w => inside(w, x, y)),
+    doorAt: (x, y) => doors.find(d => inside(d, x, y)),
     rugAt: (x, y) => rugs.find(r => inside(r, x, y)),
   }
 }
@@ -141,9 +143,20 @@ const wallHeight = (world, x, y) => {
   return behind && front ? 8 : behind ? WALL : front ? 3 : 8
 }
 
-// The lights that blink on a tile: those of its furniture (iso-furniture.js) and the glint that sweeps along a window's
+// A tile of a door, or null: its kind, its place in the opening, which way the wall runs round it and how tall that wall is.
+export const doorOf = (world, x, y) => {
+  const door = world.doorAt(x, y)
+  if (!door) return null
+  const axis = world.isWall(door.x - 1, door.y) && world.isWall(door.x + door.w, door.y) ? 'x' : 'y'
+  const wall = axis === 'x' ? wallHeight(world, door.x - 1, door.y) : wallHeight(world, door.x, door.y - 1)
+  return { kind: door.kind, i: x - door.x, j: y - door.y, w: door.w, h: door.h, axis, wall }
+}
+
+// The lights that blink on a tile: those of its furniture (iso-furniture.js), the sensor over a sliding door, and the glint that sweeps along a window's
 // pane, which is out of step with the next window's. Each is { dx, dy, w, h, pattern, on, off } from the tile's box.
 export const lightsOf = (world, x, y) => {
+  const door = doorOf(world, x, y)
+  if (door) return doorLights(door)
   const furn = world.furnAt(x, y)
   if (furn) return LIGHTS[furn.kind]?.(furn, { i: x - furn.x, j: y - furn.y, w: furn.w, h: furn.h }, { x, y }) ?? []
   const win = world.isWall(x, y) && world.windowAt(x, y)
@@ -171,6 +184,8 @@ export const structureTile = (c, world, px, py, x, y, options = {}) => {
       const [a, b] = side === 'left' ? [x === win.x, x === win.x + win.w - 1] : [y === win.y, y === win.y + win.h - 1]
       windowOn(c, px, py, h, side, a, b)
     }
+  } else if (world.doorAt(x, y)) {
+    doorTile(c, px, py, doorOf(world, x, y))
   } else if (furn) {
     furnitureTile(c, px, py, furn, x, y, options)
   }
