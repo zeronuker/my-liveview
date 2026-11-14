@@ -212,6 +212,7 @@ const files = {
   '/angled-concept.html': ['angled-concept.html', 'text/html; charset=utf-8'],
   '/iso.js': ['iso.js', 'text/javascript; charset=utf-8'],
   '/iso-art.js': ['iso-art.js', 'text/javascript; charset=utf-8'],
+  '/iso-garden.js': ['iso-garden.js', 'text/javascript; charset=utf-8'],
   '/iso-scene.js': ['iso-scene.js', 'text/javascript; charset=utf-8'],
   '/sound.js': ['sound.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],

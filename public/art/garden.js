@@ -13,7 +13,7 @@ const moved = (ops, dx, dy) => ops.map(([kind, x, y, w, h, color]) => [kind, x +
 const [wood, stone, leaf, grass, glass, brick, light, plaster, periwinkle, lilac, terracotta] = [
   RAMPS.wood, RAMPS.stone, RAMPS.leaf, RAMPS.grass, RAMPS.glass, RAMPS.brick, RAMPS.light, RAMPS.plaster, RAMPS.periwinkle, RAMPS.lilac, RAMPS.terracotta,
 ]
-const HEADS = [brick[2], light[2], periwinkle[2], lilac[3], plaster[3], terracotta[2]]
+export const HEADS = [brick[2], light[2], periwinkle[2], lilac[3], plaster[3], terracotta[2]]
 
 // a flower on a tile of grass, chosen by a number from the tile's place: a head of three by three with a bright middle, and a stem
 export const flowerOps = h => {
@@ -57,7 +57,7 @@ const pineOps = (_, k = 1) => {
 
 const BIG = 5 / 3 // a big tree is this much bigger than a small one
 // the picture of a tree, by its kind
-const treeOps = tree => {
+export const treeOps = tree => {
   const tint = hash(tree.x, tree.y) % 2 ? leaf : grass
   switch (tree.kind) {
     case 'pine': return pineOps(tree)
@@ -68,13 +68,13 @@ const treeOps = tree => {
 }
 
 // a bush, one tile
-const bushOps = ({ x, y }) => {
+export const bushOps = ({ x, y }) => {
   const tint = hash(x, y) % 2 === 0 ? leaf : grass
   return [...ellipseOps(9, 13, 6, 2, grass[0]), ...ellipseOps(8, 9, 7, 5, tint[0]), ...ellipseOps(8, 9, 6, 4, tint[1]), ...ellipseOps(7, 8, 4, 3, tint[2]), r(4, 6, 3, 1, tint[3]), r(9, 8, 2, 1, tint[3])]
 }
 
 // a rock, one tile
-const rockOps = () => [...ellipseOps(9, 13, 6, 2, grass[0]), ...ellipseOps(8, 11, 6, 4, stone[1]), ...ellipseOps(7.5, 10.5, 5, 3, stone[2]), r(5, 9, 3, 1, stone[3])]
+export const rockOps = () => [...ellipseOps(9, 13, 6, 2, grass[0]), ...ellipseOps(8, 11, 6, 4, stone[1]), ...ellipseOps(7.5, 10.5, 5, 3, stone[2]), r(5, 9, 3, 1, stone[3])]
 
 // a flower bed of w by h tiles: dark soil with a stone edge and a few flowers to a tile
 const bedOps = ({ x, y, w, h }) => {

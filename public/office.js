@@ -13,7 +13,7 @@ import { shownNames } from './names.js'
 import { createFish } from './fish.js'
 import { createGlide } from './glide.js'
 import { createIsoScene } from './iso-scene.js'
-import { isoExtent, screenAt } from './iso.js'
+import { ISO_RISE, isoExtent, screenAt } from './iso.js'
 import { createPets } from './pets.js'
 import { buildStudio } from './studio.js'
 import { deskOnOps } from './art/office.js'
@@ -186,10 +186,10 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   }
 
   const drawPlan = view => {
-    if (angled) return isoScene.drawGround(ctx, view)
     const { tile, left, top } = view
     ctx.imageSmoothingEnabled = false
     const water = reduced ? 0 : Math.floor(performance.now() / WATER_MS) % 2
+    if (angled) return isoScene.drawGround(ctx, view, water)
     ctx.drawImage(grounds[water], left, top, layout.width * tile, layout.height * tile)
   }
 
@@ -276,10 +276,14 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   const drawFish = ({ tile, left, top }) => {
     ctx.save()
     ctx.imageSmoothingEnabled = true
+    // angled: drawn in tiles of the plan under the angled projection, so a fish lies flat on the water
+    const unit = angled ? 1 : tile
+    if (angled) ctx.transform(tile / 2, tile / 4, -tile / 2, tile / 4, left + (layout.height * tile) / 2, top + ISO_RISE * tile)
     for (const f of fish.snapshot()) {
-      const length = tile * 0.75 * f.size
+      const length = unit * 0.75 * f.size
       ctx.save()
-      ctx.translate(left + (f.x + 0.5) * tile, top + (f.y + 0.5) * tile)
+      if (angled) ctx.translate(f.x + 0.5, f.y + 0.5)
+      else ctx.translate(left + (f.x + 0.5) * tile, top + (f.y + 0.5) * tile)
       ctx.rotate(f.heading)
       ctx.globalAlpha = 0.9
       const wag = reduced ? 0 : Math.sin(f.phase * 3) * 0.3 * length
@@ -299,7 +303,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
       ctx.fill()
       ctx.fillStyle = '#222' // an eye
       ctx.beginPath()
-      ctx.arc(length * 0.3, -length * 0.07, Math.max(0.6, length * 0.045), 0, Math.PI * 2)
+      ctx.arc(length * 0.3, -length * 0.07, Math.max(0.6 * (unit / tile), length * 0.045), 0, Math.PI * 2)
       ctx.fill()
       ctx.restore()
     }
@@ -529,7 +533,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     })
     glide.keep([...people.map(p => p.id), ...pets.snapshot().map(pet => pet.id)])
     hits.length = 0
-    if (!angled) drawFish(view) // the angled ground has no pond yet
+    drawFish(view)
     drawPets(view, t)
     if (!angled) for (const light of fixedLights) drawLight(light, view.left, view.top, view.tile, t)
 

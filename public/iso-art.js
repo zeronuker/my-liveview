@@ -31,7 +31,7 @@ const SOFAS = new Set(['sofa', 'armchair'])
 export const cellHash = (x, y) => ((x * 73856093) ^ (y * 19349663)) >>> 0
 
 const inside = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
-const rect = (c, x, y, w, h, color) => {
+export const rect = (c, x, y, w, h, color) => {
   c.fillStyle = color
   c.fillRect(x, y, w, h)
 }
@@ -61,13 +61,13 @@ export const makeWorld = layout => {
 
 // A 16 by 8 diamond, drawn a row at a time so the edges stay crisp (a path would be smoothed).
 const WIDTHS = [4, 8, 12, 16, 16, 12, 8, 4]
-const diamond = (c, px, py, color) => WIDTHS.forEach((w, j) => rect(c, px + 8 - w / 2, py + j, w, 1, color))
+export const diamond = (c, px, py, color) => WIDTHS.forEach((w, j) => rect(c, px + 8 - w / 2, py + j, w, 1, color))
 // the top and bottom edge of the diamond in a column 0 to 7 (the right half mirrors it)
 const topEdge = col => 3 - (col >> 1)
 const bottomEdge = col => 5 + (col >> 1)
 
 // A box on a tile: top, left face (towards +y) and right face (towards +x), `h` pixels tall.
-const block = (c, px, py, h, mat, skirt = false) => {
+export const block = (c, px, py, h, mat, skirt = false) => {
   for (let col = 0; col < 8; col++) {
     rect(c, px + col, py - h + bottomEdge(col), 1, h, shade(mat, 2))
     rect(c, px + 15 - col, py - h + bottomEdge(col), 1, h, shade(mat, 1))
