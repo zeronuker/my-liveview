@@ -55,6 +55,7 @@ const prefs = {
   map: store.get('map', false) === true, // with office on: the Map in place of the Office
   mapMode: pick(store.get('mapMode', 'sphere'), v => MAP_MODES.includes(v), 'sphere'),
   sound: store.get('sound', false) === true,
+  angled: store.get('angled', false) === true, // the Office from an angle
   folded: store.get('folded', false) === true,
 }
 
@@ -720,7 +721,8 @@ const apply = () => {
   if (prefs.office) $('files').append($('feed'))
   else $('rz-aside').after($('feed'))
   office.setSound(prefs.sound)
-  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake'], ['b-sound', 'sound'], ['b-folded', 'folded']])
+  office.setAngled(prefs.angled)
+  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake'], ['b-sound', 'sound'], ['b-angled', 'angled'], ['b-folded', 'folded']])
     $(id).setAttribute('aria-pressed', String(prefs[key]))
   for (const [id, on] of [['v-code', !prefs.office], ['v-office', prefs.office && !isMap], ['v-map', isMap]]) $(id).setAttribute('aria-pressed', String(on))
   for (const swatch of document.querySelectorAll('.swatch'))
@@ -771,6 +773,7 @@ $('v-office').onclick = () => setView('office')
 $('v-map').onclick = () => setView('map')
 for (const mode of MAP_MODES) $(`m-${mode}`).onclick = () => save('mapMode', mode)
 $('b-sound').onclick = () => save('sound', !prefs.sound)
+$('b-angled').onclick = () => save('angled', !prefs.angled)
 $('b-folded').onclick = () => {
   save('folded', !prefs.folded)
   $('feed').classList.toggle('shut', prefs.folded)

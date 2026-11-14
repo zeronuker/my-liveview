@@ -12,6 +12,8 @@ import { buildGarden, roamGrid, waterGrid } from './garden.js'
 import { shownNames } from './names.js'
 import { createFish } from './fish.js'
 import { createGlide } from './glide.js'
+import { createIsoScene } from './iso-scene.js'
+import { isoExtent, screenAt } from './iso.js'
 import { createPets } from './pets.js'
 import { buildStudio } from './studio.js'
 import { deskOnOps } from './art/office.js'
@@ -61,6 +63,15 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   let lastDraw = 0
   let paused = false
   let manual = null // a zoomed and panned view { tile, left, top }; null while the whole plan is fitted
+  let angled = false // the angled view (iso.js) in place of the flat one
+  let isoScene = null // its walls and furniture, painted the first time it is shown
+  const isoBox = isoExtent(layout)
+  const extent = () => (angled ? isoBox : layout) // the size of the plan in tiles, for fitting, zooming and panning
+  // where the middle of a tile is on the screen, as a person is placed: feet a little below it when flat, on it when angled
+  const centre = (view, x, y) => {
+    const p = screenAt(view, layout, x + 0.5, y + 0.5, angled)
+    return angled ? { x: p.x, y: p.y - view.tile * 0.42 } : p
+  }
   let selected = '' // the chat picked in the list, whose workers stand out; '' for all
   let multiChat = false // more than one chat at work: tag every name with its chat's colour
   const chatSlots = new Map()
@@ -174,7 +185,9 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.restore()
   }
 
-  const drawPlan = ({ tile, left, top }) => {
+  const drawPlan = view => {
+    if (angled) return isoScene.drawGround(ctx, view)
+    const { tile, left, top } = view
     ctx.imageSmoothingEnabled = false
     const water = reduced ? 0 : Math.floor(performance.now() / WATER_MS) % 2
     ctx.drawImage(grounds[water], left, top, layout.width * tile, layout.height * tile)
@@ -234,14 +247,16 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
 
   // the pets, on the grass: small, so a whole number of screen pixels to a pixel of theirs at a sixteenth of a tile. They
   // glide, with a step that goes with the distance gone; a pet that is moving is drawn between pixels, one that is still on them.
-  const drawPets = ({ tile, left, top }, t) => {
+  const drawPets = (view, t) => {
+    const { tile } = view
     const unit = Math.max(1, Math.round((tile * ratio) / 16)) / ratio
     for (const pet of pets.snapshot().sort((a, b) => a.y - b.y)) {
       const g = reduced ? { x: pet.x, y: pet.y, vx: 0, stride: 0, moving: false } : glide.place(pet.id, pet.x, pet.y, frameDt)
       const state = g.moving ? 'walk' : pet.state === 'walk' ? 'rest' : pet.state
       const sprite = petSprite(pet.kind, state, reduced ? 0 : state === 'walk' ? g.stride / 1.5 : t)
-      const cx = left + (g.x + 0.5) * tile
-      const feet = top + (g.y + 0.5) * tile + tile * 0.4
+      const spot = centre(view, g.x, g.y)
+      const cx = spot.x
+      const feet = spot.y + tile * 0.4
       const hop = g.moving ? -(Math.sin((g.stride * Math.PI) / 0.5) ** 2) * tile * 0.07 : 0
       const at = value => (g.moving ? value : Math.round(value * ratio) / ratio)
       ctx.fillStyle = 'rgba(0,0,0,0.25)'
@@ -310,7 +325,8 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   }
 
   // draws the body now; the name, label and bubble go in `tags`, to be drawn on top of everything
-  const drawPerson = (p, { tile, left, top }, t, ink, tags) => {
+  const drawPerson = (p, view, t, ink, tags) => {
+    const { tile } = view
     const phase = t * 10 + hash(p.id)
     const walking = p.pose === 'walk'
     const dx = p.pose === 'shake' && !reduced ? Math.sin(phase * 3) * tile * 0.1 : 0
@@ -322,9 +338,10 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     const dim = selected && p.sessionId && p.sessionId !== selected
     ctx.save()
     if (dim) ctx.globalAlpha = 0.35
-    const cx = left + (p.x + 0.5) * tile + dx
-    const drop = SEATED.has(p.pose) ? tile * 0.3 : 0
-    const cy = top + (p.y + 0.5) * tile + dy + drop
+    const spot = centre(view, p.x, p.y)
+    const cx = spot.x + dx
+    const drop = SEATED.has(p.pose) ? tile * (angled ? -0.05 : 0.3) : 0 // flat: lower, so a desk hides the legs; angled: up on the seat
+    const cy = spot.y + dy + drop
     hits.push({ id: p.id, x: cx, y: cy, r: Math.max(tile * 0.6, 9) })
 
     ctx.fillStyle = 'rgba(0,0,0,0.25)'
@@ -432,11 +449,11 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   }
 
   // confetti, warnings, rings and code glyphs, on top of everything
-  const drawEffects = ({ tile, left, top }, ink) => {
+  const drawEffects = (view, ink) => {
+    const { tile } = view
     for (const e of effects.all()) {
       const p = e.age / e.life
-      const cx = left + (e.x + 0.5) * tile
-      const cy = top + (e.y + 0.5) * tile
+      const { x: cx, y: cy } = centre(view, e.x, e.y)
       ctx.save()
       if (e.kind === 'confetti') {
         ctx.globalAlpha = Math.min(1, (1 - p) * 3)
@@ -486,7 +503,8 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     if (!visible) return
     tick() // every frame, so people glide; the timer above only keeps the stage going while nobody is looking
     const snap = stage.snapshot()
-    const view = manual ? keepInView(manual, layout, width, height) : fit(width, height, layout)
+    if (angled) isoScene ||= createIsoScene(layout)
+    const view = manual ? keepInView(manual, extent(), width, height) : fit(width, height, extent())
     const t = performance.now() / 1000
     const ink = {
       fg: color('--fg'), dim: color('--dim'), line: color('--line'), panel: color('--panel'), bg: color('--bg'), acc: color('--acc'),
@@ -511,9 +529,9 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     })
     glide.keep([...people.map(p => p.id), ...pets.snapshot().map(pet => pet.id)])
     hits.length = 0
-    drawFish(view)
+    if (!angled) drawFish(view) // the angled ground has no pond yet
     drawPets(view, t)
-    for (const light of fixedLights) drawLight(light, view.left, view.top, view.tile, t)
+    if (!angled) for (const light of fixedLights) drawLight(light, view.left, view.top, view.tile, t)
 
     // who is writing where: that desk's screen is lit
     const open = new Set()
@@ -526,13 +544,23 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     // Everything is drawn from the back to the front: chairs and sofas first,
     // then whatever is further up the plan before what is further down, so a
     // desk hides the legs of whoever sits behind it.
-    for (const item of items) if (item.under) drawItem(item, view, open, t)
     const here = [...new Set(snap.workers.map(w => w.sessionId).filter(Boolean))]
     multiChat = here.length > 1
     const tags = []
-    const draws = items.filter(item => !item.under && !item.over).map(item => ({ key: item.y + item.h, run: () => drawItem(item, view, open, t) }))
-    for (const person of people) draws.push({ key: person.y + 0.9, run: () => drawPerson(person, view, t, ink, tags) })
-    for (const one of draws.sort((a, b) => a.key - b.key)) one.run()
+    if (angled) {
+      // back to front by diagonal row: a row's walls and furniture, then the people standing in it
+      const rows = Array.from({ length: isoScene.bandCount }, () => [])
+      for (const person of people) rows[Math.min(rows.length - 1, Math.max(0, Math.floor(person.x + person.y + 0.5)))].push(person)
+      rows.forEach((row, d) => {
+        isoScene.drawBand(ctx, view, d, open)
+        for (const person of row) drawPerson(person, view, t, ink, tags)
+      })
+    } else {
+      for (const item of items) if (item.under) drawItem(item, view, open, t)
+      const draws = items.filter(item => !item.under && !item.over).map(item => ({ key: item.y + item.h, run: () => drawItem(item, view, open, t) }))
+      for (const person of people) draws.push({ key: person.y + 0.9, run: () => drawPerson(person, view, t, ink, tags) })
+      for (const one of draws.sort((a, b) => a.key - b.key)) one.run()
+    }
     if (inspected) {
       const who = people.find(p => p.id === inspected)
       const text = who ? JSON.stringify([who.name, who.sessionId, who.label, who.kind, who.color]) : ''
@@ -542,10 +570,13 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
       }
       if (!who) inspected = ''
     }
-    for (const item of items) if (item.over) drawItem(item, view, open, t) // what is overhead goes over the people
+    if (!angled) for (const item of items) if (item.over) drawItem(item, view, open, t) // what is overhead goes over the people
 
     // the number of papers on each manager's tray, and then names, labels and bubbles
-    for (const tray of snap.trays) if (tray.count > 0) label(`${tray.count}`, view.left + (tray.x + 0.5) * view.tile, view.top + (tray.y + 0.5) * view.tile, Math.max(9, view.tile * 0.5))
+    for (const tray of snap.trays) {
+      const spot = centre(view, tray.x, tray.y)
+      if (tray.count > 0) label(`${tray.count}`, spot.x, spot.y, Math.max(9, view.tile * 0.5))
+    }
     const named = shownNames(tags)
     tags.forEach((tag, i) => tag.run(named.has(i)))
     if (multiChat) drawLegend(here)
@@ -596,7 +627,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     'wheel',
     event => {
       event.preventDefault()
-      const base = fit(width, height, layout)
+      const base = fit(width, height, extent())
       const next = zoomAt(manual ?? base, base, { x: event.offsetX, y: event.offsetY }, Math.exp(-event.deltaY * 0.0015))
       setManual(next.tile <= base.tile * 1.001 ? null : next) // all the way out is the fitted plan
     },
@@ -611,7 +642,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   })
   canvas.addEventListener('pointermove', event => {
     if (!drag || !manual) return
-    manual = keepInView({ ...manual, left: manual.left + event.clientX - drag.x, top: manual.top + event.clientY - drag.y }, layout, width, height)
+    manual = keepInView({ ...manual, left: manual.left + event.clientX - drag.x, top: manual.top + event.clientY - drag.y }, extent(), width, height)
     drag = { x: event.clientX, y: event.clientY }
   })
   const endDrag = () => {
@@ -633,9 +664,16 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   })
   // zoom by a factor about the middle of the canvas (the + and - buttons)
   const zoomBy = factor => {
-    const base = fit(width, height, layout)
+    const base = fit(width, height, extent())
     const next = zoomAt(manual ?? base, base, { x: width / 2, y: height / 2 }, factor)
     setManual(next.tile <= base.tile * 1.001 ? null : next)
+  }
+
+  // the angled view or the flat one; the zoom starts again, as the plan is another shape
+  const setAngled = on => {
+    if (on === angled) return
+    angled = on
+    setManual(null)
   }
 
   const setSelected = id => {
@@ -650,5 +688,5 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
   // what a chat is doing, for its card: its phase, how many of its team are on work, and whether it is waiting on a permission
   const chatInfo = sessionId => ({ phase: director.phaseOf(sessionId), asking: director.isAsking(sessionId), ...stage.teamOf(sessionId) })
 
-  return { feed, chatInfo, zoomBy, setVisible, setPaused, setSelected, setSound: sound.setOn, resetView: () => setManual(null), isZoomed: () => manual !== null, skip: stage.skip, isIdle: stage.isIdle }
+  return { feed, chatInfo, zoomBy, setAngled, setVisible, setPaused, setSelected, setSound: sound.setOn, resetView: () => setManual(null), isZoomed: () => manual !== null, skip: stage.skip, isIdle: stage.isIdle }
 }

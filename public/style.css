@@ -557,12 +557,14 @@ body.office #rz-split {
   display: none;
 }
 
-/* Record is only for the Office, and shows a red dot while it records */
-#b-record {
+/* Record and Angled are only for the Office, and Record shows a red dot while it records */
+#b-record,
+#b-angled {
   display: none;
 }
 
-body.office:not(.map) #b-record {
+body.office:not(.map) #b-record,
+body.office:not(.map) #b-angled {
   display: inline-block;
 }
 
