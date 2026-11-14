@@ -5,6 +5,7 @@
 import { HEADS, bushOps, rockOps, treeOps } from './art/garden.js'
 import { inPond, treeSize } from './garden.js'
 import { block, cellHash, diamond, rect } from './iso-art.js'
+import { railing } from './iso-furniture.js'
 import { shade } from './palette.js'
 
 const inRect = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
@@ -63,11 +64,12 @@ export const grassDetail = (c, px, py, x, y) => {
 export const isFence = ({ fence: { x0, y0, x1, y1, gate } }, x, y) =>
   (x === x0 || x === x1 || y === y0 || y === y1) && x >= x0 && x <= x1 && y >= y0 && y <= y1 && !(y === y1 && x >= gate.x && x < gate.x + gate.w)
 
-// a bit of fence: a low wooden rail; a stone post on each side of the gate
+// a bit of fence: posts with two rails between them along the run of the fence; a stone post on each side of the gate
 export const fenceTile = (c, garden, px, py, x, y) => {
-  const { gate, y1 } = garden.fence
-  const post = y === y1 && (x === gate.x - 1 || x === gate.x + gate.w)
-  block(c, px, py, post ? 10 : 4, post ? 'stone' : 'wood')
+  const { gate, y0, y1 } = garden.fence
+  if (y === y1 && (x === gate.x - 1 || x === gate.x + gate.w)) return block(c, px, py, 10, 'stone')
+  const alongX = y === y0 || y === y1 // the top and bottom run east to west, the sides north to south
+  railing('wood', 7)(c, px, py, alongX ? { w: 2, h: 1 } : { w: 1, h: 2 })
 }
 
 // Where the base of each picture is, in its own pixels: the foot of a tree, bush or rock.

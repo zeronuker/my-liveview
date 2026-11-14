@@ -287,7 +287,10 @@ const dressed = (rows, kind, view) => {
       for (const [x, y] of [[5, 8], [6, 8], [5, 9], [6, 9], [5, 10], [6, 10]]) if (grid[y][x] === 'b') grid[y][x] = 't'
       for (const x of [3, 8]) if (grid[4][x] === 's') grid[4][x] = 'g'
     }
-    if (view === 'front3q') for (const [x, y] of [[4, 8], [4, 9], [4, 10]]) if (grid[y][x] === 'b') grid[y][x] = 't'
+    if (view === 'front3q') {
+      for (const [x, y] of [[4, 8], [4, 9], [4, 10]]) if (grid[y][x] === 'b') grid[y][x] = 't'
+      for (const x of [4, 9]) if (grid[4][x] === 's') grid[4][x] = 'g' // the frames of the glasses, beside the eyes
+    }
     if (view === 'side' && grid[4][9] === 's') grid[4][9] = 'g'
   }
   if (kind === 'subagent')

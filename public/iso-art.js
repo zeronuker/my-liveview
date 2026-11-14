@@ -4,7 +4,7 @@
 // (px, py), the left and top of its tile's 16 by 8 diamond, in whole pixels, with palette colours only. Light
 // comes from the top-left. The tile at (x, y) has its corners at: top (x, y), right (x + 1, y), left
 // (x, y + 1), bottom (x + 1, y + 1). Used by iso-scene.js (the Office) and angled-concept.html.
-import { BACK, BEHIND, block, blockTop, bottomEdge, cellHash, diamond, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
+import { BACK, BEHIND, block, bottomEdge, cellHash, diamond, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
 import { doorLights, doorTile } from './iso-doors.js'
 import { LIGHTS, PIECES } from './iso-furniture.js'
 import { risingStairs, stepHeight, STOREY } from './iso.js'
@@ -225,11 +225,15 @@ export const structureTile = (c, world, px, py, x, y, options = {}) => {
   } else if (world.stairsAt(x, y)) {
     const step = world.stairsAt(x, y)
     const h = Math.round(step.z)
-    blockTop(c, px, py, h, 'stone', step.runner ? 'carpet' : 'stone')
+    const mat = step.runner ? 'carpet' : 'stone'
+    // a step: a lit nosing along the front edge, a dark riser under it, the tread on top
     for (let col = 0; col < 8; col++) {
-      rect(c, px + col, py - h + bottomEdge(col) - 1, 1, 1, shade(step.runner ? 'carpet' : 'stone', 1)) // the edge of the step
-      rect(c, px + 15 - col, py - h + bottomEdge(col) - 1, 1, 1, shade(step.runner ? 'carpet' : 'stone', 0))
+      rect(c, px + col, py - h + bottomEdge(col), 1, h, shade(mat, 1))
+      rect(c, px + 15 - col, py - h + bottomEdge(col), 1, h, shade(mat, 0))
+      rect(c, px + col, py - h + bottomEdge(col), 1, 1, shade(mat, 3))
+      rect(c, px + 15 - col, py - h + bottomEdge(col), 1, 1, shade(mat, 2))
     }
+    diamond(c, px, py - h, shade(mat, step.runner ? 2 : 3))
   } else if (world.doorAt(x, y)) {
     doorTile(c, px, py, doorOf(world, x, y))
   } else if (furn) {

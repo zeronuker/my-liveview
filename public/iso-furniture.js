@@ -191,20 +191,23 @@ const vanity = (c, px, py, furn, part) =>
 
 // ---- outdoors ----
 
-// a parasol: a pole, and a striped canopy high above the table
+// a parasol: a pole, and a striped canopy high above the table, a dome with a scalloped edge and a finial in the middle
 const parasol = (c, px, py, furn, part) => {
   if (part.i === 1) rect(c, px + 7, py - 12, 2, 16, shade('metal', 2))
   diamond(c, px, py - 18, shade('fabricWarm', part.i % 2 ? 2 : 3))
+  ;[4, 8, 8, 4].forEach((w, j) => rect(c, px + 8 - w / 2, py - 20 + j, w, 1, shade('fabricWarm', part.i % 2 ? 3 : 2))) // the crown of the dome
   for (let col = 0; col < 8; col++) {
-    rect(c, px + col, py - 18 + bottomEdge(col), 1, 1, shade('fabricWarm', 1))
-    rect(c, px + 15 - col, py - 18 + bottomEdge(col), 1, 1, shade('fabricWarm', 0))
+    const flap = col % 2 ? 2 : 1 // a scalloped edge
+    rect(c, px + col, py - 18 + bottomEdge(col), 1, flap, shade('fabricWarm', 1))
+    rect(c, px + 15 - col, py - 18 + bottomEdge(col), 1, flap, shade('fabricWarm', 0))
   }
+  if (part.i === 1) rect(c, px + 7, py - 23, 2, 3, shade('metal', 3)) // the finial
 }
 
 // ---- railings ----
 
 // posts with two rails between them, along the run of the piece (a single tile is just a post)
-const railing = (mat, h) => (c, px, py, furn) => {
+export const railing = (mat, h) => (c, px, py, furn) => {
   const alongX = furn.w >= furn.h
   if (furn.w * furn.h > 1)
     for (const z of [h, h >> 1])

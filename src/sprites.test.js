@@ -198,4 +198,5 @@ test('the 3/4 views have their own heads, and the manager keeps a tie from the f
   assert.notDeepEqual(rows('right').cells[4], rows('up').cells[4])
   assert.ok(rows('right', 'manager').cells.flat().includes('#c0392b'))
   assert.ok(!rows('right').cells.flat().includes('#c0392b'))
+  assert.notDeepEqual(rows('right', 'manager').cells[4], rows('right').cells[4]) // glasses
 })
