@@ -11,6 +11,10 @@
   h2 { font-size: 15px; margin: 24px 0 6px; }
   p { margin: 4px 0; opacity: 0.75; max-width: 70ch; }
   canvas { display: block; width: 100%; image-rendering: pixelated; background: var(--panel); }
+  #gallery { display: flex; flex-wrap: wrap; gap: 12px; }
+  #gallery figure { margin: 0; }
+  #gallery canvas { width: auto; }
+  #gallery figcaption { font-size: 12px; opacity: 0.7; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -23,10 +27,13 @@
 <h2>One room in full detail: the open office</h2>
 <canvas id="room"></canvas>
 
+<h2>Furniture gallery: every kind in the plan at 4x</h2>
+<div id="gallery"></div>
+
 <script type="module">
 import { buildStudio } from '/studio.js'
 import { shade } from '/palette.js'
-import { cellHash, groundTile, makeWorld, monitor, slabTile, structureTile } from '/iso-art.js'
+import { cellHash, diamond, furnitureTile, groundTile, makeWorld, monitor, slabTile, structureTile } from '/iso-art.js'
 
 const layout = buildStudio()
 const world = makeWorld(layout)
@@ -105,6 +112,31 @@ const draw = (canvas, region, detail) => {
     person(c, px(x, y), py(x, y), cellHash(x, y), cellHash(y, x) % 2 ? 'walk' : 'stand')
   }
   canvas.style.aspectRatio = `${canvas.width} / ${canvas.height}`
+}
+
+// every kind of furniture the plan has (each size, facing and tone once), alone on a plain floor
+const SKIP = new Set(['pendant'])
+const seen = new Set()
+for (const furn of [...layout.furniture].sort((a, b) => a.w * a.h - b.w * b.h)) {
+  const label = [furn.kind, `${furn.w}x${furn.h}`, furn.face, furn.tone].filter(Boolean).join(' ')
+  if (SKIP.has(furn.kind) || seen.has(label)) continue
+  seen.add(label)
+  const canvas = document.createElement('canvas')
+  canvas.width = (furn.w + furn.h) * 8 + 8
+  canvas.height = (furn.w + furn.h) * 4 + 36
+  canvas.style.width = `${canvas.width * 4}px`
+  const c = canvas.getContext('2d')
+  const tiles = []
+  for (let j = 0; j < furn.h; j++) for (let i = 0; i < furn.w; i++) tiles.push([i, j])
+  tiles.sort((a, b) => a[0] + a[1] - (b[0] + b[1]))
+  const at = ([i, j]) => [4 + (i - j + furn.h - 1) * 8, 28 + (i + j) * 4]
+  for (const t of tiles) diamond(c, ...at(t), shade('honey', (t[0] + t[1]) % 2 ? 2 : 3))
+  for (const t of tiles) furnitureTile(c, ...at(t), furn, furn.x + t[0], furn.y + t[1], {})
+  const figure = document.createElement('figure')
+  const caption = document.createElement('figcaption')
+  caption.textContent = label
+  figure.append(canvas, caption)
+  document.getElementById('gallery').append(figure)
 }
 
 draw(document.getElementById('whole'), { x0: 0, y0: 0, x1: layout.width - 1, y1: layout.height - 1 }, false)
