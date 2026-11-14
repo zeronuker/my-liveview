@@ -33,3 +33,10 @@ test('the angled plan fits a canvas, with the same tile size for both ways', () 
   assert.ok(tile * box.width <= 1600 + 1e-9 && tile * box.height <= 800 + 1e-9)
   assert.ok(left >= 0 && top >= 0)
 })
+
+test('every kind of furniture in the plan has a drawer in the angled view', async () => {
+  const { PIECES } = await import('../public/iso-furniture.js')
+  const drawnElsewhere = new Set(['chair', 'desk', 'plant', 'tray', 'pendant']) // iso-art.js, or not drawn
+  const missing = [...new Set(layout.furniture.map(f => f.kind))].filter(kind => !PIECES[kind] && !drawnElsewhere.has(kind))
+  assert.deepEqual(missing, [])
+})
