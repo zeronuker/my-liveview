@@ -1,7 +1,7 @@
 // Doors in the angled view. A door is a gap in a wall; here it gets what makes it a door: a leaf standing open (swing),
 // two leaves (double), glass panels with a blinking sensor (sliding), stone posts and a lintel (arch), and a strip on the
-// floor. `door` is { kind, i, j, w, h, axis, wall }: the tile's place in the opening, which way the wall runs ('x' or 'y')
-// and how tall the wall beside it stands. Drawn like iso-art.js, on a canvas context at (px, py) of the tile's box.
+// floor. `door` is { kind, x, i, j, w, h, axis, wall }: the door's column, the tile's place in the opening, which way the wall
+// runs ('x' or 'y') and how tall the wall beside it stands. Drawn like iso-art.js, on a canvas context at (px, py) of the tile's box.
 import { bottomEdge, diamond, edgeY, rect, slab } from './iso-draw.js'
 import { shade } from './palette.js'
 
@@ -33,7 +33,11 @@ const lintel = (c, px, py, door) => {
 const SENSOR = 'slow' // the sensor over a sliding door blinks like the flat view's
 
 const KINDS = {
-  swing: (c, px, py, door, { first }) => first && leaf(c, px, py, door, ENDS[door.axis][0]),
+  // the leaf is hinged at the far end for doors on an odd column, as the flat view mirrors it (the plan has no swing side)
+  swing: (c, px, py, door, { first, last }) => {
+    const mirrored = door.x % 2 === 1
+    if (mirrored ? last : first) leaf(c, px, py, door, ENDS[door.axis][mirrored ? 1 : 0])
+  },
   double: (c, px, py, door, { first, last }) => {
     if (first) leaf(c, px, py, door, ENDS[door.axis][0])
     if (last) leaf(c, px, py, door, ENDS[door.axis][1])

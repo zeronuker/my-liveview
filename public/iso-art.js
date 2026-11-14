@@ -187,7 +187,7 @@ export const doorOf = (world, x, y) => {
   if (!door) return null
   const axis = world.isWall(door.x - 1, door.y) && world.isWall(door.x + door.w, door.y) ? 'x' : 'y'
   const wall = axis === 'x' ? wallHeight(world, door.x - 1, door.y) : wallHeight(world, door.x, door.y - 1)
-  return { kind: door.kind, i: x - door.x, j: y - door.y, w: door.w, h: door.h, axis, wall }
+  return { kind: door.kind, x: door.x, i: x - door.x, j: y - door.y, w: door.w, h: door.h, axis, wall }
 }
 
 // The lights that blink on a tile: those of its furniture (iso-furniture.js), the sensor over a sliding door, and the glint that sweeps along a window's

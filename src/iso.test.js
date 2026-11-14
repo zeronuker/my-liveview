@@ -100,3 +100,16 @@ test('the CEO suite is a storey up, the ground floor is not, and the stairs clim
   assert.equal(liftAt(layout, 38, 16), 0) // the foot of the stairs
   assert.ok(liftAt(layout, 38, 12.5) > liftAt(layout, 38, 14)) // half way up is higher than near the bottom
 })
+
+test('a swing door is hinged on the side the flat view mirrors it to: the far end on an odd column', async () => {
+  const { doorTile } = await import('../public/iso-doors.js')
+  const { shade } = await import('../public/palette.js')
+  const leafColumns = x => {
+    const xs = []
+    const c = { fillStyle: '', fillRect: px => c.fillStyle === shade('wood', 2) && xs.push(px) }
+    doorTile(c, 0, 20, { kind: 'swing', x, i: 0, j: 0, w: 1, h: 1, axis: 'x', wall: 8 })
+    return xs
+  }
+  assert.ok(leafColumns(12).length > 0 && leafColumns(12).every(px => px < 8)) // an even column: the leaf is at the near end
+  assert.ok(leafColumns(7).length > 0 && leafColumns(7).every(px => px >= 8)) // an odd one: at the far end
+})
