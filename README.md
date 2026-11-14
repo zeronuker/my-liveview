@@ -39,10 +39,15 @@ What the Office does for each kind of event, and what is built, is listed in `do
 
 ## The Map
 
-Press **Map** in the toolbar (Code, Office and Map are the three views). The chat's repo becomes a 3D city: each folder is a district with its name over it, each file a building, taller the more lines it has. Files Claude reads light up blue, files it edits amber, and a file it creates green; they glow bright and then settle to a dim tint, so you can see everywhere Claude has been. The chat you pick in the left list sets the repo shown (else the chat that was active last).
+Press **Map** in the toolbar (Code, Office and Map are the three views). The chat's repo becomes a 3D picture, lit by what Claude does: files it reads light up blue, files it edits amber, and a file it creates green. They glow bright and then settle to a dim tint, so you can see everywhere Claude has been. The chat you pick in the left list sets the repo shown (else the chat that was active last).
 
-- **City or Tree:** the buttons at the top left of the Map switch the style. The Tree is a mind map: the repo in the middle, folders branching out in rings, and files as the dots at the tips, bigger for longer files. Both light up the same way, and the choice is remembered.
-- **Move around:** drag to turn, right-drag to pan, wheel to zoom, **Fit** (or a double-click) to see the whole city again. Point at a building to see its path and length.
+- **Four styles:** the buttons at the top left of the Map switch between them, and the choice is remembered.
+  - **Sphere:** a 3D mind map. Folders sit inside, and every file is a dot on a sphere around them, evenly spaced, with each folder's files kept together.
+  - **Planet:** the same files on the skin of a dark planet, the repo at its top pole and the branches arcing over it. Turn it to see the far side.
+  - **Globe:** the sphere inside a faint globe outline.
+  - **City:** each folder a district with its name over it, each file a building, taller the more lines it has.
+- **In the three globe styles** branches are curves that fade towards the tips, the tree grows out from the middle when it opens, and when Claude moves from one file to the next a glowing comet flies between them and the file pops and glows when it lands. The camera turns slowly by itself (not if your system asks for less motion).
+- **Move around:** drag to turn, right-drag to pan, wheel to zoom, **Fit** (or a double-click) to glide back to the whole picture. Point at a dot or building to see its path and length.
 - **Big repos:** past 5000 files the shortest ones are merged, one grey block per folder.
 - **Read-only:** the server reads the repo's file list for the Map, only for a folder a Claude hook has named, and skips `.git`, `node_modules` and build folders. The 3D drawing uses [three.js](https://threejs.org) (MIT), kept in `public/vendor/` so it works offline.
 - **Not yet:** replaying a past session on the map, and searches (Grep and Glob) lighting up folders.

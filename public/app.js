@@ -16,6 +16,7 @@ const SPEEDS = [
   { name: 'instant', mult: 0 },
 ]
 const THEMES = ['dark', 'light', 'midnight', 'terminal', 'contrast']
+const MAP_MODES = ['city', 'sphere', 'planet', 'globe']
 const STATES = { writing: 'writing', edited: 'edited', failed: 'NOT APPLIED', paused: 'paused', idle: 'idle' }
 const STATUS_MARK = { running: '...', done: 'ok', failed: 'failed' }
 const FEED_MAX = 100
@@ -52,7 +53,7 @@ const prefs = {
   awake: store.get('awake', false) === true,
   office: store.get('office', false) === true,
   map: store.get('map', false) === true, // with office on: the Map in place of the Office
-  mapMode: pick(store.get('mapMode', 'city'), v => v === 'city' || v === 'tree', 'city'),
+  mapMode: pick(store.get('mapMode', 'sphere'), v => MAP_MODES.includes(v), 'sphere'),
   sound: store.get('sound', false) === true,
   folded: store.get('folded', false) === true,
 }
@@ -715,7 +716,7 @@ const apply = () => {
   office.setVisible(prefs.office && !isMap)
   map.setMode(prefs.mapMode)
   map.setVisible(isMap)
-  for (const mode of ['city', 'tree']) $(`m-${mode}`).setAttribute('aria-pressed', String(prefs.mapMode === mode))
+  for (const mode of MAP_MODES) $(`m-${mode}`).setAttribute('aria-pressed', String(prefs.mapMode === mode))
   if (prefs.office) $('files').append($('feed'))
   else $('rz-aside').after($('feed'))
   office.setSound(prefs.sound)
@@ -768,8 +769,7 @@ const setView = view => {
 $('v-code').onclick = () => setView('code')
 $('v-office').onclick = () => setView('office')
 $('v-map').onclick = () => setView('map')
-$('m-city').onclick = () => save('mapMode', 'city')
-$('m-tree').onclick = () => save('mapMode', 'tree')
+for (const mode of MAP_MODES) $(`m-${mode}`).onclick = () => save('mapMode', mode)
 $('b-sound').onclick = () => save('sound', !prefs.sound)
 $('b-folded').onclick = () => {
   save('folded', !prefs.folded)
