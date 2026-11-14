@@ -280,9 +280,9 @@ The prototype works end to end (all phases built, 271 tests). The user watched i
 
 After many sketch rounds the user approved a design, recorded in full in `docs/office-design-brief.md` ("The Garden Studio"): a stepped building in a garden with three levels (ground floor, a mezzanine with the lobby and the open office, a first floor with the CEO suite), a main street, a social hub joined to the lounge and pantry, a terrace floating over a large pond, stairs between the levels, and workers drawn at game size to check the scale. This replaces the earlier wish list in "Next session" above.
 
-- **Order of work:** the brief (done), then the empty plan in `public/layout.js` with tests, then re-wiring the spots and stage, then the art room by room, then mock sessions, then movement polish, then the angled view.
-- **Views:** flat (top-down) first. The user also wants an angled (isometric) view like their reference screenshot, switched by a toggle. Keep the building data separate from the drawing so a second view can read it. First angled version: diamond floors, tall wall blocks with a front cutaway, upright people. A static concept picture comes first for approval.
-- Nothing of the design is built in the game yet.
+- **Order of work:** the brief (done), then the empty plan in `public/layout.js` with tests, then re-wiring the spots and stage, then the art room by room, then mock sessions, then movement polish, then the angled view (all done).
+- **Views:** flat (top-down) and angled (isometric, like the user's reference screenshot), switched by the Angled button in the Office toolbar. Both read the same plan (`public/studio.js`). The angled view is built (2026-11-14); how it works, its files and what is still open are in `docs/office-design-brief.md`, "The angled view".
+- The design is built, in both views.
 
 ### The user's reference picture for the renovation (described, not stored)
 

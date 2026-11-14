@@ -103,11 +103,7 @@ Grass all round, trees along the edges and corners, flower beds, a gate path fro
 
 ## Views
 
-Flat (top-down, 3/4) first, because it reads clearly and is quicker to finish. An angled (isometric) view like the user's reference screenshot is wanted as a second view, switched by a toggle:
-
-1. Keep the data about the building (rooms, walls, doors, furniture, spots) separate from the drawing, so a second view can read the same data.
-2. First version of the angled view: floors as diamonds, walls as tall blocks with a cutaway at the front, the existing people standing upright.
-3. Later: redraw the props and people at the angled style, room by room. A static concept picture comes before this, for the user to approve.
+Two views of the same plan, switched by the **Angled** button in the Office toolbar (next to Record; it shows only in the Office, not the Map, and the choice is remembered in the browser as `lv.angled`). Flat (top-down, 3/4) was built first. The angled (isometric) view like the user's reference screenshot was built second, from the same building data (`public/studio.js`), so neither view knows about the other. How the angled view works is in "The angled view" below.
 
 ## Resized hub and lounge (2026-11-13)
 
@@ -159,13 +155,44 @@ Five koi (orange, white and gold) swim in the pond (`public/fish.js`): each pick
    - **M0 and M1 done (2026-11-13).** `public/art/shell.js` draws the shell with palette colours only: 13 floor kinds (plank, carpet, tile, slab, grate, gravel, each with per-tile variation and seams that run on), walls seen from the south (all cap where more wall continues south; cap on top and a plaster face with a skirting board where the run ends), door frames, sliding glass doors, double wooden doors, arches, windows and clear glass walls, stairs with steps, and a floor under the guardrails. `studio.js` now has a `windows` list (tested). `public/pixel.js` holds `hash`; the grid-to-pixels helper is left for M2, where the first props need it. The palette grew to 80 colours (floor materials and a wall cap); its near-duplicate test now allows pale tints close together. The server serves any `/art/<name>.js`, and a test checks that every file in `public/` is served (a missing `pixel.js` was caught this way). Room labels now show only when zoomed in (a tile of 14 pixels or more). The art-preview page shows each floor as 4 by 4 tiles and close-ups of the shell.
 5. Update the mock sessions and tests, and play them.
 6. Worker movement polish.
-7. The angled view.
+7. The angled view (done 2026-11-14; see "The angled view" below).
+
+## The angled view (built 2026-11-14)
+
+A second way to draw the Office: a 2:1 diamond view with light from the top-left, a cut-away building (walls at the back stand tall, walls facing the viewer are cut low) and upright people, in the style of the user's reference screenshot. Everything in it reads the plan in `public/studio.js`; the flat view is unchanged. All of it uses the palette in `public/palette.js`.
+
+**What is on screen.** Diamond floors in each room's colour, with a lighter pool under each ceiling lamp. A brick slab under the building. Walls with a skirting board, windows with curtains, and doors (see below). Every kind of furniture has its own drawing. The garden: the pond (two ripple frames), its stone bank, the front path, flower beds, grass tufts and flowers, trees, bushes, rocks, and a post-and-rail fence with a gate. The CEO suite stands one storey up. People, pets, name tags, bubbles, confetti and clicking a worker all work as in the flat view. Zoom, pan, Fit and the zoom buttons work too; switching views starts the zoom again.
+
+**The files** (all in `public/`; each new file also needs a line in the `files` list of `src/server.js`, or the server answers 404 and the page breaks):
+- `iso.js`: the geometry. A tile is a diamond `tile` wide and half as tall; `screenAt` turns a place on the plan into a place on the screen; `isoExtent` is the size of the whole plan, so the flat view's `fit`, `zoomAt` and `keepInView` work unchanged. Also the storey: `STOREY` (24 pixels; a wall at the back stands 16), `risingStairs`, `stepHeight` and `liftAt` (how high someone standing at a point of the plan is raised).
+- `iso-draw.js`: the small drawing tools: a crisp diamond, boxes, thin upright slabs along a tile's edge, tables. Whole pixels only.
+- `iso-art.js`: the floors, the slab, the podium, walls (their height, windows), the stairs, chairs and desks, monitors, and `lightsOf`, which says what blinks on a tile.
+- `iso-furniture.js`: one drawer for each kind of furniture (`PIECES`), and the lights on them (`LIGHTS`). A drawer paints one tile of a piece and is told which tile of the piece it is.
+- `iso-doors.js`: doors. `iso-garden.js`: the garden's ground and the fence; it reuses the flat view's upright pictures of trees, bushes and rocks.
+- `iso-scene.js`: paints the ground twice (the pond's two frames) and cuts everything that stands up into bands, one for each diagonal row of tiles (x + y the same), which is the order things are drawn in, back to front. It also paints the hanging lamps and gives `office.js` what it needs to draw them.
+- `office.js`: in angled mode `centre()` places everything through the projection (and the lift). The people and pets are put into the same rows as the walls and furniture, so a wall or desk in front hides their feet. The lamps are drawn over everyone, and the koi are drawn under the projection so they lie flat on the water.
+- `sprites.js`: two new 3/4 views for people (below).
+- `angled-concept.html` (served at `/angled-concept.html`): a static page with the whole office, the open office, and galleries of every furniture kind, every door and every pose from four directions, drawn with the same code as the Office. It is the quickest place to look at a piece of angled art up close.
+
+**Rules for the drawing.** A wall is tall (16) when floor lies behind it (to its east or south), cut low (3) when floor lies only in front, and half height (8) between rooms. A piece of furniture is drawn a tile at a time, back to front, so the neighbours in a piece cover each other's inner faces; only the outer faces and what stands on top need care. The flat art for trees, bushes, rocks and the ceiling lamps is reused as it is (upright pictures work in both views).
+
+**Doors** (`iso-doors.js`). Each door works out which way its wall runs and how tall it is. Swing doors have a wooden leaf standing open at one jamb with a handle; double doors a leaf at each end; sliding doors glass panels at the ends and a small box with a blinking sensor light; arches stone posts, and a lintel only under a tall wall. Each has a strip on the floor. All the leaves swing the same way, because the plan does not say which side each swings to.
+
+**Lights.** The blinking patterns are the flat view's (`public/lights.js`): rack LEDs, the test machine, the vending machines' sign and button, the coffee machine, the side-table lamp, a glint sweeping along every window pane, and the ten hanging lamps. With less motion they hold still. The TV picture is not drawn (the angled view sees the TV from behind).
+
+**The first floor** (`liftAt` in `iso.js`). The CEO suite is raised one storey: its floors, walls, furniture, doors, lamps and lights are drawn 24 pixels higher, on a plaster podium with a brick base. The wall it shares with the back rooms stands up to its floor. The CEO stairs are six steps, each with a lit edge, a dark riser and a tread, with the carpet runner on top; the walls beside them rise with them. Anyone on the suite's floor is drawn a storey higher, and someone on the stairs rises smoothly. The suite stands north of the back rooms (that is how the plan is laid out), so it reads as a raised wing. The lobby, the open office and the other two staircases are not raised.
+
+**People.** The flat view's sprites are used, with two new 3/4 views in `sprites.js`: `front3q` (turned towards the lower right) and `back3q` (towards the upper right), each with its own head for short and long hair; the torso and legs come from the side and back views, so every pose works. Going to the lower right or lower left shows `front3q` (flipped for the left), and going to the upper right or upper left shows `back3q`. Poses that only make sense facing you (a raised hand, cheering) stay front-on. The manager keeps the tie and glasses.
+
+**Tests.** `src/iso.test.js` (the projection, a drawer for every kind of furniture, lights, doors, the storey), `src/iso-garden.test.js`, and the sprite tests (every view of every pose is a clean 12 by 16 grid; the angled mapping).
+
+**Checked, and not.** Watched in the browser with the mock sessions (busy-office, long-session, full): the whole angled Office with a crowd, zoom and pan, clicking a worker, the pets, the koi, the lights, the CEO suite and its stairs, with no console errors. Not checked: the other themes and a narrow window, a real Claude session (only mocks), and long-run performance (the browser pane drew about 30 frames a second in both views, so no difference between them was measured). Nobody was caught half way up the stairs by eye; the lift is covered by a test.
 
 ## Open points
 
-- The angled (isometric) view, a toggled second view: not started (a concept picture first, building data kept apart from drawing).
+- The angled view is built (above). Still open there: which way each swing door opens (the plan data does not say); the TV picture, which faces away from the viewer; raising the lobby and open office (the mezzanine) and the other two staircases, as the CEO floor is; checking the other themes and a narrow window; and playing a real Claude session through it.
 - Watched live once (2026-11-13, in Chrome, the busy-office mock session): the whole Office loads with no console errors; workers walk the long route and crowd the main street; names thin out and carry chat dots; a worker waits at the front gate for an MCP call; a warning triangle shows on a failed test; pets wander (the dog and chickens moved between two looks); the parasols, pendants, racks and bathrooms show. The page ran at about 18 frames a second in that browser, but the Office's draw callback took about 1 ms, so the cost is not in our code (probably the capture tooling). Not individually seen: breaks, the huddle, blinking and fidgets, glints, the moving water, a real Claude session. Earlier, nothing built since the garden had been watched live (the browser pane was hidden): walking, collisions, crowds, names, breaks, the huddle, pets, water, light and glint animations, blinking and fidgets. A watch of the Office, ideally against a real Claude session, is still to do.
 - Rough edges: a chair backrest shows a little above a seated head; side-view sitters on the vertical desks sit slightly off; the side-view face is angular; some older art in `scenery.js` and `sprites.js` still has its own hex colours, not the palette.
 - The viewer has empty space either side of the plan (the user said it may be widened if something needs the room).
 - Decided and closed: the long walk is kept (new workers walk 1.5 times faster on their first trip); the file room and test lab are furnished; no printer stand.
-- All commits are on `main`, none pushed (push only when the user says).
+- All commits are on `main` (push only when the user says).
