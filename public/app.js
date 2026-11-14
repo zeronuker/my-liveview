@@ -52,6 +52,7 @@ const prefs = {
   awake: store.get('awake', false) === true,
   office: store.get('office', false) === true,
   map: store.get('map', false) === true, // with office on: the Map in place of the Office
+  mapMode: pick(store.get('mapMode', 'city'), v => v === 'city' || v === 'tree', 'city'),
   sound: store.get('sound', false) === true,
   folded: store.get('folded', false) === true,
 }
@@ -712,7 +713,9 @@ const apply = () => {
   const isMap = prefs.office && prefs.map
   document.body.classList.toggle('map', isMap)
   office.setVisible(prefs.office && !isMap)
+  map.setMode(prefs.mapMode)
   map.setVisible(isMap)
+  for (const mode of ['city', 'tree']) $(`m-${mode}`).setAttribute('aria-pressed', String(prefs.mapMode === mode))
   if (prefs.office) $('files').append($('feed'))
   else $('rz-aside').after($('feed'))
   office.setSound(prefs.sound)
@@ -765,6 +768,8 @@ const setView = view => {
 $('v-code').onclick = () => setView('code')
 $('v-office').onclick = () => setView('office')
 $('v-map').onclick = () => setView('map')
+$('m-city').onclick = () => save('mapMode', 'city')
+$('m-tree').onclick = () => save('mapMode', 'tree')
 $('b-sound').onclick = () => save('sound', !prefs.sound)
 $('b-folded').onclick = () => {
   save('folded', !prefs.folded)

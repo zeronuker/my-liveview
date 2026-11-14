@@ -4,8 +4,9 @@
 
 import { layoutCity } from './city.js'
 import { glowLevel, touchOf } from './glow.js'
+import { layoutRadial } from './radial.js'
 
-const COLORS = { base: '#2a3550', folded: '#44444e', read: '#5aa0ff', edit: '#ffb347', new: '#7bd88f', ground: '#10162a', sky: '#070b17' }
+const COLORS = { treeBase: '#5b6b99', dirDot: '#8a93b5', edge: '#2f3a5c', base: '#2a3550', folded: '#44444e', read: '#5aa0ff', edit: '#ffb347', new: '#7bd88f', ground: '#10162a', sky: '#070b17' }
 const RANK = { read: 1, edit: 2, new: 3 }
 const LABELS = 60 // the biggest folders are named
 const REFETCH_MS = 1500 // a file that is not in the map yet: the repo is read again after this
@@ -23,6 +24,9 @@ export const createMap = ({ canvas, tip }) => {
   let visible = false
   let cwd = ''
   let shownCwd = '' // the repo drawn now
+  let mode = 'city' // 'city' or 'tree'
+  let shownMode = ''
+  let lastTree = null // the repo's files as last read, so a change of mode needs no new read
   let loadGen = 0
   let frame = 0
   let refetch = 0
@@ -30,8 +34,9 @@ export const createMap = ({ canvas, tip }) => {
   const touchedBy = new Map() // folder -> Map(path -> { kind, at })
   const touchesOf = folder => touchedBy.get(folder) ?? touchedBy.set(folder, new Map()).get(folder)
 
-  const init = async () => {
-    if (T) return
+  let ready = null // apply() can show the Map twice before three.js has loaded: set up once
+  const init = () => (ready ??= setup())
+  const setup = async () => {
     const THREE = await import('three')
     const { OrbitControls } = await import('./vendor/OrbitControls.js')
     T = { THREE, OrbitControls }
@@ -46,8 +51,7 @@ export const createMap = ({ canvas, tip }) => {
     controls = new OrbitControls(camera, canvas)
     controls.enableDamping = true
     controls.maxPolarAngle = Math.PI * 0.48
-    raycaster = new THREE.Raycaster()
-    canvas.addEventListener('pointermove', hover)
+    raycaster = new THREE.Raycaster()    canvas.addEventListener('pointermove', hover)
     canvas.addEventListener('pointerleave', () => (tip.hidden = true))
     canvas.addEventListener('dblclick', fit)
     new ResizeObserver(resize).observe(canvas)
@@ -64,9 +68,9 @@ export const createMap = ({ canvas, tip }) => {
 
   const fit = () => {
     if (!group || !controls) return
-    const size = group.userData.size
-    controls.target.set(size / 2, 0, size / 2)
-    camera.position.set(size / 2, size * 1.0, size * 1.5)
+    const { size, center } = group.userData
+    controls.target.copy(center)
+    camera.position.set(center.x, size * 1.0, center.z + size * 1.5)
     controls.update()
   }
 
@@ -86,9 +90,9 @@ export const createMap = ({ canvas, tip }) => {
     return new T.THREE.Sprite(new T.THREE.SpriteMaterial({ map: new T.THREE.CanvasTexture(c), depthTest: false, transparent: true }))
   }
 
-  // the city drawn from the repo's files; what was touched keeps its light
+  // the repo drawn as a city or as a tree; what was touched keeps its light
   const build = tree => {
-    const { THREE } = T
+    lastTree = tree
     if (group) {
       scene.remove(group)
       group.traverse(o => {
@@ -97,9 +101,65 @@ export const createMap = ({ canvas, tip }) => {
         o.material?.dispose?.()
       })
     }
+    group = new T.THREE.Group()
+    ;(mode === 'tree' ? addTree : addCity)(tree)
+    scene.add(group)
+    if (shownCwd !== cwd || shownMode !== mode) {
+      shownCwd = cwd
+      shownMode = mode
+      fit()
+    }
+  }
+
+  // the tree: the repo in the middle, folders in rings, files as the dots at the tips
+  const addTree = tree => {
+    const { THREE } = T
+    const radial = layoutRadial(tree)
+    group.userData.size = Math.max(radial.radius * 0.9, 10)
+    group.userData.center = new THREE.Vector3(0, 0, 0)
+    const dummy = new THREE.Object3D()
+    const dots = radial.nodes.filter(n => n.dir)
+    files = radial.nodes.filter(n => !n.dir)
+    const dirMesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial(), dots.length)
+    mesh = new THREE.InstancedMesh(new THREE.SphereGeometry(1, 12, 8), new THREE.MeshBasicMaterial(), files.length)
+    const put = (m, i, n, size) => {
+      dummy.position.set(n.x, n.y, n.z)
+      dummy.scale.setScalar(size)
+      dummy.updateMatrix()
+      m.setMatrixAt(i, dummy.matrix)
+    }
+    dots.forEach((n, i) => {
+      put(dirMesh, i, n, n.depth === 0 ? 2.2 : 0.8)
+      dirMesh.setColorAt(i, new THREE.Color(COLORS.dirDot))
+    })
+    index.clear()
+    files.forEach((n, i) => {
+      put(mesh, i, n, Math.min(0.6 + Math.sqrt(n.lines) * 0.04, 1.5))
+      mesh.setColorAt(i, new THREE.Color(n.folded ? COLORS.folded : COLORS.treeBase))
+      index.set(n.path, i)
+    })
+    const lines = new Float32Array(radial.edges.length * 6)
+    radial.edges.forEach(([a, b], i) => {
+      const [p, q] = [radial.nodes[a], radial.nodes[b]]
+      lines.set([p.x, p.y, p.z, q.x, q.y, q.z], i * 6)
+    })
+    const edges = new THREE.LineSegments(new THREE.BufferGeometry().setAttribute('position', new THREE.BufferAttribute(lines, 3)), new THREE.LineBasicMaterial({ color: COLORS.edge }))
+    group.add(edges, dirMesh, mesh)
+
+    const big = dots.filter(n => n.depth > 0 && n.depth <= 2).slice(0, LABELS)
+    for (const n of big) {
+      const sprite = label(n.path.split('/').pop())
+      sprite.position.set(n.x, n.y + 1.6, n.z)
+      sprite.scale.set(7, 1.75, 1)
+      group.add(sprite)
+    }
+  }
+
+  const addCity = tree => {
+    const { THREE } = T
     const city = layoutCity(tree)
-    group = new THREE.Group()
     group.userData.size = Math.max(city.width, 10)
+    group.userData.center = new THREE.Vector3(group.userData.size / 2, 0, group.userData.size / 2)
     const box = new THREE.BoxGeometry(1, 1, 1)
     const dummy = new THREE.Object3D()
     const put = (m, i, x, z, w, d, y0, y1) => {
@@ -138,11 +198,6 @@ export const createMap = ({ canvas, tip }) => {
       sprite.scale.set(Math.min(dir.w * 0.8, 14), Math.min(dir.w * 0.2, 3.5), 1)
       group.add(sprite)
     }
-    scene.add(group)
-    if (shownCwd !== cwd) {
-      shownCwd = cwd
-      fit()
-    }
   }
 
   // each frame: touched files get their colour, easing back to a resting light
@@ -151,7 +206,7 @@ export const createMap = ({ canvas, tip }) => {
     if (!mesh) return
     const { THREE } = T
     const now = Date.now()
-    const base = new THREE.Color(COLORS.base)
+    const base = new THREE.Color(mode === 'tree' ? COLORS.treeBase : COLORS.base)
     const tint = new THREE.Color()
     for (const [path, { kind, at }] of touchesOf(shownCwd)) {
       const i = index.get(path)
@@ -201,6 +256,7 @@ export const createMap = ({ canvas, tip }) => {
     if (!visible) return
     resize()
     if (shownCwd !== cwd) await load()
+    else if (shownMode !== mode && lastTree) build(lastTree)
     if (visible && !frame) frame = requestAnimationFrame(draw)
   }
 
@@ -226,5 +282,12 @@ export const createMap = ({ canvas, tip }) => {
     }
   }
 
-  return { feed, setRepo, setVisible, resetView: fit }
+  // 'city' or 'tree'
+  const setMode = next => {
+    if (next === mode) return
+    mode = next
+    if (visible && lastTree) build(lastTree)
+  }
+
+  return { feed, setRepo, setMode, setVisible, resetView: fit }
 }

@@ -583,6 +583,9 @@ body.map #z-out { display: none; }
   white-space: nowrap;
 }
 #map-tip[hidden] { display: none; }
+#map-modes { display: none; position: absolute; top: 12px; left: 12px; }
+body.map #map-modes { display: inline-flex; }
+#map-modes button[aria-pressed='true'] { background: var(--accent, #3b6fd4); color: #fff; }
 #views button[aria-pressed='true'] { background: var(--accent, #3b6fd4); color: #fff; }
 
 #b-record[aria-pressed='true']::before {

@@ -67,7 +67,7 @@ const squarify = (nodes, x, z, w, d) => {
   return rects
 }
 
-const buildTree = files => {
+export const buildTree = files => {
   const root = { path: '', kids: new Map() }
   for (const file of files) {
     const parts = file.path.split('/')

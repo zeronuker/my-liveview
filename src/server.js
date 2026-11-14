@@ -204,6 +204,7 @@ const files = {
   '/palette.js': ['palette.js', 'text/javascript; charset=utf-8'],
   '/city.js': ['city.js', 'text/javascript; charset=utf-8'],
   '/glow.js': ['glow.js', 'text/javascript; charset=utf-8'],
+  '/radial.js': ['radial.js', 'text/javascript; charset=utf-8'],
   '/map.js': ['map.js', 'text/javascript; charset=utf-8'],
   '/vendor/three.module.min.js': ['vendor/three.module.min.js', 'text/javascript; charset=utf-8'],
   '/vendor/OrbitControls.js': ['vendor/OrbitControls.js', 'text/javascript; charset=utf-8'],
