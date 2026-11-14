@@ -40,3 +40,29 @@ test('every kind of furniture in the plan has a drawer in the angled view', asyn
   const missing = [...new Set(layout.furniture.map(f => f.kind))].filter(kind => !PIECES[kind] && !drawnElsewhere.has(kind))
   assert.deepEqual(missing, [])
 })
+
+test('lights: racks, the test machine, vending machines and windows blink, and every light is in its tile', async () => {
+  const { lightsOf, makeWorld } = await import('../public/iso-art.js')
+  const { PATTERNS } = await import('../public/lights.js')
+  const { inPalette } = await import('../public/palette.js')
+  const world = makeWorld(layout)
+  const lightsAt = kind => layout.furniture.filter(f => f.kind === kind).flatMap(f => lightsOf(world, f.x, f.y + f.h - 1)) // the front tile of each
+  assert.equal(lightsAt('rack').length, 8 * layout.furniture.filter(f => f.kind === 'rack').length)
+  assert.ok(lightsAt('machine').length > 0 && lightsAt('vending').length > 0 && lightsAt('coffeebar').length > 0)
+  const window = layout.windows.find(w => w.kind === 'window')
+  const glints = lightsOf(world, window.x, window.y)
+  assert.ok(glints.length === 6 && glints.every(l => l.pattern === 'glint'))
+  for (const l of [...lightsAt('rack'), ...lightsAt('vending'), ...glints]) {
+    assert.ok(PATTERNS.includes(l.pattern) && inPalette(l.on) && inPalette(l.off))
+    assert.ok(l.dx >= 0 && l.dx + l.w <= 16 && l.dy >= -24 && l.dy < 10)
+  }
+})
+
+test('the plan has hanging lamps, and a pool of light lifts the floor under it', async () => {
+  const { makeWorld } = await import('../public/iso-art.js')
+  const world = makeWorld(layout)
+  assert.ok(world.pendants.length > 0)
+  const pool = layout.lights[0]
+  assert.equal(world.poolAt(Math.floor(pool.x), Math.floor(pool.y)), 2)
+  assert.equal(world.poolAt(0, 0), 0)
+})

@@ -5,7 +5,7 @@
 // comes from the top-left. The tile at (x, y) has its corners at: top (x, y), right (x + 1, y), left
 // (x, y + 1), bottom (x + 1, y + 1). Used by iso-scene.js (the Office) and angled-concept.html.
 import { BACK, BEHIND, bottomEdge, block, cellHash, diamond, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
-import { PIECES } from './iso-furniture.js'
+import { LIGHTS, PIECES } from './iso-furniture.js'
 import { shade } from './palette.js'
 import { levelAt } from './studio.js'
 
@@ -35,8 +35,15 @@ export const makeWorld = layout => {
   const isWall = (x, y) => inGrid(x, y) && !isFloor(x, y) && near(x, y, 1, isFloor)
   const furn = new Map()
   for (const f of furniture.filter(f => f.kind !== 'pendant').reverse()) for (let j = f.y; j < f.y + f.h; j++) for (let i = f.x; i < f.x + f.w; i++) furn.set(`${i},${j}`, f)
+  // how strongly a pool of light (the plan's `lights`) falls on a tile: 0 none, 1 in the pool, 2 in its middle
+  const poolAt = (x, y) =>
+    Math.max(0, ...layout.lights.map(l => {
+      const d = ((x + 0.5 - l.x) / l.rx) ** 2 + ((y + 0.5 - l.y) / l.ry) ** 2
+      return d < 0.35 ? 2 : d < 1 ? 1 : 0
+    }))
   return {
-    layout, inGrid, isFloor, isWall, near,
+    layout, inGrid, isFloor, isWall, near, poolAt,
+    pendants: furniture.filter(f => f.kind === 'pendant'),
     isBuilding: (x, y) => isFloor(x, y) || isWall(x, y),
     furnAt: (x, y) => furn.get(`${x},${y}`),
     toneAt: (x, y) => (rooms.findLast(r => inside(r, x, y)) ?? { tone: 'stone' }).tone,
@@ -50,9 +57,10 @@ export const makeWorld = layout => {
 export const groundTile = (c, world, px, py, x, y, grassNear = Infinity) => {
   if (world.isFloor(x, y)) {
     const rug = world.rugAt(x, y)
-    if (rug) return diamond(c, px, py, shade(rug.tone ?? 'terracotta', (x + y) % 2 ? 1 : 2))
+    const lift = world.poolAt(x, y) // lit by a lamp: a shade lighter, or two
+    if (rug) return diamond(c, px, py, shade(rug.tone ?? 'terracotta', Math.min(3, ((x + y) % 2 ? 1 : 2) + lift)))
     const [mat, step] = FLOOR[world.toneAt(x, y)] ?? FLOOR.stone
-    return diamond(c, px, py, shade(mat, (x + y) % 2 ? step : Math.min(3, step + 1)))
+    return diamond(c, px, py, shade(mat, Math.min(3, ((x + y) % 2 ? step : step + 1) + lift)))
   }
   if (!world.isBuilding(x, y) && (grassNear === Infinity || world.near(x, y, grassNear, world.isFloor))) diamond(c, px, py, shade('grass', cellHash(x, y) % 3 ? 2 : 1))
 }
@@ -126,14 +134,34 @@ const furnitureTile = (c, px, py, furn, x, y, { sitter, detail }) => {
   }
 }
 
+// how tall a wall stands: tall at the back, cut low at the front, half between rooms
+const wallHeight = (world, x, y) => {
+  const behind = world.isFloor(x + 1, y) || world.isFloor(x, y + 1)
+  const front = world.isFloor(x - 1, y) || world.isFloor(x, y - 1)
+  return behind && front ? 8 : behind ? WALL : front ? 3 : 8
+}
+
+// The lights that blink on a tile: those of its furniture (iso-furniture.js) and the glint that sweeps along a window's
+// pane, which is out of step with the next window's. Each is { dx, dy, w, h, pattern, on, off } from the tile's box.
+export const lightsOf = (world, x, y) => {
+  const furn = world.furnAt(x, y)
+  if (furn) return LIGHTS[furn.kind]?.(furn, { i: x - furn.x, j: y - furn.y, w: furn.w, h: furn.h }, { x, y }) ?? []
+  const win = world.isWall(x, y) && world.windowAt(x, y)
+  const h = win && wallHeight(world, x, y)
+  if (!win || h <= 8) return []
+  const left = world.isFloor(x, y + 1)
+  const seed = cellHash(win.x, win.y) % 40
+  return Array.from({ length: 6 }, (_, i) => {
+    const col = i + 1
+    return { dx: left ? col : 15 - col, dy: -h + bottomEdge(col) + 9, w: 1, h: 1, pattern: 'glint', seed, on: shade('glass', 3), off: shade('glass', left ? 2 : 1) }
+  })
+}
+
 // A tile's wall or furniture (not its floor, and not what sits on a desk).
 export const structureTile = (c, world, px, py, x, y, options = {}) => {
   const furn = world.furnAt(x, y)
   if (world.isWall(x, y)) {
-    // tall at the back, cut low at the front, half between rooms
-    const behind = world.isFloor(x + 1, y) || world.isFloor(x, y + 1)
-    const front = world.isFloor(x - 1, y) || world.isFloor(x, y - 1)
-    const h = behind && front ? 8 : behind ? WALL : front ? 3 : 8
+    const h = wallHeight(world, x, y)
     block(c, px, py, h, 'plaster', true)
     diamond(c, px, py - h, shade('wallcap', 2))
     for (let col = 0; col < 8; col++) rect(c, px + col, py - h + topEdge(col), 1, 1, shade('wallcap', 3))

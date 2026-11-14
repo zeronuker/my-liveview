@@ -3,11 +3,14 @@
 // the pond's water. Walls, furniture, fence, trees, bushes and rocks are cut into bands, one for each
 // diagonal row of tiles (x + y the same), because that is the order things are drawn in: back to front.
 // office.js draws a band, then the people standing in it, so a wall or a desk in front hides their
-// feet. Desk monitors are separate, as they light up.
+// feet. Desk monitors are separate, as they light up, and so are the blinking lights (lights.js) and the hanging lamps,
+// which are drawn over everyone.
+import { overheadArts } from './art/overhead.js'
 import { buildGarden } from './garden.js'
-import { cellHash, groundTile, makeWorld, monitor, slabTile, structureTile } from './iso-art.js'
+import { cellHash, groundTile, lightsOf, makeWorld, monitor, slabTile, structureTile } from './iso-art.js'
 import { fenceTile, gardenPieces, gardenTile, grassDetail, isFence } from './iso-garden.js'
 import { ISO_RISE, isoExtent } from './iso.js'
+import { lightColor } from './lights.js'
 import { paint } from './scenery.js'
 
 const UP = 24 // pixels a wall or a piece of furniture may stand above its tile's top corner
@@ -48,6 +51,25 @@ export const createIsoScene = layout => {
     return { d: x + y, image, left: left(x, y) + 8 - foot[0], top: top(x, y) + 4 - foot[1] }
   })
 
+  // the hanging lamps: the flat view's own upright picture, hung over the middle of a tile with its bulb 12 pixels up
+  const lampArt = overheadArts.pendant
+  const lampImage = canvasOf(16, 19)
+  paint(lampImage.getContext('2d'), lampArt.ops())
+  const lamps = world.pendants.map(({ x, y }) => {
+    const [at, atTop] = [left(x, y), top(x, y) + 4 - 12 - 19]
+    return { left: at, top: atTop, lights: lampArt.lights().map(l => ({ ...l, x: at + l.x, y: atTop + l.y })) }
+  })
+
+  // a light, drawn on whole screen pixels
+  const drawLights = (ctx, { tile, left: x0, top: y0 }, lights, t, reduced) => {
+    const s = tile / 16
+    for (const l of lights) {
+      const [x, y] = [Math.round(x0 + l.x * s), Math.round(y0 + l.y * s)]
+      ctx.fillStyle = lightColor(l, t, reduced)
+      ctx.fillRect(x, y, Math.max(1, Math.round(x0 + (l.x + l.w) * s) - x), Math.max(1, Math.round(y0 + (l.y + l.h) * s) - y))
+    }
+  }
+
   const bands = []
   for (let d = 0; d < W + H - 1; d++) {
     const tiles = []
@@ -72,6 +94,8 @@ export const createIsoScene = layout => {
         else structureTile(c, world, px, py, x, y)
       }
     }
+    // the blinking lights of the walls and furniture in this row, in the pictures' pixels
+    const lights = tiles.flatMap(([x, y]) => lightsOf(world, x, y).map(({ dx, dy, ...light }) => ({ ...light, x: left(x, y) + dx, y: top(x, y) + dy })))
     const monitors = tiles
       .filter(([x, y]) => monitorKeys.has(`${x},${y}`))
       .map(([x, y]) => {
@@ -82,7 +106,7 @@ export const createIsoScene = layout => {
         })
         return { key: `${x},${y}`, off, on, left: left(x, y), top: top(x, y) - MONITOR.base }
       })
-    bands.push({ image, left: origin, top: d * 4 + ISO_RISE * 16 - UP, monitors, standing })
+    bands.push({ image, left: origin, top: d * 4 + ISO_RISE * 16 - UP, monitors, standing, lights })
   }
 
   return {
@@ -93,8 +117,10 @@ export const createIsoScene = layout => {
       ctx.imageSmoothingEnabled = false
       ctx.drawImage(ground, x0, y0, (ground.width * tile) / 16, (ground.height * tile) / 16)
     },
-    // the walls and furniture of one diagonal row; `open` holds the desks with someone typing, whose screens are lit
-    drawBand: (ctx, { tile, left: x0, top: y0 }, d, open) => {
+    // the walls and furniture of one diagonal row; `open` holds the desks with someone typing, whose screens are lit; `t` is
+    // the time in seconds, and `reduced` holds every light still
+    drawBand: (ctx, view, d, open, t, reduced) => {
+      const { tile, left: x0, top: y0 } = view
       const band = bands[d]
       if (!band) return
       const s = tile / 16
@@ -102,6 +128,16 @@ export const createIsoScene = layout => {
       if (band.image) ctx.drawImage(band.image, x0 + band.left * s, y0 + band.top * s, band.image.width * s, band.image.height * s)
       for (const m of band.monitors) ctx.drawImage(open.has(m.key) ? m.on : m.off, x0 + m.left * s, y0 + m.top * s, MONITOR.w * s, MONITOR.h * s)
       for (const p of band.standing) ctx.drawImage(p.image, x0 + p.left * s, y0 + p.top * s, p.image.width * s, p.image.height * s)
+      drawLights(ctx, view, band.lights, t, reduced)
+    },
+    // what hangs over everyone: the lamps
+    drawOver: (ctx, view, t, reduced) => {
+      const s = view.tile / 16
+      ctx.imageSmoothingEnabled = false
+      for (const lamp of lamps) {
+        ctx.drawImage(lampImage, view.left + lamp.left * s, view.top + lamp.top * s, 16 * s, 19 * s)
+        drawLights(ctx, view, lamp.lights, t, reduced)
+      }
     },
   }
 }

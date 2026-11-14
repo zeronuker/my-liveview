@@ -556,7 +556,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
       const rows = Array.from({ length: isoScene.bandCount }, () => [])
       for (const person of people) rows[Math.min(rows.length - 1, Math.max(0, Math.floor(person.x + person.y + 0.5)))].push(person)
       rows.forEach((row, d) => {
-        isoScene.drawBand(ctx, view, d, open)
+        isoScene.drawBand(ctx, view, d, open, t, reduced)
         for (const person of row) drawPerson(person, view, t, ink, tags)
       })
     } else {
@@ -574,7 +574,9 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
       }
       if (!who) inspected = ''
     }
-    if (!angled) for (const item of items) if (item.over) drawItem(item, view, open, t) // what is overhead goes over the people
+    // what is overhead goes over the people
+    if (angled) isoScene.drawOver(ctx, view, t, reduced)
+    else for (const item of items) if (item.over) drawItem(item, view, open, t)
 
     // the number of papers on each manager's tray, and then names, labels and bubbles
     for (const tray of snap.trays) {

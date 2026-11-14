@@ -303,6 +303,7 @@ const vending = (c, px, py) => {
       rect(c, px + col, top + 9, 2, 2, products[(col + 2) % 4])
     }
   }
+  for (let col = 1; col < 8; col++) rect(c, px + col, py - 16 + bottomEdge(col), 1, 1, shade('light', 2)) // the sign
   rect(c, px + 11, py - 16 + bottomEdge(4) + 3, 3, 3, shade('metal', 1)) // the coin panel on the other face
   rect(c, px + 12, py - 16 + bottomEdge(3) + 4, 1, 1, shade('light', 3))
 }
@@ -347,4 +348,37 @@ export const PIECES = {
   parasol,
   rail: railing('metal', 5),
   deckrail: railing('wood', 4),
+}
+
+// ---- lights ----
+
+// The lights that blink on a piece, where the art above has its glowing spots: { dx, dy, w, h, pattern, on, off } with
+// (dx, dy) from the left and top of the tile's box. The patterns are lights.js's; iso-scene.js draws them over the art
+// each frame, and the art itself shows the `on` colour for a light that is out of the frame.
+const lamp = (dx, dy, pattern, on, off, w = 1, h = 1) => ({ dx, dy, w, h, pattern, on, off })
+
+export const LIGHTS = {
+  // two LEDs to every unit, each at its own pace
+  rack: (furn, part, at) =>
+    [0, 1, 2, 3].flatMap(unit => [
+      lamp(2, -14 + bottomEdge(2) + 2 + unit * 3, 'fast', [shade('leaf', 3), shade('light', 3), shade('leaf', 3), shade('brick', 2)][(unit + at.x + at.y) % 4], shade('metal', 1)),
+      lamp(5, -14 + bottomEdge(5) + 2 + unit * 3, unit % 2 ? 'slow' : 'double', [shade('light', 3), shade('leaf', 3), shade('brick', 2), shade('glass', 3)][unit], shade('metal', 1)),
+    ]),
+  // the screen and two lights on the front of the test machine
+  machine: (furn, part) =>
+    part.j === furn.h - 1
+      ? [
+          lamp(2, -10 + bottomEdge(2) + 3, 'fast', shade('glass', 3), shade('glass', 2), 3, 2),
+          lamp(5, -10 + bottomEdge(5) + 3, 'slow', shade('light', 3), shade('metal', 0)),
+          lamp(5, -10 + bottomEdge(5) + 5, 'double', shade('leaf', 3), shade('metal', 0)),
+        ]
+      : [],
+  // the sign flickers in three pieces, a button blinks on the side
+  vending: () => [
+    ...[2, 4, 6].map(col => lamp(col, -16 + bottomEdge(col), 'flicker', shade('light', 3), shade('light', 1), 2)),
+    lamp(12, -16 + bottomEdge(3) + 4, 'slow', shade('light', 3), shade('metal', 1)),
+  ],
+  coffeebar: (furn, part) => (part.i === 0 ? [lamp(10, -9, 'slow', shade('light', 3), shade('brick', 2))] : []),
+  // the lamp's shade
+  sidetable: () => [lamp(5, -10, 'flicker', shade('light', 2), shade('light', 1), 6, 4)],
 }
