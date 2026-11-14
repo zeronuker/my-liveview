@@ -1290,6 +1290,24 @@ body.office #ticker { display: flex; }
   color: var(--dim);
 }
 
+/* the links that open a view in a window of its own look like the toolbar's buttons */
+#open-views a {
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--fg);
+  text-decoration: none;
+}
+
+#open-views a:hover {
+  border-color: var(--dim);
+}
+
+#open-views a:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
 .srow {
   display: flex;
   align-items: center;

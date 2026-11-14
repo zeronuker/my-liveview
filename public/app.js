@@ -5,6 +5,7 @@ import { nextInLine, placeEdit } from './place.js'
 import { createRecorder } from './recorder.js'
 import { clamp, makeResizer } from './resize.js'
 import { fileLabels } from './tree.js'
+import { parseView } from './viewparam.js'
 import { wholeRows } from './whole.js'
 
 const $ = id => document.getElementById(id)
@@ -22,6 +23,10 @@ const STATUS_MARK = { running: '...', done: 'ok', failed: 'failed' }
 const FEED_MAX = 100
 const ACTIVE_MS = 4000 // a chat that did something this recently counts as working
 
+// a window opened with /?view=... is pinned to that view: it shows it, and does not save the choice (viewparam.js)
+const pinned = parseView(location.search)
+const PINNED_CHOICES = new Set(['office', 'map', 'angled'])
+
 // what the person chose, kept in this browser between visits
 const store = {
   get(key, fallback) {
@@ -33,6 +38,7 @@ const store = {
     }
   },
   set(key, value) {
+    if (pinned && PINNED_CHOICES.has(key)) return // a pinned window keeps its view to itself
     try {
       localStorage.setItem(`lv.${key}`, JSON.stringify(value))
     } catch {
@@ -57,6 +63,11 @@ const prefs = {
   sound: store.get('sound', false) === true,
   angled: store.get('angled', false) === true, // the Office from an angle
   folded: store.get('folded', false) === true,
+}
+if (pinned) {
+  const { name, ...choices } = pinned
+  Object.assign(prefs, choices)
+  document.title = `Live View: ${name}`
 }
 
 const collapsed = new Set(store.get('collapsed', [])) // folders the person closed
