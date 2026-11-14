@@ -20,7 +20,7 @@ import { deskOnOps } from './art/office.js'
 import { petSprite } from './art/pets.js'
 import { lightColor } from './lights.js'
 import { doorLights, groundOps, itemsOf, paint, TILE, windowLights, withBleed } from './scenery.js'
-import { carrySprite, spriteFor } from './sprites.js'
+import { carrySprite, flipsAngled, spriteFor } from './sprites.js'
 
 const BUBBLES = { ok: '--afg', bad: '--dfg', ask: '--nfg', info: '--acc' }
 const SKIN = '#f1c9a5'
@@ -319,7 +319,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
     ctx.save()
     ctx.imageSmoothingEnabled = !!p.moving
     ctx.translate(at(cx), feet - h)
-    ctx.scale(p.facing < 0 ? -1 : 1, 1)
+    ctx.scale((angled ? flipsAngled(sprite.view, p.dir) : p.facing < 0) ? -1 : 1, 1)
     ctx.drawImage(imageOf(sprite), (-sprite.width * unit) / 2, 0, sprite.width * unit, h)
     // what is carried is held at the side, unless the hands are busy
     const carried = ['read', 'type', 'review', 'sit'].includes(p.pose) ? null : carrySprite(p.carry)
@@ -355,7 +355,7 @@ export const createOffice = ({ canvas, getMult, getChatName = () => '', onView =
 
     // the pixel-art person, and the plain shapes for a pose that has no sprite
     // with less motion, a resting person stays in one frame; walking still walks
-    const sprite = spriteFor({ pose: p.pose, t: reduced && !walking ? 0 : walking && !reduced ? p.stride / 4 : t, id: p.id, kind: p.kind, color: p.color, dir: p.dir, still: reduced })
+    const sprite = spriteFor({ pose: p.pose, t: reduced && !walking ? 0 : walking && !reduced ? p.stride / 4 : t, id: p.id, kind: p.kind, color: p.color, dir: p.dir, still: reduced, angled })
     let headTop = cy - tile * 0.5 // where a bubble goes
     if (sprite) headTop = drawSprite(sprite, p, cx, cy, tile)
     else {

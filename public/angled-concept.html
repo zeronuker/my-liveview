@@ -15,6 +15,9 @@
   #gallery figure { margin: 0; }
   #gallery canvas { width: auto; }
   #gallery figcaption { font-size: 12px; opacity: 0.7; margin-top: 2px; }
+  #people { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; align-items: center; }
+  #people .row { display: flex; gap: 6px; }
+  #people canvas { width: auto; background: var(--panel); }
 </style>
 </head>
 <body>
@@ -30,8 +33,12 @@
 <h2>Furniture gallery: every kind in the plan at 4x</h2>
 <div id="gallery"></div>
 
+<h2>People at the angle: each pose going lower right, lower left, upper right, upper left, at 5x (short hair, then long)</h2>
+<div id="people"></div>
+
 <script type="module">
 import { buildStudio } from '/studio.js'
+import { flipsAngled, lookOf, poses, spriteFor } from '/sprites.js'
 import { shade } from '/palette.js'
 import { cellHash, diamond, furnitureTile, groundTile, makeWorld, monitor, slabTile, structureTile } from '/iso-art.js'
 
@@ -137,6 +144,29 @@ for (const furn of [...layout.furniture].sort((a, b) => a.w * a.h - b.w * b.h)) 
   caption.textContent = label
   figure.append(canvas, caption)
   document.getElementById('gallery').append(figure)
+}
+
+// every pose from the four directions, with a short-haired and a long-haired person
+const ids = { short: null, long: null }
+for (let i = 0; !(ids.short && ids.long); i++) ids[lookOf(`w${i}`).head] ??= `w${i}`
+for (const pose of poses()) {
+  const label = document.createElement('span')
+  label.textContent = pose
+  const row = document.createElement('div')
+  row.className = 'row'
+  for (const id of Object.values(ids))
+    for (const dir of ['right', 'down', 'up', 'left']) {
+      const sprite = spriteFor({ pose, t: 0, id, color: '#457b9d', dir, angled: true, still: true })
+      const canvas = document.createElement('canvas')
+      canvas.width = sprite.width
+      canvas.height = sprite.height
+      canvas.style.width = `${sprite.width * 5}px`
+      const c = canvas.getContext('2d')
+      if (flipsAngled(sprite.view, dir)) c.setTransform(-1, 0, 0, 1, sprite.width, 0)
+      sprite.cells.forEach((cells, y) => cells.forEach((color, x) => color && rect(c, x, y, 1, 1, color)))
+      row.append(canvas)
+    }
+  document.getElementById('people').append(label, row)
 }
 
 draw(document.getElementById('whole'), { x0: 0, y0: 0, x1: layout.width - 1, y1: layout.height - 1 }, false)

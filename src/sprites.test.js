@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { carrySprite, framesOf, HEIGHT, lookOf, poses, shadeOf, spriteFor, tint, viewOf, views, WIDTH } from '../public/sprites.js'
+import { carrySprite, flipsAngled, framesOf, HEIGHT, lookOf, poses, shadeOf, spriteFor, tint, viewOf, views, WIDTH } from '../public/sprites.js'
 
 const LETTERS = new Set('.obBhHsSpkewlmygt'.split(''))
 
@@ -180,4 +180,22 @@ test('someone standing or sitting still sometimes scratches their head or stretc
   assert.ok(!sample('idle', 'right').some(s => /\|(scratch|stretch)$/.test(s.key)), 'not from the side')
   assert.ok(!sample('idle', 'up').some(s => /\|(scratch|stretch)$/.test(s.key)), 'not from behind')
   assert.ok(!sample('idle', 'down', { still: true }).some(s => /\|(scratch|stretch)$/.test(s.key)), 'not with less motion')
+})
+
+test('in the angled Office a person is seen 3/4 from the front or the back, flipped when going towards the left of the screen', () => {
+  assert.equal(viewOf('walk', 'right', true), 'front3q')
+  assert.equal(viewOf('walk', 'down', true), 'front3q')
+  assert.equal(viewOf('walk', 'up', true), 'back3q')
+  assert.equal(viewOf('walk', 'left', true), 'back3q')
+  assert.deepEqual(['right', 'down', 'up', 'left'].map(dir => flipsAngled(viewOf('walk', dir, true), dir)), [false, true, false, true])
+  assert.equal(viewOf('cheer', 'left', true), 'front') // a pose that only makes sense facing you
+  assert.equal(flipsAngled('front', 'down'), false)
+  assert.equal(viewOf('walk', 'right'), 'side') // the flat view is as it was
+})
+
+test('the 3/4 views have their own heads, and the manager keeps a tie from the front', () => {
+  const rows = (dir, kind = 'worker') => spriteFor({ pose: 'idle', t: 0, id: 'x', kind, color: '#457b9d', dir, angled: true, still: true })
+  assert.notDeepEqual(rows('right').cells[4], rows('up').cells[4])
+  assert.ok(rows('right', 'manager').cells.flat().includes('#c0392b'))
+  assert.ok(!rows('right').cells.flat().includes('#c0392b'))
 })

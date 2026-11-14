@@ -5,8 +5,11 @@
 // be tested; office.js draws the cells on the canvas.
 //
 // There are three views: the front, the side (facing right; the Office flips
-// it to face left) and the back. A view only holds the parts that differ from
-// the front; anything it lacks is taken from the front. Grids are 12 pixels
+// it to face left) and the back. The angled Office adds two 3/4 views, `front3q`
+// (turned towards the lower right) and `back3q` (towards the upper right), which
+// are flipped for the other side. A view only holds the parts that differ from
+// the front; anything it lacks is taken from its parent (the side for front3q,
+// the back for back3q), then from the front. Grids are 12 pixels
 // wide and 16 tall. Walking has 4 frames, resting poses 2 (a small squash,
 // like breathing), as small sprites need no more.
 
@@ -55,6 +58,48 @@ const HEADS = {
       '.ohhhsssesso',
       '.ohhhssssso.',
       '..ohhhSSSo..',
+    ],
+  },
+  // turned towards the viewer's right: the face reaches the right edge, hair is on the left
+  front3q: {
+    short: [
+      '...oooooo...',
+      '..ohhhhhho..',
+      '.ohhhhhhhho.',
+      '.ohhhssssso.',
+      '.ohhsessesso',
+      '.ohhsssssso.',
+      '..ohsSSSSo..',
+    ],
+    long: [
+      '...oooooo...',
+      '..ohhhhhho..',
+      '.ohhhhhhhho.',
+      '.ohhhssssso.',
+      '.ohhsessesso',
+      '.ohhhssssso.',
+      '..ohhSSSSo..',
+    ],
+  },
+  // the back of the head, a sliver of cheek showing on the right
+  back3q: {
+    short: [
+      '...oooooo...',
+      '..ohhhhhho..',
+      '.ohhhhhhhho.',
+      '.ohhhhhhhsso',
+      '.ohhhhhhhsso',
+      '.ohhhhhhhho.',
+      '..ohhhSSho..',
+    ],
+    long: [
+      '...oooooo...',
+      '..ohhhhhho..',
+      '.ohhhhhhhho.',
+      '.ohhhhhhhsso',
+      '.ohhhhhhhsso',
+      '.ohhhhhhhho.',
+      '..ohhhhhho..',
     ],
   },
   back: {
@@ -124,8 +169,9 @@ const LEGS = {
   back: { sit: ['..oppppppo..', '..oppppppo..', BLANK, BLANK] },
 }
 
-const VIEWS = ['front', 'side', 'back']
-const part = (parts, view, key) => parts[view]?.[key] ?? parts.front[key]
+const VIEWS = ['front', 'side', 'back', 'front3q', 'back3q']
+const PARENT = { front3q: 'side', back3q: 'back' } // a 3/4 view takes what it lacks from here, then from the front
+const part = (parts, view, key) => parts[view]?.[key] ?? parts[PARENT[view]]?.[key] ?? parts.front[key]
 
 // A frame is a head, a torso and legs. `squash` takes a row off the hair (the
 // person is a little shorter: a breath, or the middle of a step); `overlay` is
@@ -177,10 +223,14 @@ export const framesOf = (pose, head = 'short', view = 'front') => POSES[pose]?.f
 
 // which view someone in a pose, going a way, is seen in; and does it face left (to be flipped)
 const VIEW_OF = { down: 'front', up: 'back', left: 'side', right: 'side' }
-export const viewOf = (pose, dir = 'down') => {
-  const view = VIEW_OF[dir] ?? 'front'
+// in the angled Office, down is towards the lower left, right the lower right, up the upper right and left the upper left
+const ANGLED_VIEW_OF = { down: 'front3q', right: 'front3q', up: 'back3q', left: 'back3q' }
+export const viewOf = (pose, dir = 'down', angled = false) => {
+  const view = (angled ? ANGLED_VIEW_OF : VIEW_OF)[dir] ?? 'front'
   return FRONT_ONLY.has(pose) ? 'front' : view
 }
+// a 3/4 view is drawn facing right, so it is flipped for someone going towards the left of the screen
+export const flipsAngled = (view, dir) => view.endsWith('3q') && (dir === 'down' || dir === 'left')
 
 // Colours, as ramps: each shade is a little darker and a little cooler, never
 // just black added.
@@ -237,6 +287,7 @@ const dressed = (rows, kind, view) => {
       for (const [x, y] of [[5, 8], [6, 8], [5, 9], [6, 9], [5, 10], [6, 10]]) if (grid[y][x] === 'b') grid[y][x] = 't'
       for (const x of [3, 8]) if (grid[4][x] === 's') grid[4][x] = 'g'
     }
+    if (view === 'front3q') for (const [x, y] of [[4, 8], [4, 9], [4, 10]]) if (grid[y][x] === 'b') grid[y][x] = 't'
     if (view === 'side' && grid[4][9] === 's') grid[4][9] = 'g'
   }
   if (kind === 'subagent')
@@ -282,21 +333,22 @@ const withOverlay = (rows, overlay) => {
 // Which frame someone is in: `t` is the time in seconds, `dir` which way they
 // face ('down', 'up', 'left', 'right'), and the id puts neighbours out of
 // step. Null for a pose with no sprite (the Office then draws a shape).
-export const spriteFor = ({ pose, t, id, kind = 'worker', color, dir = 'down', still = false }) => {
+export const spriteFor = ({ pose, t, id, kind = 'worker', color, dir = 'down', still = false, angled = false }) => {
   const def = POSES[pose]
   if (!def) return null
   const look = lookOf(id, kind)
-  const view = viewOf(pose, dir)
+  const view = viewOf(pose, dir, angled)
   const frames = def.frames(view, look.head)
   const index = Math.floor(t / def.every + (look.h % 7)) % frames.length
   let rows = frames[index]
-  const blink = !still && view !== 'back' && isBlinking(t, look.h)
+  const blink = !still && view !== 'back' && view !== 'back3q' && isBlinking(t, look.h)
   const fidget = !still && view === 'front' && FIDGET_POSES.has(pose) ? fidgetOf(t, look.h) : null
   if (blink) rows = rows.map(row => row.replace(/e/g, 'S'))
   if (fidget) rows = withOverlay(rows, fidget === 'stretch' ? STRETCH : SCRATCH)
   return {
     width: WIDTH,
     height: HEIGHT,
+    view,
     cells: tint(rows, { look, shirt: color, kind, view }),
     key: `${pose}${index}|${view}|${look.head}|${look.skin[0]}|${look.hair[0]}|${look.pants}|${color}|${kind}${blink ? '|blink' : ''}${fidget ? `|${fidget}` : ''}`,
   }
