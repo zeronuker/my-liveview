@@ -7,7 +7,7 @@
 import { BACK, BEHIND, block, bottomEdge, cellHash, diamond, rect, seatTop, slab, table, topEdge } from './iso-draw.js'
 import { doorLights, doorTile } from './iso-doors.js'
 import { LIGHTS, PIECES } from './iso-furniture.js'
-import { risingStairs, stepHeight, STOREY } from './iso.js'
+import { entrancesOf, levelHeight, stairsOf, stepHeight } from './iso.js'
 import { shade } from './palette.js'
 import { levelAt } from './studio.js'
 
@@ -24,7 +24,8 @@ const FLOOR = {
 
 const inside = (r, x, y) => x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h
 
-// What the plan has at each tile, worked out once: floor, wall (a solid tile touching a floor) or neither.
+// What the plan has at each tile, worked out once: floor, wall (a solid tile touching a floor) or neither, and how high each
+// stands (iso.js: the first floor is a storey up, the mezzanine a third of that, the rest on the ground).
 export const makeWorld = layout => {
   const { width, height, rooms, furniture, windows, rugs, doors } = layout
   const inGrid = (x, y) => x >= 0 && y >= 0 && x < width && y < height
@@ -35,36 +36,50 @@ export const makeWorld = layout => {
     return false
   }
   const isWall = (x, y) => inGrid(x, y) && !isFloor(x, y) && near(x, y, 1, isFloor)
-  // the first floor stands a storey up (iso.js): its floors, the walls only it touches, and the walls it shares with the ground floor
-  const upperFloor = (x, y) => isFloor(x, y) && levelAt(layout, x, y) === 'first'
-  const groundFloor = (x, y) => isFloor(x, y) && !upperFloor(x, y)
-  const wallKinds = new Map()
-  const wallKind = (x, y) => {
-    if (!isWall(x, y)) return null
-    const key = `${x},${y}`
-    if (!wallKinds.has(key)) {
-      const [up, ground] = [near(x, y, 1, upperFloor), near(x, y, 1, groundFloor)]
-      wallKinds.set(key, up && ground ? 'shared' : up ? 'upper' : 'ground')
-    }
-    return wallKinds.get(key)
-  }
-  const stairs = risingStairs(layout)
+  const floorZ = (x, y) => levelHeight(levelAt(layout, x, y))
+  const stairs = stairsOf(layout)
+  const entrances = entrancesOf(layout)
   const furn = new Map()
   for (const f of furniture.filter(f => f.kind !== 'pendant').reverse()) for (let j = f.y; j < f.y + f.h; j++) for (let i = f.x; i < f.x + f.w; i++) furn.set(`${i},${j}`, f)
+  // how high the stairs stand beside a tile (x, y) that runs along them: the side of a staircase rises with it
+  const rampZ = (x, y) => Math.max(0, ...stairs.filter(({ room }) => y >= room.y && y < room.y + room.h && (x === room.x - 1 || x === room.x + room.w)).map(stair => stepHeight(stair, y)))
+  // A wall: a guardrail stands on the edge of the higher floor; a wall between floors of one height stands on that height; a wall
+  // between floors of different heights (a podium wall) stands on the ground and reaches the higher floor and a low rail more.
+  const walls = new Map()
+  const wallInfo = (x, y) => {
+    if (!isWall(x, y)) return null
+    const key = `${x},${y}`
+    if (!walls.has(key)) {
+      const zs = []
+      for (let j = -1; j <= 1; j++) for (let i = -1; i <= 1; i++) if ((i || j) && isFloor(x + i, y + j)) zs.push(floorZ(x + i, y + j))
+      const [low, high] = [Math.min(...zs), Math.max(...zs)]
+      walls.set(key, furn.has(key) ? { z: Math.max(high, rampZ(x, y)), top: 0 } : low === high ? { z: high, top: 0 } : { z: 0, top: high + 3 })
+    }
+    return walls.get(key)
+  }
   // how strongly a pool of light (the plan's `lights`) falls on a tile: 0 none, 1 in the pool, 2 in its middle
   const poolAt = (x, y) =>
     Math.max(0, ...layout.lights.map(l => {
       const d = ((x + 0.5 - l.x) / l.rx) ** 2 + ((y + 0.5 - l.y) / l.ry) ** 2
       return d < 0.35 ? 2 : d < 1 ? 1 : 0
     }))
+  const baseZ = (x, y) => (isFloor(x, y) ? floorZ(x, y) : (wallInfo(x, y)?.z ?? 0))
   return {
-    layout, inGrid, isFloor, isWall, near, poolAt, wallKind, upperFloor,
-    // a tile that is a storey up: a first-floor floor or a wall only the first floor touches
-    isUpper: (x, y) => upperFloor(x, y) || wallKind(x, y) === 'upper',
-    // a step of the stairs that rise to the first floor, or null: how high it stands, and whether the runner is on it
-    stairsAt: (x, y) => (stairs && inside(stairs, x, y) ? { z: stepHeight(stairs, y), runner: Boolean(stairs.runner) && x > stairs.x && x < stairs.x + stairs.w - 1 } : null),
-    // how high the stairs stand beside a wall tile (x, y) that runs along them, plus the wall's own cap
-    rampBeside: (x, y) => (stairs && y >= stairs.y && y < stairs.y + stairs.h && (x === stairs.x - 1 || x === stairs.x + stairs.w) ? stepHeight(stairs, y) + 3 : 0),
+    layout, inGrid, isFloor, isWall, near, poolAt,
+    // how high a floor, or the foot of a wall or guardrail, stands (whole pixels, or a fraction beside a staircase)
+    baseZ,
+    isRaised: (x, y) => baseZ(x, y) > 0,
+    isRaisedFloor: (x, y) => isFloor(x, y) && floorZ(x, y) > 0,
+    // how high a podium wall (between floors of different heights) reaches, or 0 for any other tile
+    sharedTop: (x, y) => wallInfo(x, y)?.top ?? 0,
+    rampZ,
+    // a step of a staircase, or of the steps down outside the entrance, or null: how high it stands, and whether the runner is on it
+    stairsAt: (x, y) => {
+      const stair = stairs.find(({ room }) => inside(room, x, y))
+      if (stair) return { z: stepHeight(stair, y), rise: Math.abs(stair.zHigh - stair.zLow) / stair.room.h, runner: Boolean(stair.room.runner) && x > stair.room.x && x < stair.room.x + stair.room.w - 1 }
+      const entrance = entrances.find(e => x >= e.x && x < e.x + e.w && y === e.y + 1)
+      return entrance ? { z: entrance.z / 2, rise: entrance.z / 2, runner: false } : null
+    },
     pendants: furniture.filter(f => f.kind === 'pendant'),
     isBuilding: (x, y) => isFloor(x, y) || isWall(x, y),
     furnAt: (x, y) => furn.get(`${x},${y}`),
@@ -103,18 +118,23 @@ export const slabTile = (c, world, px, py, x, y) => {
   }
 }
 
-// The podium the first floor stands on: plaster faces a storey tall, with a brick base, on the sides of an upper tile that
-// face the viewer and have no podium (or shared wall) beyond them. Drawn at the tile's place on the ground.
+// The podium a raised tile stands on: plaster faces from the ground (or the lower tile beside it) up to its floor, with a brick base
+// on the ground, on the sides that face the viewer and have no podium wall beyond them. Drawn at the tile's place on the ground.
 export const podiumTile = (c, world, px, py, x, y) => {
-  const open = (nx, ny) => !world.isUpper(nx, ny) && world.wallKind(nx, ny) !== 'shared'
+  const z = Math.round(world.baseZ(x, y))
+  const faceBelow = (nx, ny) => {
+    if (world.sharedTop(nx, ny) > 0) return 0 // a podium wall covers it
+    const nz = Math.round(world.baseZ(nx, ny))
+    return nz < z ? [z - nz, nz] : 0
+  }
   for (let col = 0; col < 8; col++) {
-    if (open(x, y + 1)) {
-      rect(c, px + col, py + bottomEdge(col) - STOREY, 1, STOREY, shade('plaster', 2))
-      rect(c, px + col, py + bottomEdge(col) - 4, 1, 4, shade('brick', 2))
-    }
-    if (open(x + 1, y)) {
-      rect(c, px + 15 - col, py + bottomEdge(col) - STOREY, 1, STOREY, shade('plaster', 1))
-      rect(c, px + 15 - col, py + bottomEdge(col) - 4, 1, 4, shade('brick', 1))
+    for (const [nx, ny, mirror, light] of [[x, y + 1, false, 2], [x + 1, y, true, 1]]) {
+      const below = faceBelow(nx, ny)
+      if (!below) continue
+      const [h, nz] = below
+      const at = mirror ? px + 15 - col : px + col
+      rect(c, at, py + bottomEdge(col) - z, 1, h, shade('plaster', light))
+      if (nz === 0) rect(c, at, py + bottomEdge(col) - Math.min(4, h), 1, Math.min(4, h), shade('brick', light))
     }
   }
 }
@@ -175,10 +195,11 @@ const furnitureTile = (c, px, py, furn, x, y, { sitter, detail }) => {
 
 // how tall a wall stands: tall at the back, cut low at the front, half between rooms
 const wallHeight = (world, x, y) => {
-  if (world.wallKind(x, y) === 'shared') return STOREY + 3 // a podium wall: up to the first floor, and its low rail
+  if (world.sharedTop(x, y) > 0) return world.sharedTop(x, y) // a podium wall: up to the higher floor, and its low rail
   const behind = world.isFloor(x + 1, y) || world.isFloor(x, y + 1)
   const front = world.isFloor(x - 1, y) || world.isFloor(x, y - 1)
-  return Math.max(world.rampBeside(x, y), behind && front ? 8 : behind ? WALL : front ? 3 : 8)
+  const ramp = world.rampZ(x, y)
+  return Math.max(ramp > 0 ? Math.round(ramp) + 3 : 0, behind && front ? 8 : behind ? WALL : front ? 3 : 8)
 }
 
 // A tile of a door, or null: its kind, its place in the opening, which way the wall runs round it and how tall that wall is.
@@ -211,7 +232,7 @@ export const lightsOf = (world, x, y) => {
 // A tile's wall or furniture (not its floor, and not what sits on a desk).
 export const structureTile = (c, world, px, py, x, y, options = {}) => {
   const furn = world.furnAt(x, y)
-  if (world.isWall(x, y)) {
+  if (world.isWall(x, y) && !furn) {
     const h = wallHeight(world, x, y)
     block(c, px, py, h, 'plaster', true)
     diamond(c, px, py - h, shade('wallcap', 2))
@@ -224,12 +245,13 @@ export const structureTile = (c, world, px, py, x, y, options = {}) => {
     }
   } else if (world.stairsAt(x, y)) {
     const step = world.stairsAt(x, y)
-    const h = Math.round(step.z)
+    const h = Math.max(1, Math.round(step.z))
     const mat = step.runner ? 'carpet' : 'stone'
-    // a step: a lit nosing along the front edge, a dark riser under it, the tread on top
+    // a step: a lit nosing along the front edge, a riser under it (dark when the step is tall, lighter when it is low), the tread on top
+    const [left, right] = step.rise >= 3 ? [1, 0] : [2, 1]
     for (let col = 0; col < 8; col++) {
-      rect(c, px + col, py - h + bottomEdge(col), 1, h, shade(mat, 1))
-      rect(c, px + 15 - col, py - h + bottomEdge(col), 1, h, shade(mat, 0))
+      rect(c, px + col, py - h + bottomEdge(col), 1, h, shade(mat, left))
+      rect(c, px + 15 - col, py - h + bottomEdge(col), 1, h, shade(mat, right))
       rect(c, px + col, py - h + bottomEdge(col), 1, 1, shade(mat, 3))
       rect(c, px + 15 - col, py - h + bottomEdge(col), 1, 1, shade(mat, 2))
     }

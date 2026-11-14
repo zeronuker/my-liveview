@@ -74,7 +74,7 @@ test('doors: each knows which way its wall runs and how tall it is, and a slidin
     const found = doorOf(world, door.x, door.y)
     assert.equal(found.kind, door.kind)
     assert.ok(found.axis === 'x' || found.axis === 'y')
-    assert.ok([3, 8, 16].includes(found.wall), `${door.kind} at ${door.x},${door.y}: wall ${found.wall}`)
+    assert.ok(Number.isFinite(found.wall) && found.wall >= 3, `${door.kind} at ${door.x},${door.y}: wall ${found.wall}`)
   }
   assert.equal(doorOf(world, 7, 17).axis, 'x') // a door in a wall that runs east to west
   assert.equal(doorOf(world, 20, 8).axis, 'y') // and one in a wall that runs north to south
@@ -85,20 +85,38 @@ test('doors: each knows which way its wall runs and how tall it is, and a slidin
   assert.equal(sensors[0].pattern, 'slow')
 })
 
-test('the CEO suite is a storey up, the ground floor is not, and the stairs climb smoothly between', async () => {
-  const { STOREY, liftAt, risingStairs, stepHeight } = await import('../public/iso.js')
-  const stairs = risingStairs(layout)
-  assert.equal(stairs.name, 'CEO stairs')
+test('the CEO suite is a storey up, the mezzanine a third of that, the ground floor none, and the stairs climb smoothly between', async () => {
+  const { MEZZANINE, STOREY, liftAt, stairsOf, stepHeight } = await import('../public/iso.js')
+  const stairs = Object.fromEntries(stairsOf(layout).map(s => [s.room.name, s]))
+  assert.deepEqual([stairs['CEO stairs'].zLow, stairs['CEO stairs'].zHigh], [0, STOREY])
+  assert.deepEqual([stairs['Stairs A'].zLow, stairs['Stairs A'].zHigh], [0, MEZZANINE])
+  assert.deepEqual([stairs['Stairs B'].zLow, stairs['Stairs B'].zHigh], [0, MEZZANINE])
   assert.equal(liftAt(layout, 27, 5), STOREY) // the CEO's office
   assert.equal(liftAt(layout, 38, 9), STOREY) // the foyer, at the top of the stairs
-  assert.equal(liftAt(layout, 30, 20), 0) // the hub
-  assert.equal(liftAt(layout, 10, 36), 0) // the lobby
-  const column = Array.from({ length: stairs.h + 2 }, (_, i) => liftAt(layout, 38, stairs.y + stairs.h - i)) // from the bottom up
-  for (let i = 1; i < column.length; i++) assert.ok(column[i] >= column[i - 1], `${column}`)
-  assert.equal(liftAt(layout, 38, stairs.y), STOREY) // the top step
-  assert.equal(stepHeight(stairs, stairs.y + stairs.h - 1), STOREY / stairs.h) // the bottom step: a sixth
-  assert.equal(liftAt(layout, 38, 16), 0) // the foot of the stairs
+  assert.equal(liftAt(layout, 10, 26), MEZZANINE) // the open office
+  assert.equal(liftAt(layout, 10, 36), MEZZANINE) // the lobby
+  assert.equal(liftAt(layout, 20, 42), MEZZANINE) // the entrance
+  assert.equal(liftAt(layout, 30, 24), 0) // the hub
+  assert.equal(liftAt(layout, 12, 18), 0) // the main street, under the open office's north edge
+  for (const stair of Object.values(stairs)) {
+    const { room } = stair
+    const x = room.x + 1
+    const bottomUp = Array.from({ length: room.h + 2 }, (_, i) => liftAt(layout, x, (room.high === 'north' ? room.y + room.h : room.y - 1) + (room.high === 'north' ? -i : i)))
+    for (let i = 1; i < bottomUp.length; i++) assert.ok(bottomUp[i] >= bottomUp[i - 1] - 1e-9, `${room.name}: ${bottomUp}`)
+    assert.equal(bottomUp.at(-1), Math.max(stair.zLow, stair.zHigh)) // the top, level with the floor it reaches
+  }
+  assert.equal(stepHeight(stairs['CEO stairs'], 15), STOREY / 6) // the bottom step: a sixth
+  assert.equal(liftAt(layout, 38, 16), 0) // the foot of the CEO stairs
   assert.ok(liftAt(layout, 38, 12.5) > liftAt(layout, 38, 14)) // half way up is higher than near the bottom
+})
+
+test('the steps down outside the entrance: the door is on the mezzanine, then half way, then the ground', async () => {
+  const { MEZZANINE, entrancesOf, liftAt } = await import('../public/iso.js')
+  const [door] = entrancesOf(layout)
+  assert.equal(door.z, MEZZANINE)
+  const column = [door.y - 1, door.y, door.y + 1, door.y + 2, door.y + 3].map(y => liftAt(layout, door.x, y))
+  assert.deepEqual(column, [MEZZANINE, MEZZANINE, MEZZANINE / 2, 0, 0])
+  assert.equal(liftAt(layout, door.x + door.w + 3, door.y + 2), 0) // the boardwalk beside the path is on the ground
 })
 
 test('a swing door is hinged on the side the flat view mirrors it to: the far end on an odd column', async () => {

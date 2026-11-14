@@ -3,13 +3,14 @@
 // the pond's water. Walls, furniture, fence, trees, bushes and rocks are cut into bands, one for each
 // diagonal row of tiles (x + y the same), because that is the order things are drawn in: back to front.
 // office.js draws a band, then the people standing in it, so a wall or a desk in front hides their
-// feet. The first floor stands a storey up (iso.js) on a podium: its tiles are drawn that much higher. Desk monitors are separate, as they light up, and so are the blinking lights (lights.js) and the hanging lamps,
+// feet. The first floor and the mezzanine stand up (iso.js) on podiums: their floors, walls and furniture are drawn that much higher, in
+// the rows too, so a raised floor hides the ground and the people behind it. Desk monitors are separate, as they light up, and so are the blinking lights (lights.js) and the hanging lamps,
 // which are drawn over everyone.
 import { overheadArts } from './art/overhead.js'
 import { buildGarden } from './garden.js'
 import { cellHash, groundTile, lightsOf, makeWorld, monitor, podiumTile, slabTile, structureTile } from './iso-art.js'
 import { fenceTile, gardenPieces, gardenTile, grassDetail, isFence } from './iso-garden.js'
-import { ISO_RISE, isoExtent, STOREY } from './iso.js'
+import { ISO_RISE, isoExtent } from './iso.js'
 import { lightColor } from './lights.js'
 import { paint } from './scenery.js'
 
@@ -26,8 +27,8 @@ export const createIsoScene = layout => {
   const left = (x, y) => (x - y + H) * 8 - 8
   const top = (x, y) => (x + y) * 4 + ISO_RISE * 16
 
-  // how high a tile's walls and furniture are raised: a storey on the first floor
-  const liftOf = (x, y) => (world.isUpper(x, y) ? STOREY : 0)
+  // how high a tile's floor, walls and furniture are raised, in whole pixels
+  const liftOf = (x, y) => Math.round(world.baseZ(x, y))
 
   const grounds = [0, 1].map(frame => {
     const ground = canvasOf((W + H) * 8, Math.ceil(isoExtent(layout).height * 16))
@@ -35,15 +36,13 @@ export const createIsoScene = layout => {
     for (let y = 0; y < H; y++)
       for (let x = 0; x < W; x++) {
         const [px, py] = [left(x, y), top(x, y)]
-        if (world.isUpper(x, y)) podiumTile(g, world, px, py, x, y)
+        if (world.isRaised(x, y)) podiumTile(g, world, px, py, x, y) // the floor itself is drawn in the rows, a storey up
         else if (world.isBuilding(x, y) || !gardenTile(g, garden, px, py, x, y, frame)) {
           groundTile(g, world, px, py, x, y)
           if (!world.isBuilding(x, y)) grassDetail(g, px, py, x, y)
         }
       }
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!world.isUpper(x, y)) slabTile(g, world, left(x, y), top(x, y), x, y)
-    // the first floor's floors, a storey up, over the podium
-    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (world.upperFloor(x, y)) groundTile(g, world, left(x, y), top(x, y) - STOREY, x, y)
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!world.isRaised(x, y)) slabTile(g, world, left(x, y), top(x, y), x, y)
     return ground
   })
 
@@ -81,7 +80,7 @@ export const createIsoScene = layout => {
     const tiles = []
     for (let x = Math.max(0, d - (H - 1)); x <= Math.min(W - 1, d); x++) {
       const y = d - x
-      if (world.isWall(x, y) || world.furnAt(x, y) || world.doorAt(x, y) || world.stairsAt(x, y) || isFence(garden, x, y)) tiles.push([x, y])
+      if (world.isWall(x, y) || world.furnAt(x, y) || world.doorAt(x, y) || world.stairsAt(x, y) || world.isRaisedFloor(x, y) || isFence(garden, x, y)) tiles.push([x, y])
     }
     const standing = pieces.filter(piece => piece.d === d)
     if (!tiles.length && !standing.length) {
@@ -91,13 +90,14 @@ export const createIsoScene = layout => {
     let image = null
     let origin = 0
     // a row with something on the first floor, or a wall up to it, needs more room above
-    const up = UP + (tiles.some(([x, y]) => world.isUpper(x, y) || world.wallKind(x, y) === 'shared') ? STOREY : 0)
+    const up = UP + Math.max(0, ...tiles.map(([x, y]) => Math.max(liftOf(x, y), world.sharedTop(x, y))))
     if (tiles.length) {
       origin = Math.min(...tiles.map(([x, y]) => left(x, y)))
       image = canvasOf(Math.max(...tiles.map(([x, y]) => left(x, y))) - origin + 16, up + 10)
       const c = image.getContext('2d')
       for (const [x, y] of tiles) {
         const [px, py] = [left(x, y) - origin, up - liftOf(x, y)]
+        if (world.isRaisedFloor(x, y)) groundTile(c, world, px, py, x, y)
         if (isFence(garden, x, y)) fenceTile(c, garden, px, py, x, y)
         else structureTile(c, world, px, py, x, y)
       }
@@ -112,7 +112,7 @@ export const createIsoScene = layout => {
           monitor(small.getContext('2d'), 0, MONITOR.base, lit, cellHash(x, y))
           return small
         })
-        return { key: `${x},${y}`, off, on, left: left(x, y), top: top(x, y) - MONITOR.base }
+        return { key: `${x},${y}`, off, on, left: left(x, y), top: top(x, y) - MONITOR.base - liftOf(x, y) }
       })
     bands.push({ image, left: origin, top: d * 4 + ISO_RISE * 16 - up, monitors, standing, lights })
   }

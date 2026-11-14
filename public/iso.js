@@ -20,24 +20,57 @@ export const screenAt = (view, layout, x, y, angled) =>
     ? { x: view.left + ((x - y + layout.height) * view.tile) / 2, y: view.top + ((x + y) * view.tile) / 4 + ISO_RISE * view.tile }
     : { x: view.left + x * view.tile, y: view.top + y * view.tile }
 
-// ---- the upper storey ----
-// The first floor (the CEO suite) stands one storey above the ground, on a podium, and a staircase rises to it.
+// ---- the levels ----
+// The first floor (the CEO suite) stands one storey above the ground and the mezzanine (the lobby, the open office and the
+// entrance) a third of that. They stand on podiums, and the staircases take their two heights from the levels they join.
 
 export const STOREY = 24 // pixels, at 16 to a tile; a wall at the back stands 16
+export const MEZZANINE = 8 // lower than half a storey: a platform hides the ground behind it, up to four pixels for each tile it is high
 
-// the staircase that rises to the first floor: a stairs room whose high end (north) meets a first-floor tile; null if none
-export const risingStairs = layout =>
-  layout.rooms.find(room => room.level === 'stairs' && room.high === 'north' && levelAt(layout, room.x, room.y - 1) === 'first') ?? null
+const LEVEL_HEIGHT = { first: STOREY, mezzanine: MEZZANINE } // every other level is on the ground
 
-// how high the step on a stairs tile (x, y) stands, in pixels: the top tile of the stairs is a full storey up, the bottom one a sixth of it
-export const stepHeight = (room, y) => (STOREY * (room.y + room.h - y)) / room.h
+// how high a level's floor stands
+export const levelHeight = level => LEVEL_HEIGHT[level] ?? 0
 
-// How high someone standing at tile (x, y) of the plan is raised, in pixels (x and y may be between tiles): a storey on the
-// first floor, nothing on the ground floor, and a smooth climb up the stairs.
+const cache = new WeakMap()
+const geometry = layout => {
+  if (!cache.has(layout)) {
+    // each staircase: its high end and the heights of the floors at its two ends
+    const stairs = layout.rooms
+      .filter(room => room.level === 'stairs')
+      .map(room => {
+        const middle = room.x + (room.w >> 1)
+        const [above, below] = [levelHeight(levelAt(layout, middle, room.y - 1)), levelHeight(levelAt(layout, middle, room.y + room.h))]
+        const [zHigh, zLow] = room.high === 'north' ? [above, below] : [below, above]
+        return { room, high: room.high, zLow, zHigh }
+      })
+    // the front doors of the mezzanine: the floor outside is lower, so there are two steps down, the door's row and two more
+    const entrances = layout.doors
+      .filter(door => door.level === 'mezzanine' && levelAt(layout, door.x, door.y + door.h) === 'outside')
+      .map(door => ({ x: door.x, w: door.w, y: door.y, z: MEZZANINE }))
+    cache.set(layout, { stairs, entrances })
+  }
+  return cache.get(layout)
+}
+
+// the staircases, and the steps down outside the entrance, of a plan
+export const stairsOf = layout => geometry(layout).stairs
+export const entrancesOf = layout => geometry(layout).entrances
+
+// how high the step on row y of a staircase stands, in pixels: the top row is at the height of the floor it reaches, the one
+// before the bottom a step above the floor it leaves
+export const stepHeight = ({ room, high, zLow, zHigh }, y) => zLow + ((zHigh - zLow) * (high === 'north' ? room.y + room.h - y : y - room.y + 1)) / room.h
+
+const clamp = (value, low, high) => Math.min(high, Math.max(low, value))
+
+// How high someone standing at tile (x, y) of the plan is raised, in pixels (x and y may be between tiles): the height of the
+// floor of their level, a smooth climb on the stairs, and a smooth way down the steps outside the entrance.
 export const liftAt = (layout, x, y) => {
-  const stairs = risingStairs(layout)
+  const { stairs, entrances } = geometry(layout)
   const [cx, cy] = [Math.round(x), Math.round(y)]
-  if (levelAt(layout, cx, cy) === 'first') return STOREY
-  if (stairs && cx >= stairs.x && cx < stairs.x + stairs.w && y >= stairs.y - 0.5 && y <= stairs.y + stairs.h) return Math.min(STOREY, Math.max(0, stepHeight(stairs, y)))
-  return 0
+  for (const e of entrances) if (cx >= e.x && cx < e.x + e.w && y >= e.y && y <= e.y + 2) return e.z * clamp((e.y + 2 - y) / 2, 0, 1)
+  const level = levelAt(layout, cx, cy)
+  if (level === 'first' || level === 'mezzanine') return levelHeight(level)
+  const stair = stairs.find(({ room }) => cx >= room.x && cx < room.x + room.w && y >= room.y - 0.5 && y <= room.y + room.h)
+  return stair ? clamp(stepHeight(stair, y), Math.min(stair.zLow, stair.zHigh), Math.max(stair.zLow, stair.zHigh)) : 0
 }
