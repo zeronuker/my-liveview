@@ -12,7 +12,8 @@ const COLORS = {
 }
 const RANK = { read: 1, edit: 2, new: 3 }
 const LABELS = 60 // the biggest folders are named (city)
-const CLOUD_LABELS = 24 // and the biggest clouds (nebula)
+const CLOUD_LABELS = 12 // and the biggest clouds of two files or more (nebula)
+const DUST_PER_FILE = 3 // faint specks in each cloud, so a bigger folder is a denser cloud
 const REFETCH_MS = 1500 // a file that is not in the map yet: the repo is read again after this
 const GROW_MS = 900 // a star fades in over this long
 const SPREAD_MS = 1400 // and the outermost starts this much after the middle
@@ -237,7 +238,7 @@ export const createMap = ({ canvas, tip }) => {
       if (!born.has(n.path)) born.set(n.path, calm || !fresh ? now - GROW_MS : now + (Math.hypot(n.x, n.y, n.z) / R) * SPREAD_MS)
     })
 
-    // far stars all round, and fine dust in each cloud
+    // far stars all round, and faint dust in each cloud, more where there are more files
     const far = dotSet(1800)
     for (let i = 0; i < 1800; i++) {
       const u = Math.random() * 2 - 1
@@ -249,28 +250,30 @@ export const createMap = ({ canvas, tip }) => {
       const tint = new THREE.Color().setHSL(0.55 + Math.random() * 0.4, 0.5, 0.55 + Math.random() * 0.3)
       far.attrs.aColor.set([tint.r, tint.g, tint.b], i * 3)
     }
-    const dustCount = Math.min(8000, nodes.length * 5 + 600)
-    const dust = dotSet(dustCount)
     const big = layout.clouds.filter(c => c.count)
-    for (let i = 0; i < dustCount; i++) {
-      const c = big[i % big.length]
-      const spread = c.spread + 6
+    const perFile = Math.min(DUST_PER_FILE, 8000 / nodes.length)
+    const specks = big.flatMap(c => Array(Math.round(c.count * perFile)).fill(c))
+    const dust = dotSet(specks.length)
+    specks.forEach((c, i) => {
+      const spread = c.spread + 4
       const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * spread * 1.1
       dust.attrs.position.set([c.x + gauss(), c.y + gauss() * 0.7, c.z + gauss()], i * 3)
-      dust.attrs.aSize[i] = 0.15 + Math.random() * 0.35
-      const tint = cloudColor(c).multiplyScalar(0.22 + Math.random() * 0.2)
+      dust.attrs.aSize[i] = 0.1 + Math.random() * 0.2
+      const tint = cloudColor(c).multiplyScalar(0.06 + Math.random() * 0.07)
       dust.attrs.aColor.set([tint.r, tint.g, tint.b], i * 3)
       dust.attrs.aHalo.set([tint.r, tint.g, tint.b], i * 3)
-      dust.attrs.aGlow[i] = 0.8
-    }
+      dust.attrs.aGlow[i] = 0.6
+    })
 
-    // the clouds: a few big soft smudges in each folder's colour, turning slowly
+    // the clouds: a few big soft smudges in each folder's colour, turning slowly; fainter when there are many,
+    // so where they overlap they do not wash out to white
     const clouds = []
+    const faint = Math.min(1, Math.sqrt(8 / big.length))
     for (const c of big) {
       const base = cloudColor(c)
       const size = (c.spread + 8) * 2.6
       for (let k = 0; k < 3; k++) {
-        const material = new THREE.SpriteMaterial({ map: puffTexture(), color: base.clone().offsetHSL((k - 1) * 0.04, 0, 0), transparent: true, opacity: 0.11 / (1 + k * 0.3), blending: THREE.AdditiveBlending, depthWrite: false })
+        const material = new THREE.SpriteMaterial({ map: puffTexture(), color: base.clone().offsetHSL((k - 1) * 0.04, 0, 0), transparent: true, opacity: (0.11 * faint) / (1 + k * 0.3), blending: THREE.AdditiveBlending, depthWrite: false })
         const sprite = new THREE.Sprite(material)
         const off = (c.spread + 4) * 0.35
         sprite.position.set(c.x + (Math.random() - 0.5) * off, c.y + (Math.random() - 0.5) * off, c.z + (Math.random() - 0.5) * off)
@@ -338,9 +341,11 @@ export const createMap = ({ canvas, tip }) => {
     group.add(far.points, dust.points, links, stars.points, rings.points, sparks.points, trail.points)
     sky = { stars, sparks, rings, trail, links, linkAttrs, linkGeometry, linkMaterial, linksOf, layout, curves, colors, sizes, phases, clouds, dotSets: [far, dust, stars, sparks, rings, trail], lit: new Set(), R }
 
-    // names over the biggest clouds
-    for (const c of [...big].sort((a, b) => b.count - a.count).slice(0, CLOUD_LABELS)) {
-      const sprite = label(c.dir.split('/').pop() || 'repo', true)
+    // names over the biggest clouds; a name that two folders share gets its parent too (prayer/components)
+    const shortName = (dir, parts) => dir.split('/').slice(-parts).join('/') || 'repo'
+    const shared = new Set(big.map(c => shortName(c.dir, 1)).filter((n, i, all) => all.indexOf(n) !== i))
+    for (const c of big.filter(c => c.count > 1).sort((a, b) => b.count - a.count).slice(0, CLOUD_LABELS)) {
+      const sprite = label(shortName(c.dir, shared.has(shortName(c.dir, 1)) ? 2 : 1), true)
       sprite.scale.set(R * 0.4, R * 0.1, 1)
       sprite.position.set(c.x, c.y + c.spread * 0.8 + 4, c.z)
       group.add(sprite)

@@ -1,12 +1,14 @@
 // Which repo files each file imports, for the Map's links. Plain text in, plain data out.
-// Only relative imports are followed: JS/TS (import, export from, require, import()),
-// CSS (@import), HTML (src= and href=) and Python (import a.b, from .a import b).
+// Only imports of files in the repo are followed: JS/TS (import, export from, require, import()),
+// CSS (@import), HTML (src= and href=), Python (import a.b, from .a import b) and Kotlin/Java
+// (import a.b.Name, found as a/b/Name.kt or .java anywhere in the repo).
 // Other languages have no links; their files still show, grouped by folder.
 
 const JS = /\.(m?js|cjs|jsx|tsx?|vue|svelte)$/
 const CSS = /\.(css|scss|less)$/
 const HTML = /\.html?$/
 const PY = /\.py$/
+const JVM = /\.(kt|kts|java)$/
 const TRY = ['', '.js', '.ts', '.tsx', '.jsx', '.mjs', '.cjs', '.vue', '.svelte', '.css', '.scss', '/index.js', '/index.ts', '/index.tsx']
 
 const all = (text, re) => [...text.matchAll(re)].map(m => m[1])
@@ -24,6 +26,12 @@ export const importsOf = (path, text) => {
     }
     for (const [, names] of text.matchAll(/^[ \t]*import[ \t]+([\w., \t]+)$/gm)) out.push(...names.split(',').map(s => s.trim().split(/\s+/)[0]).filter(Boolean))
     return out.map(m => `py:${m}`)
+  }
+  if (JVM.test(path)) {
+    // what it imports, and what it declares at the top level, so `import a.b.helper` finds the file that declares helper
+    const imports = all(text, /^[ \t]*import[ \t]+(?:static[ \t]+)?([\w.]+)/gm).map(m => `jvm:${m}`)
+    const declares = all(text, /^(?:(?:public|internal|private|data|sealed|enum|abstract|open|inline|value|annotation|const)[ \t]+)*(?:fun|val|var|class|object|interface|typealias)[ \t]+(?:<[^>]*>[ \t]*)?(?:[\w.]+\.)?(\w+)/gm)
+    return [...imports, ...declares.map(m => `decl:${m}`)]
   }
   return []
 }
@@ -43,7 +51,13 @@ const normal = path => {
 const dirOf = path => path.slice(0, path.lastIndexOf('/') + 1)
 
 // the repo file a specifier names, or null
-const resolve = (spec, from, known) => {
+const resolve = (spec, from, known, tails) => {
+  if (spec.startsWith('decl:')) return null
+  if (spec.startsWith('jvm:')) {
+    const name = spec.slice(4).replace(/\./g, '/')
+    const owner = name.slice(0, name.lastIndexOf('/')) // import a.B.member: the file of B
+    return tails.get(`${name}.kt`) ?? tails.get(`${name}.java`) ?? tails.get(name) ?? tails.get(`${owner}.kt`) ?? tails.get(`${owner}.java`) ?? null
+  }
   if (spec.startsWith('py:')) {
     const mod = spec.slice(3)
     const dots = mod.match(/^\.*/)[0].length
@@ -69,11 +83,21 @@ const resolve = (spec, from, known) => {
 // Map(path -> specifiers) and every path in the repo -> Map(path -> the repo files it imports)
 export const resolveImports = (specs, paths) => {
   const known = new Set(paths)
+  // Kotlin/Java: com/a/B.kt, and com/a/helper for what a file in com/a declares -> that file
+  const tails = new Map()
+  const addTails = (parts, path) => {
+    for (let i = 0; i < parts.length; i++) if (!tails.has(parts.slice(i).join('/'))) tails.set(parts.slice(i).join('/'), path)
+  }
+  for (const path of paths) if (/\.(kt|java)$/.test(path)) addTails(path.split('/'), path)
+  for (const [path, list] of specs) {
+    const dir = path.split('/').slice(0, -1)
+    for (const spec of list) if (spec.startsWith('decl:')) addTails([...dir, spec.slice(5)], path)
+  }
   const out = new Map()
   for (const [from, list] of specs) {
     const found = new Set()
     for (const spec of list) {
-      const to = resolve(spec, from, known)
+      const to = resolve(spec, from, known, tails)
       if (to && to !== from) found.add(to)
     }
     if (found.size) out.set(from, [...found])

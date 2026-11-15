@@ -33,3 +33,16 @@ test('Python: from-imports, relative imports and plain imports', () => {
 test('a file that only imports itself or missing files has no links', () => {
   assert.deepEqual(links({ 'a.js': "import './a.js'\nimport './gone.js'\nimport '../../out.js'" }), {})
 })
+
+test('Kotlin and Java: an import names a class file, or a file that declares the name; libraries are not files', () => {
+  const got = links({
+    'app/src/main/java/com/x/Main.kt': 'package com.x\nimport android.os.Bundle\nimport com.x.data.Settings\nimport com.x.ui.Theme as T\nimport com.x.ui.MOTION_MS',
+    'app/src/main/java/com/x/data/Settings.kt': 'object Settings {\n  fun load() = 1\n}', 'app/src/main/java/com/x/ui/Theme.kt': '',
+    'app/src/main/java/com/x/ui/Motion.kt': 'package com.x.ui\n\nconst val MOTION_MS = 300\nprivate fun helper() = 0',
+    'lib/src/com/y/Util.java': 'import static com.x.data.Settings.load;\nimport com.x.ui.Theme;',
+  })
+  assert.deepEqual(got, {
+    'app/src/main/java/com/x/Main.kt': ['app/src/main/java/com/x/data/Settings.kt', 'app/src/main/java/com/x/ui/Theme.kt', 'app/src/main/java/com/x/ui/Motion.kt'],
+    'lib/src/com/y/Util.java': ['app/src/main/java/com/x/data/Settings.kt', 'app/src/main/java/com/x/ui/Theme.kt'],
+  })
+})
