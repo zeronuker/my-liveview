@@ -286,6 +286,7 @@ export const createMap = ({ canvas, tip }) => {
 
     // the links: soft arcs in the colours of the two stars, that light up and run with light
     const count = layout.links.length * STEPS * 2
+    const linkLight = 0.11 * Math.min(1, Math.sqrt(150 / Math.max(layout.links.length, 1))) // fainter when there are many, so a big repo does not wash out
     const linkAttrs = { position: new Float32Array(count * 3), aColor: new Float32Array(count * 3), aT: new Float32Array(count), aStart: new Float32Array(count), aGlow: new Float32Array(count), aFlow: new Float32Array(count), aHot: new Float32Array(count * 3) }
     const curves = []
     const linksOf = nodes.map(() => [])
@@ -294,8 +295,8 @@ export const createMap = ({ canvas, tip }) => {
       linksOf[b].push(l)
       const points = curvePoints(nodes[a], nodes[b], STEPS)
       curves.push(points)
-      const ca = starColor(layout.clouds[nodes[a].cloud]).multiplyScalar(0.11)
-      const cb = starColor(layout.clouds[nodes[b].cloud]).multiplyScalar(0.11)
+      const ca = starColor(layout.clouds[nodes[a].cloud]).multiplyScalar(linkLight)
+      const cb = starColor(layout.clouds[nodes[b].cloud]).multiplyScalar(linkLight)
       const start = (Math.max(born.get(nodes[a].path), born.get(nodes[b].path)) - origin) / 1000
       let v = l * STEPS * 2
       for (let i = 1; i <= STEPS; i++) {
@@ -322,7 +323,7 @@ export const createMap = ({ canvas, tip }) => {
       fragmentShader: `uniform float uTime; uniform float uMove; varying vec3 vC; varying vec3 vH; varying float vT; varying float vG; varying float vF; varying float vIn;
         void main() { float along = vF < 0.0 ? 1.0 - vT : vT;
           float wave = pow(0.5 + 0.5 * sin((along * 3.0 - uTime * 1.6 * uMove) * 6.2832), 6.0);
-          gl_FragColor = vec4((vC + vH * vG * (0.35 + 1.4 * wave)) * vIn, 1.0); }`,
+          gl_FragColor = vec4((vC + vH * vG * (0.7 + 2.4 * wave)) * vIn, 1.0); }`,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
@@ -449,8 +450,8 @@ export const createMap = ({ canvas, tip }) => {
         const level = busy(touch, now, i === latest)
         if (level > 0) {
           const beat = calm ? 0.5 : 0.5 + 0.5 * Math.sin(((now - touch.at) / 1000 / PULSE_S) * Math.PI * 2)
-          size *= 1 + level * (0.5 + 0.6 * beat)
-          glow = Math.max(glow, 0.5 + level * (0.6 + 0.6 * beat))
+          size *= 1 + level * (0.8 + 0.9 * beat)
+          glow = Math.max(glow, 0.7 + level * (0.9 + 0.9 * beat))
           beating.push({ i, level, at: touch.at, color: halo })
           for (const l of linksOf[i]) {
             const was = hot.get(l)
@@ -501,7 +502,7 @@ export const createMap = ({ canvas, tip }) => {
           if (h.flow < 0) along = 1 - along
           const p = points[Math.round(along * STEPS)]
           s.position.set([p.x, p.y, p.z], slot * 3)
-          s.aSize[slot] = 0.35 * h.glow * Math.sin(Math.PI * along) + 0.05
+          s.aSize[slot] = 0.6 * h.glow * Math.sin(Math.PI * along) + 0.08
           s.aGlow[slot] = h.glow
           s.aColor.set([h.color.r, h.color.g, h.color.b], slot * 3)
           s.aHalo.set([h.color.r, h.color.g, h.color.b], slot * 3)
@@ -518,8 +519,8 @@ export const createMap = ({ canvas, tip }) => {
       const n = nodes[b.i]
       const phase = calm ? 0.5 : (((now - b.at) / 1000) % PULSE_S) / PULSE_S
       r.position.set([n.x, n.y, n.z], k * 3)
-      r.aSize[k] = sizes[b.i] * (1.2 + phase * 4)
-      r.aGlow[k] = b.level * (1 - phase) * 1.2
+      r.aSize[k] = sizes[b.i] * (1.5 + phase * 6)
+      r.aGlow[k] = b.level * (1 - phase) * 1.8
       r.aHalo.set([b.color.r, b.color.g, b.color.b], k * 3)
     })
     rings.changed('position', 'aSize', 'aGlow', 'aHalo')
