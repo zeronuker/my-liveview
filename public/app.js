@@ -17,7 +17,7 @@ const SPEEDS = [
   { name: 'instant', mult: 0 },
 ]
 const THEMES = ['dark', 'light', 'midnight', 'terminal', 'contrast']
-const MAP_MODES = ['city', 'sphere', 'planet', 'globe']
+const MAP_MODES = ['nebula', 'city']
 const STATES = { writing: 'writing', edited: 'edited', failed: 'NOT APPLIED', paused: 'paused', idle: 'idle' }
 const STATUS_MARK = { running: '...', done: 'ok', failed: 'failed' }
 const FEED_MAX = 100
@@ -59,7 +59,7 @@ const prefs = {
   awake: store.get('awake', false) === true,
   office: store.get('office', false) === true,
   map: store.get('map', false) === true, // with office on: the Map in place of the Office
-  mapMode: pick(store.get('mapMode', 'sphere'), v => MAP_MODES.includes(v), 'sphere'),
+  mapMode: pick(store.get('mapMode', 'nebula'), v => MAP_MODES.includes(v), 'nebula'),
   sound: store.get('sound', false) === true,
   angled: store.get('angled', false) === true, // the Office from an angle
   rotation: pick(store.get('rotation', 0), v => Number.isInteger(v) && v >= 0 && v <= 3, 0), // and turned this many quarter turns
