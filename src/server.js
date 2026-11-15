@@ -8,7 +8,7 @@ import { applyEdit, makeRows } from './diff.js'
 import { gitKind, summarize, titleOf } from './summary.js'
 import { readStatuses } from './sessions.js'
 import { readAppTitle } from './titles.js'
-import { scanTree } from './tree-scan.js'
+import { isRepo, listRepos, scanTree } from './tree-scan.js'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.PORT) || 4747
@@ -244,13 +244,16 @@ const server = http.createServer((req, res) => {
   }
 
   if (req.method === 'GET' && pathname === '/tree') {
-    // the files and their lengths in a chat's folder, for the Map; only folders a hook has named
+    // the files, their lengths and imports in a folder, for the Map; only a folder a hook has named, or a git repo
     const cwd = url.searchParams.get('cwd')
-    if (!cwd || !seenCwds.has(cwd)) {
-      res.writeHead(404).end()
-      return
-    }
-    scanTree(cwd).then(tree => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(tree)))
+    const json = data => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(data))
+    Promise.resolve(Boolean(cwd) && (seenCwds.has(cwd) || isRepo(cwd))).then(ok => (ok ? scanTree(cwd).then(json) : res.writeHead(404).end()))
+    return
+  }
+
+  if (req.method === 'GET' && pathname === '/repos') {
+    // the git repos in a folder, for the Map's list: their names and paths only
+    listRepos(url.searchParams.get('dir')).then(repos => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(repos)))
     return
   }
 

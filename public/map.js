@@ -56,6 +56,7 @@ export const createMap = ({ canvas, tip }) => {
   const born = new Map() // path -> when its star starts to fade in
   const trails = []
   const lastPath = new Map() // folder -> the file touched last there, where the next comet starts
+  const resting = new Set() // folders whose chat has finished its turn: the last file there stops beating
   const touchedBy = new Map() // folder -> Map(path -> { kind, at })
   const touchesOf = folder => touchedBy.get(folder) ?? touchedBy.set(folder, new Map()).get(folder)
   const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -432,7 +433,7 @@ export const createMap = ({ canvas, tip }) => {
     linkMaterial.uniforms.uTime.value = time
     if (!calm) for (const c of clouds) c.sprite.material.rotation += c.spin * 16
     const touches = touchesOf(shownCwd)
-    const latest = index.get(lastPath.get(shownCwd))
+    const latest = resting.has(shownCwd) ? undefined : index.get(lastPath.get(shownCwd))
     const tint = (scratch ??= new THREE.Color())
     const { attrs } = stars
     const hot = new Map() // link -> { glow, flow, color }
@@ -650,8 +651,10 @@ export const createMap = ({ canvas, tip }) => {
   // every tool event is noted, shown or not; a file the map does not have yet brings a fresh reading of the repo,
   // and in the nebula a file touched just now is flown to by a comet from the one before
   const feed = event => {
+    if (event.type === 'turn-end' || event.type === 'turn-fail' || (event.type === 'life' && event.what === 'end')) resting.add(event.cwd)
     const touch = touchOf(event, event.cwd)
     if (!touch) return
+    resting.delete(event.cwd)
     const touches = touchesOf(event.cwd)
     const known = event.cwd !== shownCwd || index.has(touch.path)
     let kind = touch.kind === 'edit' && !known ? 'new' : touch.kind

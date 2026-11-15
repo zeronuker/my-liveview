@@ -381,3 +381,21 @@ test('/tree answers only for a folder a hook has named, with its files and their
       fs.rmSync(dir, { recursive: true, force: true })
     }
   }))
+
+test('/repos lists the git repos in a folder, and /tree then answers for them without a hook', () =>
+  withServer(async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lv-repos-'))
+    try {
+      fs.mkdirSync(path.join(dir, 'app', '.git'), { recursive: true })
+      fs.mkdirSync(path.join(dir, 'plain'))
+      fs.writeFileSync(path.join(dir, 'app', 'a.js'), 'x\n')
+      fs.writeFileSync(path.join(dir, 'plain', 'b.js'), 'x\n')
+      const repos = await (await fetch(`${base}/repos?dir=${encodeURIComponent(dir)}`)).json()
+      assert.deepEqual(repos, [{ name: 'app', path: path.join(dir, 'app') }])
+      const tree = cwd => fetch(`${base}/tree?cwd=${encodeURIComponent(cwd)}`)
+      assert.deepEqual(await (await tree(path.join(dir, 'app'))).json(), [{ path: 'a.js', lines: 1 }])
+      assert.equal((await tree(path.join(dir, 'plain'))).status, 404) // not a repo, and no hook named it
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }))

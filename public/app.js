@@ -64,6 +64,7 @@ const prefs = {
   angled: store.get('angled', false) === true, // the Office from an angle
   rotation: pick(store.get('rotation', 0), v => Number.isInteger(v) && v >= 0 && v <= 3, 0), // and turned this many quarter turns
   folded: store.get('folded', false) === true,
+  reposDir: pick(store.get('reposDir', ''), v => typeof v === 'string', ''), // the folder that holds the person's repos (the Map's list)
 }
 if (pinned) {
   const { name, ...choices } = pinned
@@ -144,7 +145,45 @@ const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[
 
 const map = createMap({ canvas: $('map-canvas'), tip: $('map-tip') })
 // the Map shows the repo of the chat picked, else of the chat that was active last
-const mapCwd = () => chats.get(selected)?.cwd ?? [...chats.values()].sort((a, b) => b.lastAt - a.lastAt)[0]?.cwd ?? ''
+// the Map shows a repo picked under Repos, else the chosen chat's folder, else the latest chat's
+let pickedRepo = ''
+const latestCwd = () => [...chats.values()].sort((a, b) => b.lastAt - a.lastAt)[0]?.cwd ?? ''
+const mapCwd = () => pickedRepo || (chats.get(selected)?.cwd ?? latestCwd())
+
+// the Map's list of repos: the git repos in the folder set in Settings, else in the folder that holds the latest chat's repo
+let repos = []
+let reposFrom = null
+const parentOf = dir => dir.replace(/[\\/]+$/, '').replace(/[\\/][^\\/]*$/, '')
+const loadRepos = () => {
+  const dir = prefs.reposDir.trim() || parentOf(latestCwd())
+  if (dir === reposFrom) return
+  reposFrom = dir
+  if (!dir) return void (repos = [])
+  fetch(`/repos?dir=${encodeURIComponent(dir)}`)
+    .then(res => (res.ok ? res.json() : []))
+    .catch(() => [])
+    .then(list => {
+      if (dir !== reposFrom) return
+      repos = list
+      scheduleLists()
+    })
+}
+const repoList = () => {
+  const shown = mapCwd()
+  return repos.map(repo =>
+    node({
+      key: `r:${repo.path}`,
+      iconName: 'folder',
+      label: repo.name,
+      title: repo.path,
+      isSelected: repo.path === shown,
+      onPress: () => {
+        pickedRepo = repo.path
+        scheduleLists()
+      },
+    }),
+  )
+}
 
 // the recording is a download, named after the day and time
 const download = (blob, name) => {
@@ -397,6 +436,7 @@ const select = sessionId => {
 // the person picks a chat in the list: it is selected, and in the Office its
 // workers stand out (a chat that is followed automatically does not dim the others)
 const pickChat = sessionId => {
+  pickedRepo = '' // a chat picked: the Map shows its repo again
   select(sessionId)
   office.setSelected(sessionId)
 }
@@ -618,8 +658,14 @@ setInterval(renderElapsed, 1000)
 
 const renderLists = () => {
   isListsDue = false
+  loadRepos()
   map.setRepo(mapCwd())
+  $('map-empty').hidden = Boolean(mapCwd())
+  $('map-empty').textContent = repos.length
+    ? 'Pick a repo under Repos on the left, or start a Claude chat, to see it here.'
+    : 'Start a Claude chat, or set your repos folder in Settings, to see a repo here.'
   $('chat-list').replaceChildren(chatTree())
+  $('repo-list').replaceChildren(...repoList())
 
   $('feed-list').replaceChildren(
     ...feed
@@ -793,6 +839,12 @@ $('b-folded').onclick = () => {
   $('feed').classList.toggle('shut', prefs.folded)
 }
 $('feed').classList.toggle('shut', prefs.folded)
+// the Map's repos folder: read again when the person stops typing (on change)
+$('repos-dir').value = prefs.reposDir
+$('repos-dir').onchange = () => {
+  save('reposDir', $('repos-dir').value.trim())
+  scheduleLists()
+}
 // the settings panel: the gear opens it, and a click anywhere else, or Escape, closes it
 const setSettings = on => {
   $('settings').hidden = !on

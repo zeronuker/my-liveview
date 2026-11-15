@@ -86,6 +86,10 @@
           </span>
         </div>
         <div class="srow"><span>Keep the screen on</span><button id="b-awake" type="button" aria-pressed="false" title="Keep the screen on while this window is visible">Stay awake</button></div>
+        <div id="set-map">
+          <h3>Map</h3>
+          <div class="srow"><span>Repos folder</span><input id="repos-dir" type="text" spellcheck="false" placeholder="The folder Claude last worked in" title="The folder that holds your repos, e.g. C:\Users\you\code. Empty: the folder that holds the repo Claude last worked in."></div>
+        </div>
         <div id="set-office">
           <h3>Office</h3>
           <div class="srow"><span>Sounds</span><button id="b-sound" type="button" aria-pressed="false" title="Sounds in the Office: off until you turn them on">Sound</button></div>
@@ -97,6 +101,10 @@
       <nav id="files" aria-label="Chats and the files each touched">
         <h2>Chats</h2>
         <ul id="chat-list"></ul>
+        <section id="repos" aria-label="Repos to show on the Map">
+          <h2>Repos</h2>
+          <ul id="repo-list"></ul>
+        </section>
       </nav>
       <div class="resizer" id="rz-nav"></div>
       <section id="panes" aria-label="Files being written">
@@ -106,6 +114,7 @@
         <canvas id="office-canvas"></canvas>
         <canvas id="map-canvas"></canvas>
         <div id="map-tip" hidden></div>
+        <p id="map-empty" hidden></p>
         <span id="map-modes" class="group" role="group" aria-label="Map style">
           <button id="m-nebula" type="button" title="Every file a star, linked to the files it imports, each folder a coloured cloud">Nebula</button>
           <button id="m-city" type="button" title="Files as buildings in a city">City</button>

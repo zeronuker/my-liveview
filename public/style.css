@@ -585,6 +585,8 @@ body.map #z-out { display: none; }
   white-space: nowrap;
 }
 #map-tip[hidden] { display: none; }
+#map-empty { display: none; position: absolute; top: 45%; left: 0; right: 0; margin: 0 auto; max-width: 420px; padding: 0 16px; text-align: center; color: #aab4dc; font-size: 14px; line-height: 1.5; }
+body.map #map-empty:not([hidden]) { display: block; }
 #map-modes { display: none; position: absolute; top: 12px; left: 12px; }
 body.map #map-modes { display: inline-flex; }
 #map-modes button[aria-pressed='true'] { background: var(--accent, #3b6fd4); color: #fff; }
@@ -1330,6 +1332,32 @@ body.angled #zoom .turn { display: block; }
 }
 
 body.office #set-file,
-body:not(.office) #set-office {
+body:not(.office) #set-office,
+body:not(.map) #set-map {
   display: none;
+}
+
+#repos-dir {
+  flex: 1;
+  min-width: 0;
+  max-width: 240px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+
+#repos {
+  display: none;
+}
+
+body.map nav #repos {
+  display: block;
+  flex: none;
+  max-height: 30%;
+  margin-top: 8px;
+  border-top: 1px solid var(--line);
+  overflow: auto;
 }

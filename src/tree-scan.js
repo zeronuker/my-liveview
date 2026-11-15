@@ -46,3 +46,18 @@ export const scanTree = async root => {
   for (const f of out) if (imports.has(f.path)) f.imports = imports.get(f.path)
   return out
 }
+
+// a git repo: a folder with .git in it (a folder, or a file in a worktree)
+export const isRepo = async dir => Boolean(dir) && path.isAbsolute(dir) && (await fs.stat(path.join(dir, '.git')).catch(() => null)) !== null
+
+// the git repos directly inside `dir`, by name: [{ name, path }]; [] if it cannot be read
+export const listRepos = async dir => {
+  if (!dir || !path.isAbsolute(dir)) return []
+  const entries = await fs.readdir(dir, { withFileTypes: true }).catch(() => [])
+  const out = []
+  for (const entry of entries) {
+    const full = path.join(dir, entry.name)
+    if (entry.isDirectory() && !entry.name.startsWith('.') && (await isRepo(full))) out.push({ name: entry.name, path: full })
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name))
+}

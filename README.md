@@ -44,13 +44,15 @@ What the Office does for each kind of event, and what is built, is listed in `do
 
 Press **Map** in the toolbar (Code, Office and Map are the three views). The chat's repo becomes a 3D picture, lit by what Claude does: files it reads light up blue, files it edits amber, and a file it creates green. They glow bright and then settle to a dim tint, so you can see everywhere Claude has been. The chat you pick in the left list sets the repo shown (else the chat that was active last).
 
+- **Any repo, no chat needed:** in the Map the left side also lists **Repos**: the git repos in your repos folder. Set the folder in Settings (Map, Repos folder); left empty, it is the folder that holds the repo Claude last worked in. Click a repo to see it; click a chat to go back to that chat's repo. With nothing to show yet, the Map says how to get started.
+
 - **Two styles:** the buttons at the top left of the Map switch between them, and the choice is remembered.
   - **Nebula:** every real file is a star, and a file that imports another is linked to it (JS/TS, CSS, HTML, Python, Kotlin and Java imports). Each folder is a softly glowing cloud in its own colour, with faint dust (more for a bigger folder) and far stars behind; the clouds and links are fainter when there are many. The biggest folders are named, with the parent folder added when two share a name. Stars with more links are bigger, and related files pull together (a force layout, like [Graphify](https://github.com/Graphify-Labs/graphify)). There are no folder or stand-in nodes.
   - **City:** each folder a district with its name over it, each file a building, taller the more lines it has.
-- **In the Nebula** a file Claude is working on beats like a heart, sending rings out, and light runs along its links. When Claude moves from one file to the next a comet flies between them. Stars twinkle, the clouds turn slowly, and the camera turns by itself (none of this if your system asks for less motion).
+- **In the Nebula** a file Claude is working on beats like a heart, sending rings out, and light runs along its links. The last file touched keeps a gentle beat until the chat finishes its turn. When Claude moves from one file to the next a comet flies between them. Stars twinkle, the clouds turn slowly, and the camera turns by itself (none of this if your system asks for less motion).
 - **Move around:** drag to turn, right-drag to pan, wheel to zoom, click a star to glide up to it, **Fit** (or a double-click) to glide back to the whole picture. Point at a star or building to see its path and length; a star also lights its links.
 - **Big repos:** the Nebula shows every file. In the City, past 5000 files the shortest ones are merged, one grey block per folder.
-- **Read-only:** the server reads the repo's file list and import lines for the Map, only for a folder a Claude hook has named, and skips `.git`, `node_modules` and build folders. The 3D drawing uses [three.js](https://threejs.org) (MIT), kept in `public/vendor/` so it works offline.
+- **Read-only:** the server reads the repo's file list and import lines for the Map, only for a folder a Claude hook has named or a git repo, and skips `.git`, `node_modules` and build folders. The 3D drawing uses [three.js](https://threejs.org) (MIT), kept in `public/vendor/` so it works offline.
 - **Not yet:** replaying a past session on the map, and searches (Grep and Glob) lighting up folders.
 
 ## Try it without Claude
