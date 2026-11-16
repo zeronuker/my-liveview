@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { ROAD, ageLight, cityArc, foldFiles, layoutCity, roadLines } from '../public/city.js'
+import { ROAD, ageLight, buildingHeight, buildingPieces, cityArc, foldFiles, layoutCity, roadLines, treeSpots } from '../public/city.js'
 
 const FILES = [
   { path: 'README.md', lines: 40 },
@@ -40,7 +40,7 @@ test('layoutCity: the same files always make the same city, in any order', () =>
 })
 
 test('layoutCity: no files is an empty city', () => {
-  assert.deepEqual(layoutCity([]), { width: 0, depth: 0, dirs: [], files: [] })
+  assert.deepEqual(layoutCity([]), { width: 0, depth: 0, districts: [], dirs: [], files: [], roads: [] })
 })
 
 test('foldFiles: past the limit the shortest files merge into one block per folder', () => {
@@ -56,23 +56,73 @@ test('layoutCity: folded blocks are laid out like files and say how many they ho
   assert.equal(city.files.filter(f => f.folded).length, 3)
 })
 
-test('layoutCity: top folders have roads round them, wider than the gaps inside', () => {
+test('layoutCity: each top folder is a district of its own shape, apart from the others with room for roads', () => {
   const city = layoutCity(MANY)
-  const top = city.dirs.find(d => d.path === 'd0')
-  const inner = city.files.filter(f => f.path.startsWith('d0/'))
-  const left = Math.min(...inner.map(f => f.x)) - top.x
-  assert.ok(left >= ROAD - 1e-6, `${left}`)
+  assert.deepEqual(city.districts.map(d => d.path).sort(), ['d0', 'd1', 'd2', 'd3'])
+  const aspects = city.districts.map(d => (d.w / d.d).toFixed(2))
+  assert.ok(new Set(aspects).size > 1, 'not all the same shape')
+  for (const [i, a] of city.districts.entries()) {
+    for (const b of city.districts.slice(i + 1)) {
+      const gapX = Math.max(b.x - (a.x + a.w), a.x - (b.x + b.w))
+      const gapZ = Math.max(b.z - (a.z + a.d), a.z - (b.z + b.d))
+      assert.ok(Math.max(gapX, gapZ) >= 2 * ROAD, `${a.path} ${b.path}`)
+    }
+  }
+  for (const f of city.files) {
+    const own = city.districts.find(d => d.path === f.path.split('/')[0])
+    assert.ok(f.x >= own.x && f.z >= own.z && f.x + f.w <= own.x + own.w + 1e-6 && f.z + f.d <= own.z + own.d + 1e-6, f.path)
+  }
 })
 
-test('roadLines: the edges of the city and of each top folder, each stretch once', () => {
+test('layoutCity: the files at the top make a district of their own', () => {
+  const city = layoutCity(FILES)
+  const top = city.districts.find(d => d.path === '')
+  const readme = city.files.find(f => f.path === 'README.md')
+  assert.ok(top && readme.x >= top.x && readme.x + readme.w <= top.x + top.w + 1e-6)
+})
+
+test('layoutCity: main roads join every district, one fewer than there are districts', () => {
+  const city = layoutCity(MANY)
+  assert.equal(city.roads.length, city.districts.length - 1)
+  for (const road of city.roads) assert.ok(road.length > 2 && road.every(p => Number.isFinite(p.x) && Number.isFinite(p.z)))
+})
+
+test('roadLines: a ring road round each district, outside it', () => {
   const city = layoutCity(FILES)
   const lines = roadLines(city)
-  const keys = lines.map(l => l.map(v => v.toFixed(3)).join(' '))
-  assert.equal(new Set(keys).size, keys.length)
-  assert.ok(lines.some(([x1, z1, x2, z2]) => x1 === 0 && z1 === 0 && x2 === city.width && z2 === 0)) // the city's own edge
-  const src = city.dirs.find(d => d.path === 'src')
-  assert.ok(lines.some(([x1, z1, , z2]) => Math.abs(x1 - src.x) < 1e-9 && Math.abs(z1 - src.z) < 1e-9 && Math.abs(z2 - (src.z + src.d)) < 1e-9))
-  assert.equal(lines.some(([x1, z1]) => city.dirs.some(d => d.path === 'src/deep' && x1 === d.x && z1 === d.z)), false) // no road round an inner folder
+  assert.equal(lines.length, city.districts.length * 4)
+  const src = city.districts.find(d => d.path === 'src')
+  assert.ok(lines.some(([x1, z1]) => Math.abs(x1 - (src.x - ROAD / 2)) < 1e-9 && Math.abs(z1 - (src.z - ROAD / 2)) < 1e-9))
+})
+
+test('treeSpots: trees stand on open ground near the city, never on a district', () => {
+  const city = layoutCity(MANY)
+  const trees = treeSpots(city)
+  assert.ok(trees.length > 10)
+  for (const t of trees) for (const d of city.districts) assert.ok(!(t.x > d.x - ROAD && t.x < d.x + d.w + ROAD && t.z > d.z - ROAD && t.z < d.z + d.d + ROAD), `${t.x},${t.z} on ${d.path}`)
+  assert.deepEqual(treeSpots(city), trees)
+})
+
+test('buildingHeight: a much wider range, from a low house to a tower, and no taller past 3000 lines', () => {
+  assert.ok(buildingHeight(10) < 2)
+  assert.ok(buildingHeight(1000) > 10)
+  assert.ok(buildingHeight(1000) / buildingHeight(10) > 6)
+  assert.equal(buildingHeight(3000), buildingHeight(50000))
+})
+
+test('buildingPieces: a small file is one box; a big one steps in as it rises, and the biggest carry a spire', () => {
+  const lot = { x: 0, z: 0, w: 4, d: 4 }
+  assert.equal(buildingPieces(lot, 100, 0.5).length, 1)
+  assert.equal(buildingPieces(lot, 600, 0.5).length, 2)
+  const tower = buildingPieces(lot, 2500, 0.5)
+  assert.equal(tower.length, 4)
+  for (let i = 1; i < 3; i++) {
+    assert.ok(tower[i].w < tower[i - 1].w && tower[i].y0 === tower[i - 1].y1)
+    assert.ok(tower[i].x >= lot.x && tower[i].x + tower[i].w <= lot.x + lot.w)
+  }
+  assert.equal(tower[2].y1, buildingHeight(2500))
+  assert.ok(tower[3].y1 > tower[2].y1)
+  assert.equal(buildingPieces({ x: 0, z: 0, w: 0.8, d: 3 }, 2500, 0.5).length, 1) // too thin to step
 })
 
 test('cityArc: from rooftop to rooftop, rising higher for buildings further apart', () => {
@@ -102,4 +152,17 @@ test('layoutCity: past 3000 lines a file gets no more ground', () => {
   }
   const ratio = lines => area(lines) / layoutCity([{ path: 'a/big.js', lines }, { path: 'a/small.js', lines: 100 }]).files.find(f => f.path === 'a/small.js').w
   assert.ok(Math.abs(ratio(3000) - ratio(60000)) < 1e-6)
+})
+
+test('layoutCity: a folder holding most of the repo is split into districts of its own folders', () => {
+  const files = [
+    ...Array.from({ length: 60 }, (_, i) => ({ path: `app/src/main/${['ui', 'data', 'edit'][i % 3]}/f${i}.kt`, lines: 100 })),
+    { path: 'app/src/main/App.kt', lines: 50 },
+    { path: 'README.md', lines: 20 },
+  ]
+  const city = layoutCity(files)
+  assert.deepEqual(city.districts.map(d => d.path).sort(), ['', 'app/src/main', 'app/src/main/data', 'app/src/main/edit', 'app/src/main/ui'])
+  const app = city.districts.find(d => d.path === 'app/src/main')
+  const lot = city.files.find(f => f.path === 'app/src/main/App.kt')
+  assert.ok(lot.x >= app.x && lot.x + lot.w <= app.x + app.w + 1e-6)
 })

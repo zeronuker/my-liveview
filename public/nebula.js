@@ -10,16 +10,12 @@
 // importLinks(files, at) is the links alone, for the City too.
 // curvePoints(a, b, steps) is the gentle arc a link is drawn along.
 
+import { hash } from './city.js'
+
 const SPACE = 6 // about the gap between neighbouring stars, in world units
 const GOLDEN = Math.PI * (3 - Math.sqrt(5))
 const HUES = [0.58, 0.78, 0.9, 0.5, 0.68, 0.98, 0.62, 0.84, 0.45, 0.73] // blues, violets, pinks, teals
 
-// a steady pseudo-random number for a string, 0..1, so the same repo always looks the same
-const hash = text => {
-  let h = 2166136261
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619)
-  return ((h >>> 0) % 100000) / 100000
-}
 
 // the import links among some files: [[a, b], ...] as numbered by `at` (Map path -> number), each pair once
 export const importLinks = (files, at) => {
