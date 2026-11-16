@@ -225,6 +225,8 @@ const files = {
   '/iso-scene.js': ['iso-scene.js', 'text/javascript; charset=utf-8'],
   '/sound.js': ['sound.js', 'text/javascript; charset=utf-8'],
   '/style.css': ['style.css', 'text/css; charset=utf-8'],
+  '/oxygen.css': ['oxygen.css', 'text/css; charset=utf-8'],
+  '/oxygen.js': ['oxygen.js', 'text/javascript; charset=utf-8'],
 }
 
 const server = http.createServer((req, res) => {
