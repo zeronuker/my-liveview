@@ -1,18 +1,24 @@
-/* Themes: one block of colors each. Midnight is the default. */
+/* Themes: Dark (the default), Light and Contrast. Each is a block of colours; the rest of the file only uses these. */
 :root,
-:root[data-theme='midnight'] {
-  --bg: #0f1226;
-  --panel: #161a35;
-  --fg: #e0e4ff;
-  --dim: #8087b8;
-  --line: #2a3060;
+:root[data-theme='dark'] {
+  --bg: #0b0e14;
+  --panel: #0f131b;
+  --view: #0d1118;
+  --well: rgba(255, 255, 255, 0.05);
+  --glass: rgba(20, 24, 34, 0.74);
+  --sheet: #121620;
+  --fg: #e7eaf2;
+  --dim: #97a0b5;
+  --line: rgba(255, 255, 255, 0.08);
+  --acc: #8b9bff;
+  --accsoft: rgba(139, 155, 255, 0.2);
+  --shadow: 0 14px 44px rgba(0, 0, 0, 0.45);
   --abg: #0f3a26;
   --afg: #4ade80;
   --dbg: #4a1a24;
   --dfg: #f87171;
   --nbg: #4a3a12;
   --nfg: #fcd34d;
-  --acc: #818cf8;
   --kw: #a78bfa;
   --str: #67e8f9;
   --num: #fcd34d;
@@ -21,40 +27,25 @@
   --fn: #60a5fa;
 }
 
-:root[data-theme='dark'] {
-  --bg: #1a1a1a;
-  --panel: #232323;
-  --fg: #e6e6e6;
-  --dim: #8a8a8a;
-  --line: #383838;
-  --abg: #12361a;
-  --afg: #4ade80;
-  --dbg: #401414;
-  --dfg: #f87171;
-  --nbg: #4d4300;
-  --nfg: #facc15;
-  --acc: #60a5fa;
-  --kw: #c084fc;
-  --str: #86efac;
-  --num: #fbbf24;
-  --com: #6b7280;
-  --key: #7dd3fc;
-  --fn: #60a5fa;
-}
-
 :root[data-theme='light'] {
-  --bg: #ffffff;
-  --panel: #f4f4f5;
-  --fg: #1f2328;
-  --dim: #6b7280;
-  --line: #e0e0e4;
+  --bg: #f5f6f9;
+  --panel: #ffffff;
+  --view: #ffffff;
+  --well: rgba(15, 20, 40, 0.05);
+  --glass: rgba(255, 255, 255, 0.82);
+  --sheet: #ffffff;
+  --fg: #141826;
+  --dim: #5d6579;
+  --line: rgba(15, 20, 40, 0.11);
+  --acc: #4f5fe0;
+  --accsoft: rgba(79, 95, 224, 0.13);
+  --shadow: 0 14px 40px rgba(20, 24, 40, 0.16);
   --abg: #dcfce7;
   --afg: #166534;
   --dbg: #fee2e2;
   --dfg: #991b1b;
   --nbg: #fef9c3;
   --nfg: #854d0e;
-  --acc: #2563eb;
   --kw: #7c3aed;
   --str: #15803d;
   --num: #b45309;
@@ -63,41 +54,26 @@
   --fn: #1d4ed8;
 }
 
-:root[data-theme='terminal'] {
-  --bg: #000000;
-  --panel: #06100a;
-  --fg: #b7f7c6;
-  --dim: #4d8a5e;
-  --line: #0f3d1f;
-  --abg: #003d12;
-  --afg: #39ff7a;
-  --dbg: #3d0000;
-  --dfg: #ff5f5f;
-  --nbg: #3d3300;
-  --nfg: #ffd866;
-  --acc: #39ff7a;
-  --kw: #39ff7a;
-  --str: #9dff9d;
-  --num: #ffd866;
-  --com: #3f7a52;
-  --key: #7dffa8;
-  --fn: #6ee7ff;
-}
-
-/* blue and orange instead of green and red, for colorblind eyes */
+/* blue and orange instead of green and red, for colourblind eyes; solid panels, strong edges */
 :root[data-theme='contrast'] {
   --bg: #000000;
-  --panel: #0a0a0a;
+  --panel: #000000;
+  --view: #000000;
+  --well: #161616;
+  --glass: #0a0a0a;
+  --sheet: #000000;
   --fg: #ffffff;
-  --dim: #c8c8c8;
+  --dim: #d6d6d6;
   --line: #ffffff;
+  --acc: #ffd400;
+  --accsoft: rgba(255, 212, 0, 0.28);
+  --shadow: none;
   --abg: #003a7a;
   --afg: #8ec5ff;
   --dbg: #7a3300;
   --dfg: #ffb066;
   --nbg: #4d4300;
   --nfg: #ffd400;
-  --acc: #ffd400;
   --kw: #ffd400;
   --str: #8ec5ff;
   --num: #ffb066;
@@ -121,8 +97,16 @@ body {
   flex-direction: column;
   background: var(--bg);
   color: var(--fg);
-  font: 14px/1.5 system-ui, sans-serif;
+  font: 14px/1.5 Inter, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
   transition: background-color 0.25s, color 0.25s;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
 }
 
 .dim {
@@ -137,35 +121,196 @@ body {
   color: var(--dfg);
 }
 
-/* stats bar */
-#top {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 18px;
-  align-items: center;
-  padding: 9px 16px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--line);
-  box-shadow: 0 1px 14px -8px var(--acc);
-  font-size: 13px;
+svg {
+  flex: none;
 }
 
-.state {
+/* buttons: plain, icon-only, segmented. Every one is at least 40px, most 44px, so they suit a finger too */
+.btn,
+.icon-btn,
+.round-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 44px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: var(--fg);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.btn {
+  padding: 0 14px;
+}
+
+.icon-btn {
+  width: 44px;
+}
+
+.icon-btn.txt {
+  font-weight: 600;
+}
+
+.btn svg,
+.icon-btn svg,
+.round-btn svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.btn:hover,
+.icon-btn:hover {
+  background: var(--well);
+}
+
+.btn[aria-pressed='true'],
+.icon-btn[aria-pressed='true'] {
+  background: var(--accsoft);
+}
+
+.btn:disabled,
+.icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  background: transparent;
+}
+
+:is(.btn, .icon-btn, .round-btn, .seg button, .stab, .switch, nav button, .menu a):focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+}
+
+.seg {
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+  border-radius: 12px;
+  background: var(--well);
+}
+
+.seg button {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--dim);
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.seg button:hover {
+  color: var(--fg);
+}
+
+.seg button[aria-pressed='true'] {
+  background: var(--accsoft);
+  color: var(--fg);
+}
+
+.seg.big button {
+  min-width: 88px;
+  min-height: 40px;
+}
+
+.glass {
+  background: var(--glass);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+
+/* the top bar: the chats button and the name, the views in the middle, status, Activity and Settings at the right */
+#top {
+  position: relative;
+  z-index: 30;
+  flex: none;
   display: flex;
   align-items: center;
+  gap: 10px;
+  height: 60px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.brand svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: var(--acc);
+  stroke-width: 2;
+}
+
+#top .center {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+#top .right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 16px;
+  background: var(--well);
+  color: var(--dim);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+#conn:empty {
+  display: none;
+}
+
+#conn::before {
+  content: '· ';
 }
 
 .dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 50%;
   background: var(--dim);
 }
 
 .dot[data-state='writing'] {
-  background: var(--num);
-  animation: pulse 1s ease-in-out infinite;
+  background: var(--afg);
+  animation: pulse 1.2s ease-in-out infinite;
 }
 
 .dot[data-state='edited'] {
@@ -176,173 +321,770 @@ body {
   background: var(--dfg);
 }
 
-#conn {
-  margin-left: auto;
-  font-size: 12px;
+body.paused .dot {
+  background: var(--nfg);
 }
 
-/* controls */
-#toolbar {
+/* the menu that opens a view in a window of its own */
+.pop {
   position: relative;
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 260px;
+  padding: 6px;
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px 10px;
-  align-items: center;
-  padding: 7px 16px;
-  border-bottom: 1px solid var(--line);
+  flex-direction: column;
+}
+
+.menu[hidden] {
+  display: none;
+}
+
+.menu-title {
+  padding: 8px 10px 6px;
   font-size: 12px;
-}
-
-#toolbar button:not(.swatch) {
-  padding: 3px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: transparent;
-  color: var(--fg);
-  font: inherit;
-  cursor: pointer;
-}
-
-#toolbar button:not(.swatch):hover {
-  border-color: var(--dim);
-}
-
-#toolbar button:disabled {
-  opacity: 0.4;
-  cursor: default;
-}
-
-#toolbar button[aria-pressed='true']:not(.swatch) {
-  border-color: var(--acc);
-  background: color-mix(in srgb, var(--acc) 22%, transparent);
-}
-
-#toolbar button:focus-visible,
-nav button:focus-visible {
-  outline: 2px solid var(--acc);
-  outline-offset: 2px;
-}
-
-.group {
-  display: inline-flex;
-  gap: 4px;
-}
-
-#toolbar select {
-  padding: 3px 8px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: var(--panel);
-  color: var(--fg);
-  font: inherit;
-  cursor: pointer;
-}
-
-#toolbar select:focus-visible {
-  outline: 2px solid var(--acc);
-  outline-offset: 2px;
-}
-
-.speed {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
   color: var(--dim);
 }
 
-.speed input {
-  width: 80px;
-  accent-color: var(--acc);
-}
-
-.speed output {
-  min-width: 4.5em;
+.menu a {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 10px;
+  border-radius: 10px;
   color: var(--fg);
+  text-decoration: none;
 }
 
-.swatches {
-  display: inline-flex;
-  gap: 7px;
-  margin-left: auto;
+.menu a:hover {
+  background: var(--well);
 }
 
-.swatch {
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 2px solid var(--line);
-  border-radius: 50%;
-  background: linear-gradient(135deg, var(--sw1) 50%, var(--sw2) 50%);
-  cursor: pointer;
+.menu-row {
+  display: flex;
+  gap: 4px;
+  padding-left: 14px;
 }
 
-.swatch[aria-pressed='true'] {
-  border-color: var(--fg);
+.menu-row a {
+  flex: 1;
+  justify-content: center;
+  color: var(--dim);
 }
 
-.swatch[data-theme='dark'] {
-  --sw1: #1a1a1a;
-  --sw2: #4ade80;
-}
-
-.swatch[data-theme='light'] {
-  --sw1: #ffffff;
-  --sw2: #2563eb;
-}
-
-.swatch[data-theme='midnight'] {
-  --sw1: #0f1226;
-  --sw2: #818cf8;
-}
-
-.swatch[data-theme='terminal'] {
-  --sw1: #000000;
-  --sw2: #39ff7a;
-}
-
-.swatch[data-theme='contrast'] {
-  --sw1: #000000;
-  --sw2: #ffd400;
-}
-
-/* layout */
+/* the layout: the chats, the view, the activity drawer */
 .layout {
   flex: 1;
   display: flex;
   min-height: 0;
+  position: relative;
 }
 
 nav,
-aside {
-  flex: 0 0 var(--nav-w, 399px);
-  overflow: auto;
-  padding: 8px 0;
+#feed {
+  flex: 0 0 var(--nav-w, 290px);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
   background: var(--panel);
   transition: background-color 0.25s;
 }
 
 nav {
   border-right: 1px solid var(--line);
+  padding: 6px 0;
 }
 
-aside {
-  flex-basis: var(--aside-w, 300px);
+#feed {
+  flex-basis: var(--aside-w, 330px);
   border-left: 1px solid var(--line);
 }
 
-body.focus nav,
-body.focus aside {
+body:not(.nav-open) nav,
+body:not(.nav-open) #rz-nav,
+body:not(.feed-open) #feed,
+body:not(.feed-open) #rz-aside {
   display: none;
 }
 
 h2 {
   margin: 0;
-  padding: 4px 12px 8px;
+  padding: 12px 16px 8px;
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
   color: var(--dim);
+}
+
+#chat-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+#repos {
+  display: none;
+  flex: none;
+  max-height: 38%;
+  overflow: auto;
+  border-top: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+
+body.map #repos {
+  display: block;
+}
+
+#repo-list {
+  padding: 0 8px;
+}
+
+.empty {
+  padding: 4px 16px 10px;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+/* a chat's row: its name and how it is doing, then what it changed */
+.nrow.tall {
+  height: auto;
+  min-height: 56px;
+  align-items: center;
+}
+
+.nlabel .nbody {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nlabel .ntop {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.nmeta {
+  font-size: 12px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* the view in the middle, with its own controls floating over it */
+#stage {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  background: var(--view);
+}
+
+#dock {
+  position: absolute;
+  z-index: 10;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: max-content;
+  max-width: calc(100% - 24px);
+  padding: 6px;
+  border-radius: 18px;
+}
+
+.grp {
+  display: contents;
+}
+
+.sep {
+  flex: none;
+  width: 1px;
+  height: 28px;
+  margin: 0 4px;
+  background: var(--line);
+}
+
+/* each control shows only in the view it is for */
+body:not(.office) .only-office,
+body.map .only-office,
+body:not(.angled) .only-angled,
+body:not(.map) .only-map,
+body.map .only-play,
+body.office .only-code,
+body:not(.office) .only-picture,
+body:not(.city) .only-city {
+  display: none;
+}
+
+#b-pause .ic-play,
+#b-pause[aria-pressed='true'] .ic-pause,
+#b-full .ic-exit,
+body.full #b-full .ic-enter {
+  display: none;
+}
+
+#b-pause[aria-pressed='true'] .ic-play,
+body.full #b-full .ic-exit {
+  display: block;
+}
+
+.rec {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #e5484d;
+}
+
+#b-record[aria-pressed='true'] .rec {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+/* the panes keep room under them for the floating controls */
+#panes {
+  padding-bottom: 76px;
+}
+
+body.office #panes,
+body.office #rz-split {
+  display: none;
+}
+
+/* the Office and the Map: their canvases fill the view */
+#office {
+  display: none;
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+#office canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+body.office #office {
+  display: block;
+}
+
+#map-canvas {
+  display: none;
+}
+
+body.map #office-canvas {
+  display: none;
+}
+
+body.map #map-canvas {
+  display: block;
+}
+
+#map-tip {
+  position: absolute;
+  pointer-events: none;
+  padding: 4px 10px;
+  border-radius: 8px;
+  background: rgba(7, 11, 23, 0.92);
+  color: #dfe6ff;
+  font: 12px ui-monospace, Consolas, monospace;
+  white-space: nowrap;
+}
+
+#map-tip[hidden] {
+  display: none;
+}
+
+#map-empty {
+  display: none;
+  position: absolute;
+  top: 42%;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  max-width: 440px;
+  padding: 0 16px;
+  text-align: center;
+  color: #aab4dc;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+body.map #map-empty:not([hidden]) {
+  display: block;
+}
+
+/* a notice when a chat is waiting for you, and a worker's card */
+#banner {
+  position: absolute;
+  z-index: 10;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 20px;
+  background: rgba(250, 204, 21, 0.16);
+  border: 1px solid rgba(250, 204, 21, 0.45);
+  color: #fde68a;
+  font-size: 13px;
+  white-space: nowrap;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+}
+
+:root[data-theme='light'] #banner {
+  color: #7a5a00;
+}
+
+#banner::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #facc15;
+}
+
+#banner[hidden] {
+  display: none;
+}
+
+body:not(.office) #banner {
+  display: none;
+}
+
+#inspector {
+  position: absolute;
+  left: 16px;
+  top: 16px;
+  z-index: 2;
+  min-width: 200px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+
+#inspector[hidden] {
+  display: none;
+}
+
+#inspector .who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+}
+
+#inspector .swatch-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+#inspector .line {
+  color: var(--dim);
+  margin-top: 2px;
+}
+
+/* the City's layers, and the time-lapse bar, above the floating controls */
+.popover {
+  position: absolute;
+  z-index: 11;
+  left: 50%;
+  bottom: 92px;
+  transform: translateX(-50%);
+  width: min(420px, calc(100% - 24px));
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.popover[hidden],
+body:not(.map) .popover,
+body:not(.city) #map-show {
+  display: none;
+}
+
+.popover-title {
+  font-weight: 600;
+}
+
+.show-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.show-row .seg {
+  display: flex;
+}
+
+.show-row .seg button {
+  flex: 1;
+  min-height: 36px;
+  padding: 0 6px;
+}
+
+#replay {
+  position: absolute;
+  z-index: 11;
+  left: 50%;
+  bottom: 92px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: min(620px, calc(100% - 24px));
+  padding: 8px 10px;
+}
+
+#replay[hidden],
+body:not(.map) #replay {
+  display: none;
+}
+
+.round-btn {
+  width: 44px;
+  border-radius: 22px;
+  background: var(--acc);
+  color: #0b0e14;
+  font-size: 14px;
+}
+
+#replay input[type='range'] {
+  flex: 1;
+  min-width: 80px;
+  accent-color: var(--acc);
+}
+
+#r-date {
+  min-width: 100px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+#r-speed,
+#win-size {
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--well);
+}
+
+#r-speed option,
+#win-size option {
+  background: var(--sheet);
+  color: var(--fg);
+}
+
+/* the activity drawer */
+.drawer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 6px 0 2px;
+}
+
+#feed-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 8px 12px;
+}
+
+#feed-list li {
+  display: flex;
+  gap: 12px;
+  padding: 8px;
+  border-radius: 10px;
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+#feed-list li:hover {
+  background: var(--well);
+}
+
+#feed-list .tool {
+  flex: none;
+  min-width: 34px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border-radius: 7px;
+  background: var(--well);
+  color: var(--dim);
+  font: 11px ui-monospace, Consolas, monospace;
+}
+
+#feed-list .done .tool {
+  background: var(--abg);
+  color: var(--afg);
+}
+
+#feed-list .failed .tool {
+  background: var(--dbg);
+  color: var(--dfg);
+}
+
+#feed-list .what {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+#feed-list .who {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+/* Settings: a sheet in the middle, its tabs at the left */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(4, 6, 10, 0.55);
+}
+
+.overlay[hidden] {
+  display: none;
+}
+
+.sheet {
+  width: min(760px, 100%);
+  height: min(560px, 100%);
+  display: flex;
+  border-radius: 20px;
+  overflow: hidden;
+  background: var(--sheet);
+  border: 1px solid var(--line);
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.5);
+}
+
+.tabs {
+  width: 200px;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 10px;
+  border-right: 1px solid var(--line);
+}
+
+.sheet-title {
+  padding: 0 10px 12px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.stab {
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--dim);
+  font-weight: 500;
+  text-align: left;
+  cursor: pointer;
+}
+
+.stab[aria-selected='true'] {
+  background: var(--accsoft);
+  color: var(--fg);
+}
+
+.sheet-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.sheet-head {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 64px;
+  padding: 0 12px 0 24px;
+  border-bottom: 1px solid var(--line);
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.spanel {
+  padding: 4px 24px 20px;
+}
+
+.spanel[hidden] {
+  display: none;
+}
+
+.srow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 72px;
+  border-bottom: 1px solid var(--line);
+}
+
+.srow > div:first-child,
+.sfield {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+small {
+  font-size: 12px;
+  color: var(--dim);
+}
+
+.pair {
+  display: flex;
+  gap: 6px;
+}
+
+.pair .icon-btn {
+  background: var(--well);
+}
+
+.sfield {
+  gap: 8px;
+  padding: 18px 0;
+}
+
+.sfield input {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--well);
+}
+
+.switch {
+  flex: none;
+  width: 52px;
+  height: 32px;
+  padding: 3px;
+  border: 0;
+  border-radius: 16px;
+  background: var(--well);
+  box-shadow: inset 0 0 0 1px var(--line);
+  cursor: pointer;
+  display: flex;
+}
+
+.switch span {
+  width: 26px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--dim);
+  transition: transform 0.15s, background-color 0.15s;
+}
+
+.switch[aria-checked='true'] {
+  background: var(--acc);
+}
+
+.switch[aria-checked='true'] span {
+  background: #ffffff;
+  transform: translateX(20px);
+}
+
+/* full screen: only the view and its own controls */
+body.full #top,
+body.full nav,
+body.full #rz-nav,
+body.full #feed,
+body.full #rz-aside {
+  display: none;
+}
+
+/* a narrow window (a tablet held upright, a window at half the screen): the chats and the drawer float over the view */
+@media (max-width: 1000px) {
+  .brand span,
+  #status {
+    display: none;
+  }
+
+  nav,
+  #feed {
+    position: absolute;
+    z-index: 20;
+    top: 0;
+    bottom: 0;
+    box-shadow: var(--shadow);
+  }
+
+  nav {
+    left: 0;
+    width: min(320px, 85%);
+  }
+
+  #feed {
+    right: 0;
+    width: min(340px, 85%);
+  }
+
+  #rz-nav,
+  #rz-aside {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) {
+  #top .center {
+    position: static;
+    transform: none;
+  }
+
+  .brand,
+  #b-feed span {
+    display: none;
+  }
+
+  .seg.big button {
+    min-width: 0;
+  }
+}
+
+@media (pointer: coarse) {
+  .nrow {
+    height: 40px;
+  }
 }
 
 ul {
@@ -509,107 +1251,6 @@ nav > ul {
   font-size: 11px;
 }
 
-aside li {
-  display: flex;
-  gap: 8px;
-  padding: 3px 12px;
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-
-aside .tool {
-  flex: none;
-  width: 3.2em;
-  color: var(--dim);
-  font: 12px ui-monospace, Consolas, monospace;
-}
-
-aside .done .tool {
-  color: var(--afg);
-}
-
-aside .failed .tool {
-  color: var(--dfg);
-}
-
-/* the office: the session as a canvas, in place of the panes */
-#office {
-  display: none;
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  min-height: 0;
-}
-
-#office canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-body.office #office {
-  display: block;
-}
-
-body.office #panes,
-body.office #rz-split {
-  display: none;
-}
-
-/* Record and Angled are only for the Office, and Record shows a red dot while it records */
-#b-record,
-#b-angled {
-  display: none;
-}
-
-body.office:not(.map) #b-record,
-body.office:not(.map) #b-angled {
-  display: inline-block;
-}
-
-/* the Map: its own canvas in place of the Office's */
-#map-canvas { display: none; }
-body.map #office-canvas { display: none; }
-body.map #map-canvas { display: block; }
-body.map #z-in,
-body.map #z-out { display: none; }
-#map-tip {
-  position: absolute;
-  pointer-events: none;
-  padding: 3px 8px;
-  border-radius: 4px;
-  background: rgba(7, 11, 23, 0.92);
-  color: #dfe6ff;
-  font: 12px ui-monospace, Consolas, monospace;
-  white-space: nowrap;
-}
-#map-tip[hidden] { display: none; }
-#map-empty { display: none; position: absolute; top: 45%; left: 0; right: 0; margin: 0 auto; max-width: 420px; padding: 0 16px; text-align: center; color: #aab4dc; font-size: 14px; line-height: 1.5; }
-body.map #map-empty:not([hidden]) { display: block; }
-#map-modes { display: none; position: absolute; top: 12px; left: 12px; }
-body.map #map-modes { display: inline-flex; }
-#map-modes button[aria-pressed='true'] { background: var(--accent, #3b6fd4); color: #fff; }
-#map-show { display: none; position: absolute; top: 44px; left: 12px; gap: 10px; flex-wrap: wrap; max-width: calc(100% - 24px); padding: 6px 10px; border-radius: 6px; background: rgba(7, 11, 23, 0.72); color: #cdd5ea; font-size: 12px; }
-body.map.city #map-show { display: flex; }
-#map-show label { display: inline-flex; align-items: center; gap: 4px; }
-#map-show select, #replay select { font: inherit; font-size: 12px; }
-#replay { position: absolute; left: 50%; bottom: 14px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; width: min(560px, calc(100% - 24px)); padding: 8px 12px; border-radius: 8px; background: rgba(7, 11, 23, 0.85); color: #dfe6ff; font-size: 13px; }
-#replay[hidden] { display: none; }
-#replay input[type='range'] { flex: 1; min-width: 80px; }
-#r-date { min-width: 96px; text-align: center; font-variant-numeric: tabular-nums; }
-#r-play, #r-close { min-width: 32px; }
-#views button[aria-pressed='true'] { background: var(--accent, #3b6fd4); color: #fff; }
-
-#b-record[aria-pressed='true']::before {
-  content: '';
-  display: inline-block;
-  width: 0.6em;
-  height: 0.6em;
-  margin-right: 0.4em;
-  border-radius: 50%;
-  background: #e5484d;
-}
 
 /* the panes: up to four files watched at once (two stack when there is little width) */
 #panes {
@@ -1001,29 +1642,6 @@ body.paused .dot {
   }
 }
 
-@media (max-width: 760px) {
-  .layout {
-    flex-direction: column;
-    overflow: auto;
-  }
-
-  #panes {
-    order: -1;
-    flex: none;
-    height: 70vh;
-  }
-
-  nav,
-  aside {
-    flex: none;
-    max-height: 220px;
-    border: 0;
-  }
-
-  .swatches {
-    margin-left: 0;
-  }
-}
 
 @media (prefers-reduced-motion: reduce) {
   .caret,
@@ -1044,6 +1662,7 @@ body.paused .dot {
     transition: none;
   }
 }
+
 
 /* draggable edges: between the panels, and between the two files */
 .resizer {
@@ -1080,11 +1699,6 @@ body.paused .dot {
 body.resizing {
   cursor: col-resize;
   user-select: none;
-}
-
-body.focus #rz-nav,
-body.focus #rz-aside {
-  display: none;
 }
 
 #rz-split {
@@ -1129,61 +1743,6 @@ body.resizing:has(#panes.stacked #rz-split.dragging) {
   cursor: row-resize;
 }
 
-@media (max-width: 760px) {
-  #rz-nav,
-  #rz-aside {
-    display: none;
-  }
-}
-
-/* the Office view: only the controls that are for it, the chats with their activity under them, a bigger picture */
-body.office #rz-aside {
-  display: none;
-}
-
-body.office nav {
-  display: flex;
-  flex-direction: column;
-  flex-basis: var(--nav-w, 300px);
-}
-
-body.office nav {
-  overflow: hidden;
-}
-
-body.office nav #chat-list {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-}
-
-body.office nav #feed {
-  display: block;
-  flex: none;
-  max-height: 45%;
-  margin-top: 8px;
-  border: 0;
-  border-top: 1px solid var(--line);
-  padding: 0;
-  overflow: auto;
-}
-
-body.office nav #feed h2 {
-  cursor: pointer;
-  padding-top: 8px;
-}
-
-body.office nav #feed h2::before {
-  content: '▾ ';
-}
-
-body.office nav #feed.shut h2::before {
-  content: '▸ ';
-}
-
-body.office nav #feed.shut ul {
-  display: none;
-}
 
 /* the chat's phase, at the right of its row */
 .phase {
@@ -1198,175 +1757,3 @@ body.office nav #feed.shut ul {
 .phase.working { background: var(--nbg); color: var(--nfg); }
 .phase.planning { background: color-mix(in srgb, var(--acc) 22%, transparent); color: var(--acc); }
 .phase.waiting { background: var(--abg); color: var(--afg); }
-
-/* on top of the office: zoom, the latest events, a notice and a worker's card */
-#zoom {
-  position: absolute;
-  right: 12px;
-  bottom: 44px;
-  display: none;
-  flex-direction: column;
-  gap: 4px;
-}
-
-#zoom button {
-  min-width: 34px;
-  height: 34px;
-  padding: 0 6px;
-}
-
-#ticker {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  display: none;
-  gap: 16px;
-  padding: 6px 12px;
-  overflow: hidden;
-  white-space: nowrap;
-  font-size: 12px;
-  background: color-mix(in srgb, var(--bg) 82%, transparent);
-  border-top: 1px solid var(--line);
-}
-
-#ticker li { flex: none; max-width: 40ch; overflow: hidden; text-overflow: ellipsis; }
-#ticker li.done .tool { color: var(--afg); }
-#ticker li.failed .tool { color: var(--dfg); }
-#ticker .tool { margin-right: 6px; color: var(--dim); font-family: ui-monospace, Consolas, monospace; }
-
-body.office #zoom,
-body.office #ticker { display: flex; }
-
-/* the buttons that turn the angled view show only in it */
-#zoom .turn { display: none; }
-body.angled #zoom .turn { display: block; }
-
-#banner {
-  position: absolute;
-  top: 12px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 2;
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 13px;
-  background: var(--panel);
-  border: 1px solid var(--acc);
-}
-
-#inspector {
-  position: absolute;
-  left: 12px;
-  top: 12px;
-  z-index: 2;
-  min-width: 180px;
-  padding: 8px 12px;
-  font-size: 13px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-}
-
-#inspector .who { display: flex; align-items: center; gap: 8px; font-weight: 600; }
-#inspector .swatch-dot { width: 10px; height: 10px; border-radius: 50%; }
-#inspector .line { color: var(--dim); margin-top: 2px; }
-
-/* the settings panel, opened from the gear at the right of the toolbar */
-#b-gear {
-  margin-left: auto;
-}
-
-#settings {
-  position: absolute;
-  top: 100%;
-  right: 8px;
-  z-index: 20;
-  width: 300px;
-  max-height: 70vh;
-  overflow: auto;
-  padding: 4px 14px 10px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
-}
-
-#settings[hidden] {
-  display: none;
-}
-
-#settings h3 {
-  margin: 12px 0 2px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--dim);
-}
-
-/* the links that open a view in a window of its own look like the toolbar's buttons */
-#open-views a,
-#open-turns a {
-  padding: 3px 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  color: var(--fg);
-  text-decoration: none;
-}
-
-#open-views a:hover,
-#open-turns a:hover {
-  border-color: var(--dim);
-}
-
-#open-views a:focus-visible,
-#open-turns a:focus-visible {
-  outline: 2px solid var(--acc);
-  outline-offset: 2px;
-}
-
-.srow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 13px;
-}
-
-#settings .swatches {
-  margin-left: 0;
-}
-
-body.office #set-file,
-body:not(.office) #set-office,
-body:not(.map) #set-map {
-  display: none;
-}
-
-#repos-dir {
-  flex: 1;
-  min-width: 0;
-  max-width: 240px;
-  padding: 3px 6px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-}
-
-#repos {
-  display: none;
-}
-
-body.map nav #repos {
-  display: block;
-  flex: none;
-  max-height: 30%;
-  margin-top: 8px;
-  border-top: 1px solid var(--line);
-  overflow: auto;
-}

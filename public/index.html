@@ -1,13 +1,15 @@
 <!doctype html>
-<html lang="en" data-theme="midnight">
+<html lang="en" data-theme="dark">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Live View</title>
     <script>
-      // the saved theme, before the first paint
+      // the saved theme, before the first paint (the old ones map onto the three there are now)
       try {
-        document.documentElement.dataset.theme = JSON.parse(localStorage.getItem('lv.theme')) || 'midnight'
+        const old = { midnight: 'dark', terminal: 'dark' }
+        const saved = JSON.parse(localStorage.getItem('lv.theme')) || 'dark'
+        document.documentElement.dataset.theme = old[saved] ?? saved
       } catch {}
     </script>
     <link rel="stylesheet" href="/style.css" />
@@ -15,88 +17,49 @@
   </head>
   <body>
     <header id="top">
-      <span class="state"><span id="dot" class="dot" data-state="idle"></span><b id="st">idle</b></span>
-      <span id="s-files">0 files</span>
-      <span><span id="s-add" class="pos">+0</span> <span id="s-del" class="neg">&minus;0</span></span>
-      <span id="s-time" class="dim">0:00</span>
-      <span id="s-chat" class="dim">All chats</span>
-      <span id="conn" class="dim"></span>
-    </header>
-    <div id="toolbar" role="toolbar" aria-label="View controls">
-      <button id="b-pause" type="button" aria-pressed="false">Pause</button>
-      <button id="b-skip" type="button" disabled>Skip</button>
-      <label class="speed">Speed
-        <input id="speed" type="range" min="1" max="4" step="1" value="2" />
-        <output id="speed-out" for="speed">normal</output>
-      </label>
-      <span id="views" class="group" role="group" aria-label="View">
-        <button id="v-code" type="button" title="The code being written">Code</button>
-        <button id="v-office" type="button" title="Watch the session as an office">Office</button>
-        <button id="v-map" type="button" title="Watch the session on a 3D map of the repo">Map</button>
+      <button id="b-nav" class="icon-btn" type="button" aria-label="Show or hide the chats" aria-pressed="true" title="Chats">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="3"></rect><path d="M9 4v16"></path></svg>
+      </button>
+      <span class="brand">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"></path></svg>
+        <span>Live View</span>
       </span>
-      <button id="b-angled" type="button" aria-pressed="false" title="Show the Office from an angle">Angled</button>
-      <button id="b-record" type="button" aria-pressed="false" title="Record the Office to an mp4 file">Record</button>
-      <button id="b-gear" type="button" class="gear" aria-label="Settings" aria-expanded="false" aria-controls="settings">&#9881; Settings</button>
-      <div id="settings" hidden>
-        <h3>Display</h3>
-        <div class="srow"><span>Theme</span>
-          <span class="swatches" role="group" aria-label="Theme">
-            <button class="swatch" type="button" data-theme="dark" aria-label="Dark theme" title="Dark"></button>
-            <button class="swatch" type="button" data-theme="light" aria-label="Light theme" title="Light"></button>
-            <button class="swatch" type="button" data-theme="midnight" aria-label="Midnight theme" title="Midnight"></button>
-            <button class="swatch" type="button" data-theme="terminal" aria-label="Terminal theme" title="Terminal"></button>
-            <button class="swatch" type="button" data-theme="contrast" aria-label="High contrast theme" title="High contrast"></button>
-          </span>
+      <div class="center">
+        <div id="views" class="seg big" role="group" aria-label="View">
+          <button id="v-code" type="button" title="The code being written">Code</button>
+          <button id="v-office" type="button" title="Watch the session as an office">Office</button>
+          <button id="v-map" type="button" title="Watch the session on a 3D map of the repo">Map</button>
         </div>
-        <div id="set-file">
-          <h3>File view</h3>
-          <div class="srow"><span>Text size</span><span class="group">
-            <button id="b-smaller" type="button" aria-label="Smaller text">A&minus;</button>
-            <button id="b-larger" type="button" aria-label="Larger text">A+</button>
-          </span></div>
-          <div class="srow"><span>Wrap long lines</span><button id="b-wrap" type="button" aria-pressed="false">Wrap</button></div>
-          <div class="srow"><span>Show the whole file</span><button id="b-whole" type="button" aria-pressed="true">Whole file</button></div>
-          <div class="srow"><span>Old and new side by side</span><button id="b-side" type="button" aria-pressed="false">Side by side</button></div>
-          <div class="srow"><span>Follow the newest edit</span><button id="b-follow" type="button" aria-pressed="true">Follow</button></div>
-          <div class="srow"><span>Hide the side lists</span><button id="b-focus" type="button" aria-pressed="false">Focus</button></div>
-        </div>
-        <h3>Window</h3>
-        <div class="srow"><span>Window size</span>
-          <select id="win-size" aria-label="Window size">
-            <option value="" selected>Keep as is</option>
-            <option value="small">Small 1000 &times; 700</option>
-            <option value="medium">Medium 1200 &times; 800</option>
-            <option value="large">Large 1600 &times; 1000</option>
-            <option value="half">Half screen, full height</option>
-          </select>
-        </div>
-        <div class="srow"><span>Open a view in a new window</span>
-          <span id="open-views" class="group">
-            <a href="/?view=code" target="_blank" rel="noopener" title="The code being written, in a window of its own">Code</a>
-            <a href="/?view=office" target="_blank" rel="noopener" title="The flat Office, in a window of its own">Office</a>
-            <a href="/?view=angled" target="_blank" rel="noopener" title="The angled Office, in a window of its own">Angled</a>
-            <a href="/?view=map" target="_blank" rel="noopener" title="The Map, in a window of its own">Map</a>
-          </span>
-        </div>
-        <div class="srow"><span>The angled Office from another side</span>
-          <span id="open-turns" class="group">
-            <a href="/?view=angled&amp;turn=1" target="_blank" rel="noopener" title="The angled Office turned a quarter turn right, in a window of its own">90&deg;</a>
-            <a href="/?view=angled&amp;turn=2" target="_blank" rel="noopener" title="The angled Office seen from the opposite side, in a window of its own">180&deg;</a>
-            <a href="/?view=angled&amp;turn=3" target="_blank" rel="noopener" title="The angled Office turned a quarter turn left, in a window of its own">270&deg;</a>
-          </span>
-        </div>
-        <div class="srow"><span>Keep the screen on</span><button id="b-awake" type="button" aria-pressed="false" title="Keep the screen on while this window is visible">Stay awake</button></div>
-        <div id="set-map">
-          <h3>Map</h3>
-          <div class="srow"><span>Repos folder</span><input id="repos-dir" type="text" spellcheck="false" placeholder="The folder Claude last worked in" title="The folder that holds your repos, e.g. C:\Users\you\code. Empty: the folder that holds the repo Claude last worked in."></div>
-        </div>
-        <div id="set-office">
-          <h3>Office</h3>
-          <div class="srow"><span>Sounds</span><button id="b-sound" type="button" aria-pressed="false" title="Sounds in the Office: off until you turn them on">Sound</button></div>
-          <div class="srow"><span>Start with activity folded</span><button id="b-folded" type="button" aria-pressed="false">Folded</button></div>
+        <div class="pop">
+          <button id="b-pop" class="icon-btn" type="button" aria-label="Open a view in a new window" aria-expanded="false" aria-controls="pop-menu" title="New window">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6"></path><path d="M20 4l-9 9"></path><path d="M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"></path></svg>
+          </button>
+          <div id="pop-menu" class="glass menu" role="menu" hidden>
+            <div class="menu-title">Open in a new window</div>
+            <a role="menuitem" href="/?view=code" target="_blank" rel="noopener">Code</a>
+            <a role="menuitem" href="/?view=office" target="_blank" rel="noopener">Office</a>
+            <a role="menuitem" href="/?view=angled" target="_blank" rel="noopener">Angled Office</a>
+            <div class="menu-row">
+              <a role="menuitem" href="/?view=angled&amp;turn=1" target="_blank" rel="noopener" title="Turned a quarter turn right">90&deg;</a>
+              <a role="menuitem" href="/?view=angled&amp;turn=2" target="_blank" rel="noopener" title="Seen from the opposite side">180&deg;</a>
+              <a role="menuitem" href="/?view=angled&amp;turn=3" target="_blank" rel="noopener" title="Turned a quarter turn left">270&deg;</a>
+            </div>
+            <a role="menuitem" href="/?view=map" target="_blank" rel="noopener">Map</a>
+          </div>
         </div>
       </div>
-    </div>
+      <div class="right">
+        <span id="status" class="chip" role="status"><span id="dot" class="dot" data-state="idle"></span><span id="st">idle</span><span id="conn"></span></span>
+        <button id="b-feed" class="btn" type="button" aria-pressed="true" aria-controls="feed">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"></path></svg>
+          <span>Activity</span>
+        </button>
+        <button id="b-gear" class="icon-btn" type="button" aria-label="Settings" aria-expanded="false" aria-controls="settings" title="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h.1a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v.1a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"></path></svg>
+        </button>
+      </div>
+    </header>
+
     <div class="layout">
       <nav id="files" aria-label="Chats and the files each touched">
         <h2>Chats</h2>
@@ -107,49 +70,186 @@
         </section>
       </nav>
       <div class="resizer" id="rz-nav"></div>
-      <section id="panes" aria-label="Files being written">
-        <div class="resizer split" id="rz-split"></div>
-      </section>
-      <section id="office" aria-label="The session as an office">
-        <canvas id="office-canvas"></canvas>
-        <canvas id="map-canvas"></canvas>
-        <div id="map-tip" hidden></div>
-        <p id="map-empty" hidden></p>
-        <span id="map-modes" class="group" role="group" aria-label="Map style">
-          <button id="m-nebula" type="button" title="Every file a star, linked to the files it imports, each folder a coloured cloud">Nebula</button>
-          <button id="m-city" type="button" title="Files as buildings in a city">City</button>
-          <button id="m-replay" type="button" title="Play the repo's git history: watch it grow">Time-lapse</button>
-        </span>
-        <div id="map-show" role="group" aria-label="What each building shows">
-          <label>Height <select id="show-height"><option value="lines">Lines</option><option value="changes">Changes</option></select></label>
-          <label>Footprint <select id="show-footprint"><option value="lines">Lines</option><option value="changes">Changes</option></select></label>
-          <label>Colour <select id="show-colour"><option value="folder">Folder</option><option value="age">Age</option><option value="changes">Changes</option><option value="type">File type</option></select></label>
-          <label>Windows <select id="show-windows"><option value="recent">Recent work</option><option value="changes">Changes</option></select></label>
-        </div>
-        <div id="replay" role="group" aria-label="Time-lapse" hidden>
-          <button id="r-play" type="button" aria-label="Play">&#9654;</button>
-          <input id="r-time" type="range" min="0" max="1000" value="0" aria-label="Day shown">
-          <span id="r-date"></span>
-          <select id="r-speed" aria-label="Speed"><option value="0.5">0.5&times;</option><option value="1" selected>1&times;</option><option value="2">2&times;</option><option value="4">4&times;</option></select>
-          <button id="r-close" type="button" aria-label="Close the time-lapse">&#10005;</button>
-        </div>
+
+      <main id="stage">
+        <section id="panes" aria-label="Files being written">
+          <div class="resizer split" id="rz-split"></div>
+        </section>
+        <section id="office" aria-label="The session as an office">
+          <canvas id="office-canvas"></canvas>
+          <canvas id="map-canvas"></canvas>
+          <div id="map-tip" hidden></div>
+          <p id="map-empty" hidden></p>
+          <div id="inspector" class="glass" hidden></div>
+        </section>
         <div id="banner" role="status" hidden></div>
-        <div id="inspector" hidden></div>
-        <div id="zoom" role="group" aria-label="Zoom">
-          <button id="z-turn-left" class="turn" type="button" aria-label="Turn the view left" title="Turn the view a quarter turn left ( [ )">&#x27F2;</button>
-          <button id="z-turn-right" class="turn" type="button" aria-label="Turn the view right" title="Turn the view a quarter turn right ( ] )">&#x27F3;</button>
-          <button id="z-in" type="button" aria-label="Zoom in">+</button>
-          <button id="z-out" type="button" aria-label="Zoom out">&minus;</button>
-          <button id="z-fit" type="button" aria-label="Show the whole office" title="Show the whole office (or double-click it)">Fit</button>
+
+        <div id="map-show" class="glass popover" role="dialog" aria-label="What each building shows" hidden>
+          <div class="popover-title">What each building shows</div>
+          <div class="show-row"><span>Height</span><div class="seg" data-show="height"><button type="button" data-value="lines">Lines</button><button type="button" data-value="changes">Changes</button></div></div>
+          <div class="show-row"><span>Footprint</span><div class="seg" data-show="footprint"><button type="button" data-value="lines">Lines</button><button type="button" data-value="changes">Changes</button></div></div>
+          <div class="show-row"><span>Colour</span><div class="seg" data-show="colour"><button type="button" data-value="folder">Folder</button><button type="button" data-value="age">Age</button><button type="button" data-value="changes">Changes</button><button type="button" data-value="type">Type</button></div></div>
+          <div class="show-row"><span>Lit windows</span><div class="seg" data-show="windows"><button type="button" data-value="recent">Recent work</button><button type="button" data-value="changes">Changes</button></div></div>
         </div>
-        <ul id="ticker" aria-label="Latest events"></ul>
-      </section>
+
+        <div id="replay" class="glass" role="group" aria-label="Time-lapse" hidden>
+          <button id="r-play" class="round-btn" type="button" aria-label="Play">&#9654;</button>
+          <input id="r-time" type="range" min="0" max="1000" value="0" aria-label="Day shown" />
+          <span id="r-date"></span>
+          <select id="r-speed" aria-label="Time-lapse speed"><option value="0.5">0.5&times;</option><option value="1" selected>1&times;</option><option value="2">2&times;</option><option value="4">4&times;</option></select>
+          <button id="r-close" class="icon-btn" type="button" aria-label="Close the time-lapse">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+          </button>
+        </div>
+
+        <div id="dock" class="glass" role="toolbar" aria-label="View controls">
+          <span class="grp only-play">
+            <button id="b-pause" class="icon-btn" type="button" aria-pressed="false" aria-label="Pause" title="Pause">
+              <svg class="ic-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>
+              <svg class="ic-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5l12 7-12 7z"></path></svg>
+            </button>
+            <button id="b-skip" class="icon-btn" type="button" aria-label="Skip to the end" title="Skip" disabled>
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 5l9 7-9 7z"></path><path d="M17 5v14"></path></svg>
+            </button>
+            <span id="speed" class="seg" role="group" aria-label="Speed">
+              <button type="button" data-speed="1" title="Slow">½×</button><button type="button" data-speed="2" title="Normal">1×</button><button type="button" data-speed="3" title="Fast">2×</button><button type="button" data-speed="4" title="Instant">Max</button>
+            </span>
+            <span class="sep"></span>
+          </span>
+
+          <span class="grp only-code">
+            <button class="btn" type="button" data-pref="wrap" aria-pressed="false">Wrap</button>
+            <button class="btn" type="button" data-pref="whole" aria-pressed="true">Whole file</button>
+            <button class="btn" type="button" data-pref="side" aria-pressed="false">Side by side</button>
+            <button class="btn" type="button" data-pref="follow" aria-pressed="true">Follow</button>
+            <span class="sep"></span>
+            <button id="b-smaller" class="icon-btn txt" type="button" aria-label="Smaller text" title="Smaller text">A&minus;</button>
+            <button id="b-larger" class="icon-btn txt" type="button" aria-label="Larger text" title="Larger text">A+</button>
+          </span>
+
+          <span class="grp only-office">
+            <span id="o-modes" class="seg" role="group" aria-label="Office view">
+              <button id="o-flat" type="button">Flat</button><button id="b-angled" type="button">Angled</button>
+            </span>
+            <span class="grp only-angled">
+              <button id="z-turn-left" class="icon-btn" type="button" aria-label="Turn the view left" title="Turn left  [">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"></path><path d="M3 3v5h5"></path></svg>
+              </button>
+              <button id="z-turn-right" class="icon-btn" type="button" aria-label="Turn the view right" title="Turn right  ]">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a9 9 0 1 1-3-6.7L21 8"></path><path d="M21 3v5h-5"></path></svg>
+              </button>
+            </span>
+            <span class="sep"></span>
+            <button id="z-out" class="icon-btn txt" type="button" aria-label="Zoom out" title="Zoom out">&minus;</button>
+            <button id="z-in" class="icon-btn txt" type="button" aria-label="Zoom in" title="Zoom in">+</button>
+          </span>
+
+          <span class="grp only-map">
+            <span id="map-modes" class="seg" role="group" aria-label="Map style">
+              <button id="m-nebula" type="button" title="Every file a star, linked to the files it imports">Nebula</button><button id="m-city" type="button" title="Files as buildings in a city">City</button>
+            </span>
+            <button id="m-replay" class="btn" type="button" aria-pressed="false" title="Play the repo's git history">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 2"></path></svg>
+              <span>Time-lapse</span>
+            </button>
+            <button id="b-layers" class="btn only-city" type="button" aria-pressed="false" aria-controls="map-show">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l9 5-9 5-9-5z"></path><path d="M3 13l9 5 9-5"></path></svg>
+              <span>Layers</span>
+            </button>
+          </span>
+
+          <span class="grp only-picture">
+            <button id="z-fit" class="btn" type="button" title="Show the whole picture (or double-click it)">Fit</button>
+            <span class="sep"></span>
+          </span>
+
+          <span class="grp only-office">
+            <button class="icon-btn" type="button" data-pref="sound" aria-pressed="false" aria-label="Sound" title="Sound">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5L6 9H3v6h3l5 4z"></path><path d="M16 9a4 4 0 0 1 0 6"></path></svg>
+            </button>
+            <button id="b-record" class="btn" type="button" aria-pressed="false" title="Record the Office to an mp4 file"><span class="rec"></span><span class="rec-label">Record</span></button>
+            <span class="sep"></span>
+          </span>
+
+          <button id="b-full" class="icon-btn" type="button" aria-pressed="false" aria-label="Full screen" title="Full screen">
+            <svg class="ic-enter" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"></path></svg>
+            <svg class="ic-exit" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"></path></svg>
+          </button>
+        </div>
+      </main>
+
       <div class="resizer" id="rz-aside"></div>
       <aside id="feed" aria-label="Activity">
-        <h2>Activity</h2>
+        <div class="drawer-head">
+          <h2>Activity</h2>
+          <button id="b-feed-close" class="icon-btn" type="button" aria-label="Close activity">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+          </button>
+        </div>
         <ul id="feed-list"></ul>
       </aside>
     </div>
+
+    <div id="settings" class="overlay" hidden>
+      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title">
+        <div class="tabs" role="tablist" aria-label="Settings">
+          <span id="settings-title" class="sheet-title">Settings</span>
+          <button class="stab" type="button" role="tab" data-tab="general" aria-selected="true">General</button>
+          <button class="stab" type="button" role="tab" data-tab="code" aria-selected="false">Code</button>
+          <button class="stab" type="button" role="tab" data-tab="office" aria-selected="false">Office</button>
+          <button class="stab" type="button" role="tab" data-tab="map" aria-selected="false">Map</button>
+        </div>
+        <div class="sheet-body">
+          <div class="sheet-head">
+            <span id="tab-title">General</span>
+            <button id="settings-close" class="icon-btn" type="button" aria-label="Close settings">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+            </button>
+          </div>
+
+          <div class="spanel" data-panel="general" role="tabpanel">
+            <div class="srow"><div><span>Theme</span><small>How the whole app looks</small></div>
+              <div class="seg" role="group" aria-label="Theme">
+                <button class="swatch" type="button" data-theme="dark">Dark</button><button class="swatch" type="button" data-theme="light">Light</button><button class="swatch" type="button" data-theme="contrast">Contrast</button>
+              </div>
+            </div>
+            <div class="srow"><div><label for="win-size">Window size</label><small>Resize this window to a preset</small></div>
+              <select id="win-size">
+                <option value="" selected>Keep as is</option>
+                <option value="small">Small 1000 &times; 700</option>
+                <option value="medium">Medium 1200 &times; 800</option>
+                <option value="large">Large 1600 &times; 1000</option>
+                <option value="half">Half screen, full height</option>
+              </select>
+            </div>
+            <div class="srow"><div><span>Keep the screen on</span><small>While this window is visible</small></div><button class="switch" type="button" role="switch" data-pref="awake" aria-checked="false" aria-label="Keep the screen on"><span></span></button></div>
+          </div>
+
+          <div class="spanel" data-panel="code" role="tabpanel" hidden>
+            <div class="srow"><div><span>Text size</span><small id="size-out">13 px</small></div>
+              <div class="pair"><button id="s-smaller" class="icon-btn txt" type="button" aria-label="Smaller text">A&minus;</button><button id="s-larger" class="icon-btn txt" type="button" aria-label="Larger text">A+</button></div>
+            </div>
+            <div class="srow"><div><span>Wrap long lines</span><small>Long lines fold instead of scrolling</small></div><button class="switch" type="button" role="switch" data-pref="wrap" aria-checked="false" aria-label="Wrap long lines"><span></span></button></div>
+            <div class="srow"><div><span>Show the whole file</span><small>Not just the lines round the edit</small></div><button class="switch" type="button" role="switch" data-pref="whole" aria-checked="true" aria-label="Show the whole file"><span></span></button></div>
+            <div class="srow"><div><span>Old and new side by side</span><small>Removed lines stay in red</small></div><button class="switch" type="button" role="switch" data-pref="side" aria-checked="false" aria-label="Old and new side by side"><span></span></button></div>
+            <div class="srow"><div><span>Follow the newest edit</span><small>Jump to each new edit as it starts</small></div><button class="switch" type="button" role="switch" data-pref="follow" aria-checked="true" aria-label="Follow the newest edit"><span></span></button></div>
+          </div>
+
+          <div class="spanel" data-panel="office" role="tabpanel" hidden>
+            <div class="srow"><div><span>Sounds</span><small>A chime, a buzz, a tick and soft typing</small></div><button class="switch" type="button" role="switch" data-pref="sound" aria-checked="false" aria-label="Sounds"><span></span></button></div>
+          </div>
+
+          <div class="spanel" data-panel="map" role="tabpanel" hidden>
+            <div class="sfield">
+              <label for="repos-dir">Repos folder</label>
+              <input id="repos-dir" type="text" spellcheck="false" placeholder="e.g. C:\Users\you\code (empty: the folder Claude last worked in)" />
+              <small>The git repos in this folder are listed under Repos in the Map.</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/app.js"></script>
   </body>
 </html>

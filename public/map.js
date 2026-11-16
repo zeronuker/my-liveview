@@ -41,8 +41,8 @@ const slabTop = depth => 0.2 + Math.min(depth, 6) * 0.03
 const ease = t => 1 - (1 - Math.min(Math.max(t, 0), 1)) ** 3
 
 // canvas and tip are the Map's canvas and its pointer tip; bar is the time-lapse bar's parts:
-// { box, open, play, time, date, speed, close }
-export const createMap = ({ canvas, tip, bar }) => {
+// { box, open, play, time, date, speed, close }; onTree(count) is told how many files the repo shown has
+export const createMap = ({ canvas, tip, bar, onTree }) => {
   let T = null // { THREE, OrbitControls }, once loaded
   let scene, camera, renderer, controls, raycaster
   let group = null // everything drawn for the current repo
@@ -966,7 +966,9 @@ export const createMap = ({ canvas, tip, bar }) => {
     const res = await fetch(`/tree?cwd=${encodeURIComponent(cwd)}`).catch(() => null)
     if (!res?.ok || gen !== loadGen) return
     const tree = await res.json()
-    if (gen === loadGen) build(tree)
+    if (gen !== loadGen) return
+    build(tree)
+    onTree?.(tree.length)
   }
 
   const show = (event, rect, file) => {

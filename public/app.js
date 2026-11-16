@@ -16,11 +16,12 @@ const SPEEDS = [
   { name: 'fast', mult: 0.4 },
   { name: 'instant', mult: 0 },
 ]
-const THEMES = ['dark', 'light', 'midnight', 'terminal', 'contrast']
+const THEMES = ['dark', 'light', 'contrast']
+const OLD_THEMES = { midnight: 'dark', terminal: 'dark' } // themes there were before, and the one each is now
 const MAP_MODES = ['nebula', 'city']
 const MAP_SHOW = { height: ['lines', 'changes'], footprint: ['lines', 'changes'], colour: ['folder', 'age', 'changes', 'type'], windows: ['recent', 'changes'] }
 const STATES = { writing: 'writing', edited: 'edited', failed: 'NOT APPLIED', paused: 'paused', idle: 'idle' }
-const STATUS_MARK = { running: '...', done: 'ok', failed: 'failed' }
+const STATUS_MARK = { running: '···', done: 'ok', failed: 'fail' }
 const FEED_MAX = 100
 const ACTIVE_MS = 4000 // a chat that did something this recently counts as working
 
@@ -49,14 +50,17 @@ const store = {
 }
 const pick = (value, isOk, fallback) => (isOk(value) ? value : fallback)
 const prefs = {
-  theme: pick(store.get('theme', 'midnight'), v => THEMES.includes(v), 'midnight'),
-  speed: pick(store.get('speed', 2), v => Number.isInteger(v) && v >= 1 && v <= 4, 2),
+  theme: pick(OLD_THEMES[store.get('theme', 'dark')] ?? store.get('theme', 'dark'), v => THEMES.includes(v), 'dark'),
+  // how fast edits are typed in Code, and how fast the Office plays: each view its own (1 slow .. 4 instant)
+  codeSpeed: pick(store.get('codeSpeed', store.get('speed', 2)), v => Number.isInteger(v) && v >= 1 && v <= 4, 2),
+  officeSpeed: pick(store.get('officeSpeed', store.get('speed', 2)), v => Number.isInteger(v) && v >= 1 && v <= 4, 2),
   size: pick(store.get('size', 13), v => Number.isInteger(v) && v >= 11 && v <= 20, 13),
   wrap: store.get('wrap', false) === true,
   whole: store.get('whole', true) !== false,
   side: store.get('side', false) === true,
   follow: store.get('follow', true) !== false,
-  focus: store.get('focus', false) === true,
+  nav: store.get('nav', true) !== false, // the chats at the left are open
+  drawer: store.get('drawer', true) !== false, // the Activity drawer at the right is open
   awake: store.get('awake', false) === true,
   office: store.get('office', false) === true,
   map: store.get('map', false) === true, // with office on: the Map in place of the Office
@@ -65,9 +69,10 @@ const prefs = {
   sound: store.get('sound', false) === true,
   angled: store.get('angled', false) === true, // the Office from an angle
   rotation: pick(store.get('rotation', 0), v => Number.isInteger(v) && v >= 0 && v <= 3, 0), // and turned this many quarter turns
-  folded: store.get('folded', false) === true,
   reposDir: pick(store.get('reposDir', ''), v => typeof v === 'string', ''), // the folder that holds the person's repos (the Map's list)
 }
+// a narrow window starts with the chats and the drawer closed: they would cover the view
+if (window.innerWidth < 1000) Object.assign(prefs, { nav: false, drawer: false })
 if (pinned) {
   const { name, ...choices } = pinned
   Object.assign(prefs, choices)
@@ -143,13 +148,18 @@ function showInspector(who) {
   dot.style.background = who.color
   box.replaceChildren(item('div', 'who', dot, who.name), ...[who.chat, who.job].filter(Boolean).map(text => span('line', text)).map(line => item('div', '', line)))
 }
-const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[prefs.speed - 1].mult, getChatName: id => nameOfChat(id), onView: zoomed => ($('z-fit').disabled = !zoomed), onInspect: showInspector })
+const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[prefs.officeSpeed - 1].mult, getChatName: id => nameOfChat(id), onView: zoomed => ($('z-fit').disabled = !zoomed), onInspect: showInspector })
 
 const map = createMap({
   canvas: $('map-canvas'),
   tip: $('map-tip'),
   bar: { box: $('replay'), open: $('m-replay'), play: $('r-play'), time: $('r-time'), date: $('r-date'), speed: $('r-speed'), close: $('r-close') },
+  onTree: count => {
+    mapFiles = count
+    scheduleLists()
+  },
 })
+let mapFiles = -1 // how many files the Map's repo has (0: nothing to draw), -1 before it is read
 // the Map shows the repo of the chat picked, else of the chat that was active last
 // the Map shows a repo picked under Repos, else the chosen chat's folder, else the latest chat's
 let pickedRepo = ''
@@ -204,13 +214,13 @@ const recorder = createRecorder({
   save: download,
   onChange: () => {
     $('b-record').setAttribute('aria-pressed', String(recorder.isRecording))
-    $('b-record').textContent = recorder.isRecording ? 'Stop recording' : 'Record'
+    $('b-record').querySelector('.rec-label').textContent = recorder.isRecording ? 'Stop' : 'Record'
   },
 })
 
 /* how wide each part is: the person drags the edges, and it is remembered */
 
-const DEFAULT_NAV = 399 // the chat list's width until the person drags it
+const DEFAULT_NAV = 290 // the chat list's width until the person drags it
 const sizes = {
   nav: pick(store.get('navW', DEFAULT_NAV), v => Number.isFinite(v) && v >= 180 && v <= 480, DEFAULT_NAV),
   aside: pick(store.get('asideW', 300), v => Number.isFinite(v) && v >= 200 && v <= 520, 300),
@@ -390,7 +400,7 @@ const place = event => {
   const pane = panes[at]
   pane.open()
   layoutPanes()
-  pane.render(event, rowsFor(event), { animate: true, mult: SPEEDS[prefs.speed - 1].mult })
+  pane.render(event, rowsFor(event), { animate: true, mult: SPEEDS[prefs.codeSpeed - 1].mult })
 }
 
 // A pane has finished: edits that waited take the panes that are free, in order.
@@ -512,9 +522,9 @@ const toggleFolder = key => {
 // whatever sits at the right. A folder with `opensOnPress` opens and closes
 // when pressed; any other row runs `onPress`. `activity` ('working' or
 // 'waiting') puts a pulsing dot on a row that work is happening in.
-const node = ({ key, iconName, label, title, badge, right, kids = [], isSelected, activity, opensOnPress, onPress, onRename }) => {
+const node = ({ key, iconName, label, title, badge, right, meta, kids = [], isSelected, activity, opensOnPress, onPress, onRename }) => {
   const isOpen = !collapsed.has(key)
-  const row = item('div', `nrow${isSelected ? ' sel' : ''}${activity ? ` busy ${activity}` : ''}`)
+  const row = item('div', `nrow${meta ? ' tall' : ''}${isSelected ? ' sel' : ''}${activity ? ` busy ${activity}` : ''}`)
   // the sweep carries on where it was after a redraw: its start comes from one shared clock
   if (activity) row.style.setProperty('--phase', `${-(Date.now() % (activity === 'working' ? 1600 : 2800))}ms`)
   if (kids.length > 0) {
@@ -526,9 +536,13 @@ const node = ({ key, iconName, label, title, badge, right, kids = [], isSelected
     row.append(twisty)
   } else row.append(item('span', 'twisty gap'))
 
-  const main = item('button', 'nlabel', icon(iconName, `ico-${iconName}`), span('ntext', label))
-  if (badge) main.append(badge)
-  if (right) main.append(right)
+  const main = item('button', 'nlabel', icon(iconName, `ico-${iconName}`))
+  // a row with a second line (a chat: what it changed) stacks its name over it
+  const top = meta ? item('span', 'ntop', span('ntext', label)) : main
+  if (!meta) main.append(span('ntext', label))
+  if (badge) top.append(badge)
+  if (right) top.append(right)
+  if (meta) main.append(item('span', 'nbody', top, span('nmeta', meta)))
   main.type = 'button'
   if (title) main.title = activity ? `${title}\n(${activity})` : title
   if (onRename) main.ondblclick = onRename
@@ -549,6 +563,13 @@ const phasePill = chat => {
   return pill
 }
 const plainCount = n => span('counts', String(n))
+// under a chat's name: how many files it changed, the lines added and removed, and how long ago it started
+const chatMeta = (chat, own) => {
+  const adds = own.reduce((sum, file) => sum + file.adds, 0)
+  const dels = own.reduce((sum, file) => sum + file.dels, 0)
+  const mins = Math.floor((Date.now() - chat.firstAt) / 60000)
+  return `${own.length} ${own.length === 1 ? 'file' : 'files'} · +${adds} −${dels} · ${mins < 1 ? 'just now' : mins < 60 ? `${mins} min` : `${Math.floor(mins / 60)} h ${mins % 60} min`}`
+}
 const changeCount = file => item('span', 'counts', span('pos', `+${file.adds}`), ' ', span('neg', `−${file.dels}`))
 
 const renameChat = chat => {
@@ -613,7 +634,8 @@ const chatTree = () => {
         iconName: 'chat',
         label: labelOf(chat),
         title: `${baseName(chat.cwd)} · ${chat.id.slice(0, 6)}\n${chat.cwd}\nDouble-click to rename`,
-        right: prefs.office ? phasePill(chat) : plainCount(chat.count),
+        right: phasePill(chat),
+        meta: chatMeta(chat, own),
         isSelected: selected === chat.id,
         activity: state,
         onPress: () => pickChat(chat.id),
@@ -639,58 +661,31 @@ const chatTree = () => {
   })
 }
 
-const clock = ms => {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  const [h, m, r] = [Math.floor(s / 3600), Math.floor((s % 3600) / 60), s % 60]
-  const two = n => String(n).padStart(2, '0')
-  return h ? `${h}:${two(m)}:${two(r)}` : `${m}:${two(r)}`
-}
-
-const renderElapsed = () => {
-  const starts = [...chats.values()].filter(chat => isShown(chat.id)).map(chat => chat.firstAt)
-  $('s-time').textContent = starts.length ? clock(Date.now() - Math.min(...starts)) : '0:00'
-}
-
-const renderStats = () => {
-  const scoped = [...files.values()].filter(file => isShown(file.sessionId))
-  const sum = key => scoped.reduce((total, file) => total + file[key], 0)
-  $('s-files').textContent = `${scoped.length} ${scoped.length === 1 ? 'file' : 'files'}`
-  $('s-add').textContent = `+${sum('adds')}`
-  $('s-del').textContent = `−${sum('dels')}`
-  $('s-chat').textContent = selected ? nameOfChat(selected) : 'All chats'
-  renderElapsed()
-}
-setInterval(renderElapsed, 1000)
-
 const renderLists = () => {
   isListsDue = false
   loadRepos()
   map.setRepo(mapCwd())
-  $('map-empty').hidden = Boolean(mapCwd())
-  $('map-empty').textContent = repos.length
-    ? 'Pick a repo under Repos on the left, or start a Claude chat, to see it here.'
-    : 'Start a Claude chat, or set your repos folder in Settings, to see a repo here.'
+  $('map-empty').hidden = Boolean(mapCwd()) && mapFiles !== 0
+  $('map-empty').textContent = mapCwd()
+    ? 'This repo has no files to show yet.'
+    : repos.length
+      ? 'Pick a repo under Repos on the left, or start a Claude chat, to see it here.'
+      : 'Start a Claude chat, or set your repos folder in Settings, to see a repo here.'
   $('chat-list').replaceChildren(chatTree())
-  $('repo-list').replaceChildren(...repoList())
+  $('repo-list').replaceChildren(...(repos.length ? repoList() : [item('li', 'empty', 'Set your repos folder in Settings (Map) to list them here.')]))
 
+  // the Activity drawer: what each tool did, and in which chat
   $('feed-list').replaceChildren(
     ...feed
       .filter(entry => isShown(entry.sessionId))
       .map(entry => {
         const text = span('', entry.summary)
         text.title = `${nameOfChat(entry.sessionId)}: ${entry.summary}`
-        return item('li', entry.status, span('tool', STATUS_MARK[entry.status]), text)
+        return item('li', entry.status, span('tool', STATUS_MARK[entry.status]), item('span', 'what', text, span('who', nameOfChat(entry.sessionId))))
       }),
   )
 
-  // the Office's strip of the latest events, and a notice when a chat is waiting on a permission
-  $('ticker').replaceChildren(
-    ...feed
-      .filter(entry => isShown(entry.sessionId))
-      .slice(-6)
-      .reverse()
-      .map(entry => item('li', entry.status, span('tool', STATUS_MARK[entry.status]), span('', entry.summary))),
-  )
+  // a notice when a chat is waiting on a permission
   const asking = [...chats.keys()].filter(id => office.chatInfo(id).asking)
   $('banner').hidden = asking.length === 0
   if (asking.length > 0) $('banner').textContent = `${nameOfChat(asking[0])} is waiting for you${asking.length > 1 ? ` (+${asking.length - 1} more)` : ''}`
@@ -700,7 +695,6 @@ const renderLists = () => {
     const chat = pane.current?.event.sessionId
     if (chat) pane.setChat(chat === selected ? '' : nameOfChat(chat))
   }
-  renderStats()
 }
 
 function scheduleLists() {
@@ -711,10 +705,12 @@ function scheduleLists() {
 
 // a dot that should stop pulsing is noticed within half a second
 let lastActivity = ''
+let lastListAt = 0
 setInterval(() => {
   const act = activity()
   const signature = `${[...act.busyChats]}|${[...act.working]}|${[...act.waiting]}`
-  if (signature === lastActivity) return
+  if (signature === lastActivity && Date.now() - lastListAt < 15000) return // the minutes under each chat move on too
+  lastListAt = Date.now()
   lastActivity = signature
   scheduleLists()
 }, 500)
@@ -770,34 +766,37 @@ const syncAwake = () => {
 }
 document.addEventListener('visibilitychange', syncAwake)
 
+// the speed of the view shown: Code and the Office each keep their own
+const speedKey = () => (prefs.office ? 'officeSpeed' : 'codeSpeed')
+const press = (el, on) => el.setAttribute(el.getAttribute('role') === 'switch' ? 'aria-checked' : 'aria-pressed', String(on))
+
 const apply = () => {
   document.documentElement.dataset.theme = prefs.theme
   document.documentElement.style.setProperty('--code-size', `${prefs.size}px`)
   document.body.classList.toggle('wrap', prefs.wrap)
-  document.body.classList.toggle('focus', prefs.focus)
+  document.body.classList.toggle('nav-open', prefs.nav)
+  document.body.classList.toggle('feed-open', prefs.drawer)
   document.body.classList.toggle('office', prefs.office)
   const isMap = prefs.office && prefs.map
   document.body.classList.toggle('map', isMap)
   document.body.classList.toggle('angled', prefs.office && !isMap && prefs.angled) // the buttons that turn the view
+  document.body.classList.toggle('city', prefs.mapMode === 'city')
   office.setVisible(prefs.office && !isMap)
   map.setMode(prefs.mapMode)
   map.setMapping(prefs.mapShow)
-  document.body.classList.toggle('city', prefs.mapMode === 'city')
-  for (const part of Object.keys(MAP_SHOW)) $(`show-${part}`).value = prefs.mapShow[part]
   map.setVisible(isMap)
-  for (const mode of MAP_MODES) $(`m-${mode}`).setAttribute('aria-pressed', String(prefs.mapMode === mode))
-  if (prefs.office) $('files').append($('feed'))
-  else $('rz-aside').after($('feed'))
   office.setSound(prefs.sound)
   office.setAngled(prefs.angled)
   office.setRotation(prefs.rotation)
-  for (const [id, key] of [['b-follow', 'follow'], ['b-wrap', 'wrap'], ['b-whole', 'whole'], ['b-side', 'side'], ['b-focus', 'focus'], ['b-awake', 'awake'], ['b-sound', 'sound'], ['b-angled', 'angled'], ['b-folded', 'folded']])
-    $(id).setAttribute('aria-pressed', String(prefs[key]))
-  for (const [id, on] of [['v-code', !prefs.office], ['v-office', prefs.office && !isMap], ['v-map', isMap]]) $(id).setAttribute('aria-pressed', String(on))
-  for (const swatch of document.querySelectorAll('.swatch'))
-    swatch.setAttribute('aria-pressed', String(swatch.dataset.theme === prefs.theme))
-  $('speed').value = String(prefs.speed)
-  $('speed-out').textContent = SPEEDS[prefs.speed - 1].name
+
+  // every button and switch shows its choice
+  for (const el of document.querySelectorAll('[data-pref]')) press(el, prefs[el.dataset.pref])
+  for (const [id, on] of [['v-code', !prefs.office], ['v-office', prefs.office && !isMap], ['v-map', isMap], ['o-flat', !prefs.angled], ['b-angled', prefs.angled], ['b-nav', prefs.nav], ['b-feed', prefs.drawer]]) press($(id), on)
+  for (const mode of MAP_MODES) press($(`m-${mode}`), prefs.mapMode === mode)
+  for (const button of document.querySelectorAll('[data-show] button')) press(button, prefs.mapShow[button.parentElement.dataset.show] === button.dataset.value)
+  for (const button of $('speed').querySelectorAll('button')) press(button, prefs[speedKey()] === Number(button.dataset.speed))
+  for (const swatch of document.querySelectorAll('.swatch')) press(swatch, swatch.dataset.theme === prefs.theme)
+  $('size-out').textContent = `${prefs.size} px`
   for (const pane of panes) pane.updateBox()
   syncAwake()
 }
@@ -805,7 +804,8 @@ const apply = () => {
 const setPaused = on => {
   isPaused = on
   document.body.classList.toggle('paused', on)
-  $('b-pause').textContent = on ? 'Resume' : 'Pause'
+  $('b-pause').setAttribute('aria-label', on ? 'Resume' : 'Pause')
+  $('b-pause').title = on ? 'Resume' : 'Pause'
   $('b-pause').setAttribute('aria-pressed', String(on))
   office.setPaused(on)
   for (const pane of panes) pane.refresh()
@@ -817,14 +817,16 @@ $('b-skip').onclick = () => {
   skipAll()
   office.skip()
 }
-$('b-follow').onclick = () => save('follow', !prefs.follow)
-$('b-wrap').onclick = () => save('wrap', !prefs.wrap)
-$('b-whole').onclick = () => {
-  save('whole', !prefs.whole)
-  rerenderAll()
+// a choice that is on or off, from its button in the floating controls or its switch in Settings
+for (const el of document.querySelectorAll('[data-pref]')) {
+  el.onclick = () => {
+    const key = el.dataset.pref
+    save(key, !prefs[key])
+    if (key === 'whole' || key === 'side') rerenderAll()
+  }
 }
-$('b-focus').onclick = () => save('focus', !prefs.focus)
-$('b-awake').onclick = () => save('awake', !prefs.awake)
+for (const button of $('speed').querySelectorAll('button')) button.onclick = () => save(speedKey(), Number(button.dataset.speed))
+
 // leaving the Office is the one in-app way out of the picture, so it asks first
 const setView = view => {
   const leaving = prefs.office && !prefs.map && view !== 'office'
@@ -840,31 +842,71 @@ const setView = view => {
 $('v-code').onclick = () => setView('code')
 $('v-office').onclick = () => setView('office')
 $('v-map').onclick = () => setView('map')
+$('o-flat').onclick = () => save('angled', false)
+$('b-angled').onclick = () => save('angled', true)
 for (const mode of MAP_MODES) $(`m-${mode}`).onclick = () => save('mapMode', mode)
-for (const part of Object.keys(MAP_SHOW)) $(`show-${part}`).onchange = () => save('mapShow', { ...prefs.mapShow, [part]: $(`show-${part}`).value })
-$('b-sound').onclick = () => save('sound', !prefs.sound)
-$('b-angled').onclick = () => save('angled', !prefs.angled)
-$('b-folded').onclick = () => {
-  save('folded', !prefs.folded)
-  $('feed').classList.toggle('shut', prefs.folded)
+for (const button of document.querySelectorAll('[data-show] button')) button.onclick = () => save('mapShow', { ...prefs.mapShow, [button.parentElement.dataset.show]: button.dataset.value })
+
+// the panels that open and close: the chats, the Activity drawer, the City's layers, the new-window menu
+$('b-nav').onclick = () => save('nav', !prefs.nav)
+$('b-feed').onclick = () => save('drawer', !prefs.drawer)
+$('b-feed-close').onclick = () => save('drawer', false)
+const setOpen = (button, box, on) => {
+  box.hidden = !on
+  button.setAttribute(button.hasAttribute('aria-expanded') ? 'aria-expanded' : 'aria-pressed', String(on))
 }
-$('feed').classList.toggle('shut', prefs.folded)
+$('b-layers').onclick = () => setOpen($('b-layers'), $('map-show'), $('map-show').hidden)
+$('m-replay').addEventListener('click', () => setOpen($('b-layers'), $('map-show'), false)) // the time-lapse bar takes the layers' place
+$('b-pop').onclick = () => setOpen($('b-pop'), $('pop-menu'), $('pop-menu').hidden)
+$('pop-menu').addEventListener('click', event => event.target.closest('a') && setOpen($('b-pop'), $('pop-menu'), false))
+document.addEventListener('click', event => {
+  if (!$('pop-menu').hidden && !event.target.closest('.pop')) setOpen($('b-pop'), $('pop-menu'), false)
+  if (!$('map-show').hidden && !event.target.closest('#map-show, #b-layers')) setOpen($('b-layers'), $('map-show'), false)
+})
+
+// full screen: only the view and its own controls; the browser's own full screen too, where it has one
+const setFull = on => {
+  document.body.classList.toggle('full', on)
+  press($('b-full'), on)
+  $('b-full').setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen')
+  $('b-full').title = on ? 'Leave full screen' : 'Full screen'
+  if (on && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {})
+  if (!on && document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+  for (const pane of panes) pane.updateBox()
+}
+$('b-full').onclick = () => setFull(!document.body.classList.contains('full'))
+document.addEventListener('fullscreenchange', () => !document.fullscreenElement && document.body.classList.contains('full') && setFull(false))
+
 // the Map's repos folder: read again when the person stops typing (on change)
 $('repos-dir').value = prefs.reposDir
 $('repos-dir').onchange = () => {
   save('reposDir', $('repos-dir').value.trim())
   scheduleLists()
 }
-// the settings panel: the gear opens it, and a click anywhere else, or Escape, closes it
+
+// Settings: the gear opens it; the cross, a click outside it, or Escape closes it; a tab for each part of the app
 const setSettings = on => {
   $('settings').hidden = !on
   $('b-gear').setAttribute('aria-expanded', String(on))
+  if (on) document.querySelector('.stab[aria-selected="true"]').focus()
 }
-$('b-gear').onclick = () => setSettings($('settings').hidden)
-document.addEventListener('click', event => {
-  if (!$('settings').hidden && !event.target.closest('#settings, #b-gear')) setSettings(false)
+const showTab = tab => {
+  for (const el of document.querySelectorAll('.stab')) el.setAttribute('aria-selected', String(el.dataset.tab === tab))
+  for (const el of document.querySelectorAll('.spanel')) el.hidden = el.dataset.panel !== tab
+  $('tab-title').textContent = document.querySelector(`.stab[data-tab="${tab}"]`).textContent
+}
+for (const el of document.querySelectorAll('.stab')) el.onclick = () => showTab(el.dataset.tab)
+$('b-gear').onclick = () => setSettings(true)
+$('settings-close').onclick = () => setSettings(false)
+$('settings').addEventListener('click', event => event.target === $('settings') && setSettings(false))
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') return
+  if (!$('settings').hidden) setSettings(false)
+  else if (!$('pop-menu').hidden) setOpen($('b-pop'), $('pop-menu'), false)
+  else if (!$('map-show').hidden) setOpen($('b-layers'), $('map-show'), false)
+  else if (document.body.classList.contains('full') && !document.fullscreenElement) setFull(false)
 })
-document.addEventListener('keydown', event => event.key === 'Escape' && setSettings(false))
+
 // turn the angled view a quarter turn: the buttons, or [ and ] (not while typing in a field)
 const turnView = by => save('rotation', (prefs.rotation + by + 4) % 4)
 $('z-turn-left').onclick = () => turnView(-1)
@@ -877,8 +919,6 @@ document.addEventListener('keydown', event => {
 $('z-fit').onclick = () => (prefs.map ? map.resetView() : office.resetView())
 $('z-in').onclick = () => office.zoomBy(1.4)
 $('z-out').onclick = () => office.zoomBy(1 / 1.4)
-// in the Office the activity list sits under the chats, and can be folded away
-$('feed').querySelector('h2').onclick = () => $('feed').classList.toggle('shut')
 setInterval(() => prefs.office && scheduleLists(), 2000)
 $('b-record').disabled = !recorder.isSupported()
 if (!recorder.isSupported()) $('b-record').title = "This browser can't record mp4 (Chrome or Edge 126 or later can)"
@@ -891,15 +931,10 @@ window.addEventListener('beforeunload', event => {
   event.preventDefault()
   event.returnValue = ''
 })
-$('b-side').onclick = () => {
-  save('side', !prefs.side)
-  rerenderAll()
-}
-$('b-smaller').onclick = () => save('size', Math.max(11, prefs.size - 1))
-$('b-larger').onclick = () => save('size', Math.min(20, prefs.size + 1))
-$('speed').oninput = event => save('speed', Number(event.target.value))
-for (const swatch of document.querySelectorAll('.swatch'))
-  swatch.onclick = () => save('theme', swatch.dataset.theme)
+const textSize = by => save('size', Math.min(20, Math.max(11, prefs.size + by)))
+for (const id of ['b-smaller', 's-smaller']) $(id).onclick = () => textSize(-1)
+for (const id of ['b-larger', 's-larger']) $(id).onclick = () => textSize(1)
+for (const swatch of document.querySelectorAll('.swatch')) swatch.onclick = () => save('theme', swatch.dataset.theme)
 
 // the window's own size, from the app window itself
 const SIZES = { small: [1000, 700], medium: [1200, 800], large: [1600, 1000] }
@@ -932,7 +967,7 @@ source.onopen = () => {
   isReplaying = true
   resetView(null)
   scheduleLists()
-  $('conn').textContent = 'connected'
+  $('conn').textContent = ''
 }
 source.onerror = () => {
   if (!isStopped) $('conn').textContent = 'reconnecting...'
