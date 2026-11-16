@@ -1,3 +1,4 @@
+import { execFile } from 'node:child_process'
 import fs from 'node:fs/promises'
 import path from 'node:path'
 
@@ -11,7 +12,11 @@ const MAX_BYTES = 1024 * 1024 // a bigger file is not read, so it counts as one 
 
 // how many lines, and what it imports; lines -1 for a binary file
 const readFile = async (file, size, rel) => {
-  if (size > MAX_BYTES) return { lines: Math.ceil(size / 40), specs: [] }
+  if (size > MAX_BYTES) {
+    const handle = await fs.open(file)
+    const { buffer, bytesRead } = await handle.read(Buffer.alloc(8000), 0, 8000, 0).finally(() => handle.close())
+    return buffer.subarray(0, bytesRead).includes(0) ? { lines: -1 } : { lines: Math.ceil(size / 40), specs: [] }
+  }
   const buf = await fs.readFile(file)
   if (buf.subarray(0, 8000).includes(0)) return { lines: -1 }
   let n = buf.length > 0 && buf[buf.length - 1] !== 10 ? 1 : 0
@@ -19,8 +24,29 @@ const readFile = async (file, size, rel) => {
   return { lines: n, specs: importsOf(rel, buf.toString('utf8')) }
 }
 
-// [{ path: 'src/a.js', lines: 12, imports: ['src/b.js'] }], paths below `root` with forward slashes;
-// imports only when the file imports other files in the repo
+// git's word on when each file last changed: Map(path below `dir` -> ms), from the latest commits,
+// and now for a file changed but not committed yet; empty when `dir` is not in a git repo
+const git = (dir, args) =>
+  new Promise(resolve => execFile('git', args, { cwd: dir, maxBuffer: 64 * 1024 * 1024, timeout: 8000 }, (error, out) => resolve(error ? '' : out)))
+export const gitChanged = async dir => {
+  const out = new Map()
+  const [log, diff, untracked] = await Promise.all([
+    git(dir, ['log', '-n', '3000', '--relative', '--no-renames', '--format=@%ct', '--name-only']),
+    git(dir, ['diff', '--name-only', '--relative', 'HEAD']),
+    git(dir, ['ls-files', '--others', '--exclude-standard']),
+  ])
+  const now = Date.now()
+  for (const path of [...diff.split('\n'), ...untracked.split('\n')]) if (path) out.set(path, now)
+  let at = 0
+  for (const line of log.split('\n')) {
+    if (line.startsWith('@')) at = Number(line.slice(1)) * 1000
+    else if (line && !out.has(line)) out.set(line, at)
+  }
+  return out
+}
+
+// [{ path: 'src/a.js', lines: 12, imports: ['src/b.js'], changed: ms }], paths below `root` with forward slashes;
+// imports only when the file imports other files in the repo, changed only when git knows the file
 export const scanTree = async root => {
   const out = []
   const specs = new Map()
@@ -41,9 +67,12 @@ export const scanTree = async root => {
       }
     }
   }
-  await walk(root, '')
+  const [, changed] = await Promise.all([walk(root, ''), gitChanged(root)])
   const imports = resolveImports(specs, out.map(f => f.path))
-  for (const f of out) if (imports.has(f.path)) f.imports = imports.get(f.path)
+  for (const f of out) {
+    if (imports.has(f.path)) f.imports = imports.get(f.path)
+    if (changed.has(f.path)) f.changed = changed.get(f.path)
+  }
   return out
 }
 

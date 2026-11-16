@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { foldFiles, layoutCity } from '../public/city.js'
+import { ROAD, ageLight, cityArc, foldFiles, layoutCity, roadLines } from '../public/city.js'
 
 const FILES = [
   { path: 'README.md', lines: 40 },
@@ -10,6 +10,8 @@ const FILES = [
   { path: 'src/deep/c.js', lines: 90 },
   { path: 'docs/x.md', lines: 5 },
 ]
+
+const MANY = Array.from({ length: 120 }, (_, i) => ({ path: `d${i % 4}/e${i % 3}/f${i}.js`, lines: 10 + i }))
 
 const overlap = (a, b) => a.x < b.x + b.w - 1e-6 && b.x < a.x + a.w - 1e-6 && a.z < b.z + b.d - 1e-6 && b.z < a.z + a.d - 1e-6
 
@@ -52,4 +54,52 @@ test('layoutCity: folded blocks are laid out like files and say how many they ho
   const city = layoutCity(FILES, 2)
   assert.equal(city.files.length, 5)
   assert.equal(city.files.filter(f => f.folded).length, 3)
+})
+
+test('layoutCity: top folders have roads round them, wider than the gaps inside', () => {
+  const city = layoutCity(MANY)
+  const top = city.dirs.find(d => d.path === 'd0')
+  const inner = city.files.filter(f => f.path.startsWith('d0/'))
+  const left = Math.min(...inner.map(f => f.x)) - top.x
+  assert.ok(left >= ROAD - 1e-6, `${left}`)
+})
+
+test('roadLines: the edges of the city and of each top folder, each stretch once', () => {
+  const city = layoutCity(FILES)
+  const lines = roadLines(city)
+  const keys = lines.map(l => l.map(v => v.toFixed(3)).join(' '))
+  assert.equal(new Set(keys).size, keys.length)
+  assert.ok(lines.some(([x1, z1, x2, z2]) => x1 === 0 && z1 === 0 && x2 === city.width && z2 === 0)) // the city's own edge
+  const src = city.dirs.find(d => d.path === 'src')
+  assert.ok(lines.some(([x1, z1, , z2]) => Math.abs(x1 - src.x) < 1e-9 && Math.abs(z1 - src.z) < 1e-9 && Math.abs(z2 - (src.z + src.d)) < 1e-9))
+  assert.equal(lines.some(([x1, z1]) => city.dirs.some(d => d.path === 'src/deep' && x1 === d.x && z1 === d.z)), false) // no road round an inner folder
+})
+
+test('cityArc: from rooftop to rooftop, rising higher for buildings further apart', () => {
+  const a = { x: 0, y: 2, z: 0 }
+  const near = cityArc(a, { x: 4, y: 3, z: 0 }, 8)
+  const far = cityArc(a, { x: 40, y: 3, z: 0 }, 8)
+  assert.deepEqual(near[0], a)
+  assert.ok(Math.hypot(near[8].x - 4, near[8].y - 3, near[8].z) < 1e-9)
+  assert.ok(far[4].y > near[4].y && near[4].y > 3)
+})
+
+test('ageLight: fresh files are lit, old ones dim and grey, no date is in between', () => {
+  const now = Date.parse('2026-06-01')
+  const days = n => now - n * 86400000
+  assert.deepEqual(ageLight(days(1), now), { lit: 0.6, grey: 0 })
+  const old = ageLight(days(400), now)
+  assert.ok(old.lit < 0.1 && old.grey > 0.7)
+  const mid = ageLight(days(50), now)
+  assert.ok(mid.lit < 0.6 && mid.lit > old.lit && mid.grey === 0)
+  assert.deepEqual(ageLight(undefined, now), { lit: 0.25, grey: 0 })
+})
+
+test('layoutCity: past 3000 lines a file gets no more ground', () => {
+  const area = lines => {
+    const f = layoutCity([{ path: 'a/big.js', lines }, { path: 'a/small.js', lines: 100 }]).files.find(f => f.path === 'a/big.js')
+    return f.w * f.d
+  }
+  const ratio = lines => area(lines) / layoutCity([{ path: 'a/big.js', lines }, { path: 'a/small.js', lines: 100 }]).files.find(f => f.path === 'a/small.js').w
+  assert.ok(Math.abs(ratio(3000) - ratio(60000)) < 1e-6)
 })

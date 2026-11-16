@@ -6,10 +6,15 @@
 //   { width, depth,
 //     dirs:  [{ path, x, z, w, d }],                 the folders (root is '')
 //     files: [{ path, x, z, w, d, lines, folded }] } folded: how many files a "…" block stands for
+// The top folders are districts with roads between them; roadLines(city) gives the lines down their middles.
+// buildingHeight(lines), cityArc(a, b) (the arc an import is drawn along) and ageLight(changed, now)
+// (how lit a building's windows are, and how grey it has weathered) help draw it.
 
 export const MAX_FILES = 5000 // lots drawn one each; the rest are merged, one block per folder
 const PAD = 0.6 // the gap that makes a folder's edge, in world units
-const weight = lines => Math.sqrt(lines) + 3
+export const ROAD = 1.6 // and round a top folder, half a road's width
+const DAY = 86400000
+const weight = lines => Math.sqrt(Math.min(lines, 3000)) + 3 // past 3000 lines a file gets no more ground, so one huge file cannot flatten the rest
 
 // The longest files stay as they are; the rest become one block per folder.
 export const foldFiles = (files, max = MAX_FILES) => {
@@ -98,10 +103,50 @@ export const layoutCity = (files, max = MAX_FILES) => {
         continue
       }
       out.dirs.push({ path: node.path, x: r.x, z: r.z, w: r.w, d: r.d })
-      const pad = Math.min(PAD, r.w / 4, r.d / 4)
+      const pad = Math.min(node.path.includes('/') ? PAD : ROAD, r.w / 4, r.d / 4)
       place(node, r.x + pad, r.z + pad, r.w - 2 * pad, r.d - 2 * pad)
     }
   }
   place(root, 0, 0, side, side)
   return out
+}
+
+export const buildingHeight = lines => 0.4 + Math.log2(1 + lines) * 0.6
+
+// the middles of the roads: the edges of each top folder and of the whole city, each stretch once,
+// as segments [x1, z1, x2, z2]
+export const roadLines = city => {
+  const out = new Map()
+  const add = (x1, z1, x2, z2) => {
+    const key = [x1, z1, x2, z2].map(v => v.toFixed(3)).join(' ')
+    if (Math.hypot(x2 - x1, z2 - z1) > 1e-6) out.set(key, [x1, z1, x2, z2])
+  }
+  const rect = ({ x, z, w, d }) => {
+    add(x, z, x + w, z)
+    add(x, z + d, x + w, z + d)
+    add(x, z, x, z + d)
+    add(x + w, z, x + w, z + d)
+  }
+  rect({ x: 0, z: 0, w: city.width, d: city.depth })
+  for (const dir of city.dirs) if (!dir.path.includes('/')) rect(dir)
+  return [...out.values()]
+}
+
+// the arc from one rooftop to another, higher the further apart they are: points { x, y, z }
+export const cityArc = (a, b, steps = 16) => {
+  const length = Math.hypot(b.x - a.x, b.z - a.z)
+  const rise = 1 + length * 0.22
+  return Array.from({ length: steps + 1 }, (_, i) => {
+    const t = i / steps
+    return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t + rise * Math.sin(Math.PI * t), z: a.z + (b.z - a.z) * t }
+  })
+}
+
+// a file changed in the last two weeks has most windows lit; one left alone for months has few, and weathers grey.
+// No date (not in git): in between. { lit: 0..1 share of windows lit, grey: 0..1 }
+export const ageLight = (changed, now) => {
+  if (!changed) return { lit: 0.25, grey: 0 }
+  const days = Math.max(0, (now - changed) / DAY)
+  const lit = days < 14 ? 0.6 : days < 90 ? 0.6 - ((days - 14) / 76) * 0.45 : 0.08
+  return { lit, grey: Math.min(1, Math.max(0, (days - 60) / 300)) * 0.75 }
 }

@@ -7,6 +7,7 @@
 //   nodes:  [{ path, lines, cloud, degree, x, y, z }]   only real files, no folders
 //   links:  [[a, b], ...]                               indexes into nodes, each pair once
 //   clouds: [{ dir, hue, x, y, z, spread, count }]      one per folder, hue 0..1
+// importLinks(files, at) is the links alone, for the City too.
 // curvePoints(a, b, steps) is the gentle arc a link is drawn along.
 
 const SPACE = 6 // about the gap between neighbouring stars, in world units
@@ -18,6 +19,23 @@ const hash = text => {
   let h = 2166136261
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619)
   return ((h >>> 0) % 100000) / 100000
+}
+
+// the import links among some files: [[a, b], ...] as numbered by `at` (Map path -> number), each pair once
+export const importLinks = (files, at) => {
+  const seen = new Set()
+  const out = []
+  for (const f of files) {
+    for (const to of f.imports ?? []) {
+      const a = at.get(f.path)
+      const b = at.get(to)
+      const key = a < b ? `${a} ${b}` : `${b} ${a}`
+      if (a === undefined || b === undefined || a === b || seen.has(key)) continue
+      seen.add(key)
+      out.push([a, b])
+    }
+  }
+  return out
 }
 
 const dirOf = path => path.slice(0, Math.max(path.lastIndexOf('/'), 0))
@@ -49,18 +67,10 @@ export const layoutNebula = (files, iterations) => {
     const r = Math.sqrt(1 - u * u)
     return { path: f.path, lines: f.lines, cloud, degree: 0, x: c.x + Math.cos(t) * r * s, y: c.y + u * s, z: c.z + Math.sin(t) * r * s }
   })
-  const seen = new Set()
-  for (const f of sorted) {
-    for (const to of f.imports ?? []) {
-      const a = at.get(f.path)
-      const b = at.get(to)
-      const key = a < b ? `${a} ${b}` : `${b} ${a}`
-      if (b === undefined || a === b || seen.has(key)) continue
-      seen.add(key)
-      out.links.push([a, b])
-      out.nodes[a].degree++
-      out.nodes[b].degree++
-    }
+  out.links = importLinks(sorted, at)
+  for (const [a, b] of out.links) {
+    out.nodes[a].degree++
+    out.nodes[b].degree++
   }
 
   settle(out, iterations ?? Math.round(Math.max(40, Math.min(220, 400000 / files.length))))
