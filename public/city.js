@@ -11,7 +11,7 @@
 //                                                     ring: the points round the middle of its ring road
 //     files: [{ path, x, z, w, d, angle, r, lines, folded, district }],  x, z the middle; r the room it keeps round it
 //     roads: [[{ x, z }, ...], ...] }                 the main roads, as points along each
-// treeSpots(city) gives where trees can stand. buildingHeight(lines) and buildingPieces(w, d, lines, seed) shape
+// treeSpots(city) gives where trees can stand. buildingHeight(lines) and buildingShape(w, d, lines, seed) shape
 // the buildings, cityArc(a, b) is the arc an import is drawn along, and ageLight(changed, now) how lit a
 // building's windows are.
 
@@ -276,23 +276,65 @@ export const layoutCity = (files, max = MAX_FILES) => {
 // past 3000 lines (about 28 high) a building grows no taller; a short file is a low house, a long one a skyscraper
 export const buildingHeight = lines => 0.6 + 0.5 * Math.sqrt(Math.min(lines, 3000))
 
-// the boxes a building of footprint w x d is made of, each { x, z, w, d, y0, y1 } with x, z its middle's offset from
-// the building's: one box for a small file; a big one steps in as it rises (two tiers, three past 1200 lines), the
-// top tier off-centre on some, and past 2000 lines it carries a spire
-export const buildingPieces = (w, d, lines, seed) => {
+// The shape of a building of footprint w x d for a file of this many lines; seed (0..1, from the file's path) picks
+// among the shapes a size has, so one file always has the same: { kind, pieces, caps, rise }.
+//   pieces  the boxes it is made of, each { x, z, w, d, y0, y1 } with x, z its middle's offset from the building's;
+//           `top: true` on those that carry the roof (the roof boxes and the cranes go there)
+//   caps    roofs sitting on a top piece, each { kind, x, z, w, d, y0, y1 }: 'gable' (a pitched roof), 'slant' (a roof
+//           rising to one side) or 'pyramid'
+//   rise    how high the highest roof reaches
+// Small files are houses (pitched roof), L-shaped wings or plain blocks; middling ones stepped towers, wide slabs, a
+// wide base under a tower, or a glass tower with a slanted top; big ones Art Deco towers (setbacks, a pointed crown
+// and, past 2000 lines, a spire), twin towers on one base, glass towers or plain setback towers.
+export const buildingShape = (w, d, lines, seed) => {
   const h = buildingHeight(lines)
-  const box = (inset, y0, y1, shift = 0) => ({ x: shift * w, z: -shift * d, w: w * (1 - 2 * inset), d: d * (1 - 2 * inset), y0, y1 })
-  if (lines < 250 || Math.min(w, d) < 1.2) return [box(0, 0, h)]
-  const low = h * (0.4 + seed * 0.25)
+  const box = (inset, y0, y1, shift = 0, top = true) => ({ x: shift * w, z: -shift * d, w: w * (1 - 2 * inset), d: d * (1 - 2 * inset), y0, y1, top })
+  const part = (x, z, pw, pd, y0, y1, top = true) => ({ x: x * w, z: z * d, w: pw * w, d: pd * d, y0, y1, top }) // x, z, pw, pd as shares of the footprint
+  const done = (kind, pieces, caps = []) => ({ kind, pieces, caps, rise: Math.max(...pieces.filter(p => p.top).map(p => p.y1), ...caps.map(c => c.y1)) })
   const lean = seed > 0.5 ? (seed - 0.5) * 0.25 : 0
-  if (lines < 1200) return [box(0, 0, low), box(0.16, low, h, lean)]
+  const cap = (kind, piece, rise) => ({ kind, x: piece.x, z: piece.z, w: piece.w, d: piece.d, y0: piece.y1, y1: piece.y1 + rise })
+  const thin = Math.min(w, d) < 1.2
+
+  if (lines < 250 || thin) {
+    const one = box(0, 0, h)
+    if (seed < 0.45) return done('house', [one], [cap('gable', one, Math.min(w, d) * 0.4)])
+    if (thin) return done('needle', [one], [cap('pyramid', one, Math.max(w, d) * 0.9)])
+    if (seed < 0.7) return done('wing', [part(-0.2, 0, 0.6, 1, 0, h), part(0.3, 0.2, 0.4, 0.6, 0, h * 0.65)])
+    return done('block', [one])
+  }
+
+  const low = h * (0.4 + seed * 0.25)
+  if (lines < 1200) {
+    if (seed < 0.3) return done('stepped', [box(0, 0, low, 0, false), box(0.16, low, h, lean)])
+    if (seed < 0.55) return done('slab', [box(0, 0, h * 0.62, 0, false), box(0.28, h * 0.62, h * 0.74)])
+    if (seed < 0.8) return done('podium', [box(0, 0, h * 0.3, 0, false), box(0.24, h * 0.3, h)])
+    const glass = box(0.08, 0, h)
+    return done('glass', [glass], [cap('slant', glass, h * 0.16)])
+  }
+
+  if (seed < 0.4) {
+    const mid = low + (h - low) * 0.6
+    const crown = box(0.26, mid, h, lean)
+    const pieces = [box(0, 0, low, 0, false), box(0.13, low, mid, lean / 2, false), crown]
+    const point = cap('pyramid', crown, h * 0.12)
+    if (lines >= 2000) {
+      const s = Math.min(w, d) * 0.06
+      pieces.push({ x: crown.x, z: crown.z, w: s, d: s, y0: point.y1, y1: h * 1.3, top: false })
+    }
+    return done('deco', pieces, [point])
+  }
+  if (seed < 0.65) return done('twin', [part(0, 0, 1, 1, 0, h * 0.22, false), part(-0.24, 0, 0.4, 0.55, h * 0.22, h), part(0.24, 0, 0.4, 0.55, h * 0.22, h * 0.93)])
+  if (seed < 0.85) {
+    const glass = box(0.1, 0, h)
+    return done('glass', [glass], [cap('slant', glass, h * 0.12)])
+  }
   const mid = low + (h - low) * 0.6
-  const pieces = [box(0, 0, low), box(0.13, low, mid, lean / 2), box(0.26, mid, h, lean)]
+  const pieces = [box(0, 0, low, 0, false), box(0.13, low, mid, lean / 2, false), box(0.26, mid, h, lean)]
   if (lines >= 2000) {
     const s = Math.min(w, d) * 0.06
-    pieces.push({ x: lean * w, z: -lean * d, w: s, d: s, y0: h, y1: h * 1.2 })
+    pieces.push({ x: lean * w, z: -lean * d, w: s, d: s, y0: h, y1: h * 1.2, top: false })
   }
-  return pieces
+  return done('setback', pieces)
 }
 
 // where trees can stand: in the parks the buildings left inside a district, and on the open ground round the

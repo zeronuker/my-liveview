@@ -153,6 +153,7 @@ const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[
 const map = createMap({
   canvas: $('map-canvas'),
   tip: $('map-tip'),
+  legend: $('map-legend'),
   bar: { box: $('replay'), open: $('m-replay'), play: $('r-play'), time: $('r-time'), date: $('r-date'), speed: $('r-speed'), close: $('r-close') },
   onTree: count => {
     mapFiles = count
@@ -862,7 +863,16 @@ const setOpen = (button, box, on) => {
 $('b-layers').onclick = () => setOpen($('b-layers'), $('map-show'), $('map-show').hidden)
 $('m-replay').addEventListener('click', () => setOpen($('b-layers'), $('map-show'), false)) // the time-lapse bar takes the layers' place
 $('b-pop').onclick = () => setOpen($('b-pop'), $('pop-menu'), $('pop-menu').hidden)
-$('pop-menu').addEventListener('click', event => event.target.closest('a') && setOpen($('b-pop'), $('pop-menu'), false))
+// a menu item opens a window like this one, made by the server (no tabs, no address bar); the link's own
+// target="_blank" is the way out if the server cannot (no Chrome or Edge found)
+$('pop-menu').addEventListener('click', async event => {
+  const link = event.target.closest('a')
+  if (!link) return
+  setOpen($('b-pop'), $('pop-menu'), false)
+  event.preventDefault()
+  const opened = await fetch(`/open${new URL(link.href).search}`, { method: 'POST' }).then(res => res.ok, () => false)
+  if (!opened) window.open(link.href, '_blank', 'noopener')
+})
 document.addEventListener('click', event => {
   if (!$('pop-menu').hidden && !event.target.closest('.pop')) setOpen($('b-pop'), $('pop-menu'), false)
   if (!$('map-show').hidden && !event.target.closest('#map-show, #b-layers')) setOpen($('b-layers'), $('map-show'), false)

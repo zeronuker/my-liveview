@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { CHOICES, litOf, sizeOf, tintOf } from '../public/measure.js'
+import { cloudColor } from '../public/nebula.js'
+import { ACCENT_SHARE, CHOICES, folderTint, hueOfHex, litOf, sizeOf, tintOf } from '../public/measure.js'
 
 const NOW = Date.parse('2026-06-01')
 const day = n => NOW - n * 86400000
@@ -20,6 +21,25 @@ test('sizeOf: lines as they are, or changes scaled so the most changed file coun
 test('litOf: recent work, or more windows lit the more often a file changed', () => {
   assert.equal(litOf({ changed: day(1) }, 'recent', NOW, 10), 0.6)
   assert.ok(litOf({ changes: 10 }, 'changes', NOW, 10) > litOf({ changes: 1 }, 'changes', NOW, 10))
+})
+
+test('folderTint: a colour for each neighbourhood, each building its own shade, two in six in a material of their own', () => {
+  const paths = Array.from({ length: 900 }, (_, i) => `src/dir${i % 9}/file${i}.js`)
+  const tints = paths.map((path, i) => folderTint(path, i % 9))
+  for (const t of tints) assert.ok([t.h, t.s, t.l].every(v => v >= 0 && v <= 1), JSON.stringify(t))
+  assert.deepEqual(folderTint('a/b.js', 3), folderTint('a/b.js', 3)) // a file never changes colour
+
+  // about one in three is an accent, and the rest sit near their neighbourhood's colour (the Nebula's folder colours)
+  const near = (a, b) => Math.min(Math.abs(a - b), 1 - Math.abs(a - b))
+  const hueOfNeighbourhood = i => hueOfHex(cloudColor(i))
+  const own = tints.filter((t, i) => near(t.h, hueOfNeighbourhood(i % 9)) <= 0.03)
+  const accents = tints.length - own.length
+  assert.ok(Math.abs(accents - 900 * ACCENT_SHARE) <= 900 * 0.05, `${accents} of 900 are accents, not about 300`)
+
+  // buildings in one neighbourhood differ, and neighbourhoods differ from each other
+  const shades = new Set(paths.filter((p, i) => i % 9 === 0).slice(0, 40).map(path => JSON.stringify(folderTint(path, 0))))
+  assert.ok(shades.size >= 30, `${shades.size} different shades`)
+  for (let i = 0; i < 9; i++) for (let j = i + 1; j < 9; j++) assert.ok(near(hueOfNeighbourhood(i), hueOfNeighbourhood(j)) > 0.05, `neighbourhoods ${i} and ${j}`)
 })
 
 test('tintOf: folder keeps the folder colours; age, changes and type give a colour of their own', () => {

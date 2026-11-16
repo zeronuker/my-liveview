@@ -4,10 +4,10 @@
 // Both share the links that light up with running light, and the comets from one file to the next.
 // glow.js says what is lit. This draws it with three.js, which is only loaded the first time the Map is shown.
 
-import { ROAD, ageLight, buildingHeight, buildingPieces, cityArc, hash, layoutCity, treeSpots } from './city.js'
+import { ROAD, ageLight, buildingHeight, buildingShape, cityArc, hash, layoutCity, treeSpots } from './city.js'
 import { FADE_MS, glowLevel, touchOf } from './glow.js'
-import { litOf, sizeOf, tintOf } from './measure.js'
-import { blastRadius, curvePoints, importLinks, layoutNebula } from './nebula.js'
+import { folderTint, litOf, sizeOf, tintOf } from './measure.js'
+import { blastRadius, cloudColor, curvePoints, importLinks, layoutNebula } from './nebula.js'
 import { changesBetween, stateAt, timeline } from './replay.js'
 
 const BLAST = '#8fe9ff' // the colour of a blast radius
@@ -15,9 +15,15 @@ const COLORS = {
   folded: '#4a4d55', read: '#6cb4ff', edit: '#ffb347', new: '#7bf0a0', sky: '#05060f', night: '#060b0d',
   asphalt: '#161a21', walk: '#222833', lane: '#d8c48a', lamp: '#ffcf7a', roof: '#5a6170', crane: '#f0b43c', arc: '#5fd3e6', grey: '#6d7079',
 }
-const DISTRICT_HUES = [0.97, 0.08, 0.53, 0.74, 0.13, 0.44, 0.88, 0.6] // muted pinks, creams, teals, lavenders
 const RANK = { read: 1, edit: 2, new: 3 }
-const LABELS = 12 // the biggest folders are named
+const LABELS = 12 // the biggest folders are named (city)
+const CLOUD_LABELS = 30 // and in the nebula the biggest 30, each in its colour
+const LEGEND = 14 // the key lists this many of them
+const TOP_NAMES = 5 // seen from far off, only this many folders are named
+const NAME_DIST = 60 // within this of the camera a star's file name shows (the nearest MAX_NAMES of them)
+const MAX_NAMES = 16
+const NAME_SIZE = 0.045 // how tall a folder's name is, as a share of its distance from the camera
+const FILE_SIZE = 0.04 // and a file's name
 const DUST_PER_FILE = 3 // faint specks in each cloud, so a bigger folder is a denser cloud
 const REFETCH_MS = 1500 // a file that is not in the map yet: the repo is read again after this
 const GROW_MS = 900 // a star fades in, or a building rises, over this long
@@ -25,7 +31,8 @@ const SPREAD_MS = 1400 // and the outermost starts this much after the middle
 const TRAIL_MS = 1100 // the comet takes this long from one file to the next
 const TAIL = 26 // points in a comet's tail
 const TRAILS = 3 // comets drawn at once
-const STEPS = 12 // segments in a link's curve
+const STEPS = 20 // segments in a link's curve
+const LINK_EASE_S = 0.12 // a link takes about three times this to fade in or out
 const SPARKS = 2 // lights running along each lit link
 const MAX_SPARKS = 600
 const RINGS = 48 // pulse rings drawn at once (nebula)
@@ -40,9 +47,22 @@ const depthOf = path => (path ? path.split('/').length : 0)
 const slabTop = depth => 0.2 + Math.min(depth, 6) * 0.03
 const ease = t => 1 - (1 - Math.min(Math.max(t, 0), 1)) ** 3
 
-// canvas and tip are the Map's canvas and its pointer tip; bar is the time-lapse bar's parts:
+// puts slot `slot` of a position array a share t (0 to 1) of the way along a curve's points, between two of them, so a
+// light glides along the curve and does not hop from point to point
+export const putOn = (position, slot, points, t) => {
+  const f = Math.min(Math.max(t, 0), 1) * (points.length - 1)
+  const i = Math.min(Math.floor(f), points.length - 2)
+  const u = f - i
+  const a = points[i]
+  const b = points[i + 1]
+  position[slot * 3] = a.x + (b.x - a.x) * u
+  position[slot * 3 + 1] = a.y + (b.y - a.y) * u
+  position[slot * 3 + 2] = a.z + (b.z - a.z) * u
+}
+
+// canvas and tip are the Map's canvas and its pointer tip; legend is the nebula's key of folder colours; bar is the time-lapse bar's parts:
 // { box, open, play, time, date, speed, close }; onTree(count) is told how many files the repo shown has
-export const createMap = ({ canvas, tip, bar, onTree }) => {
+export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
   let T = null // { THREE, OrbitControls }, once loaded
   let scene, camera, renderer, controls, raycaster
   let group = null // everything drawn for the current repo
@@ -58,6 +78,7 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
   let lastTree = null // the repo's files as last read, so a change of style needs no new read
   let glide = null // the camera easing to a new place
   let hovered = -1 // the file under the pointer
+  let legendLit = -1 // the nebula folder whose name in the key is under the pointer
   let loadGen = 0
   let frame = 0
   let refetch = 0
@@ -93,6 +114,8 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     controls = new OrbitControls(camera, canvas)
     controls.enableDamping = true
     controls.addEventListener('start', () => (glide = null))
+    canvas.addEventListener('pointermove', panOnBothButtons)
+    window.addEventListener('keydown', panByKey)
     raycaster = new THREE.Raycaster()
     canvas.addEventListener('pointermove', hover)
     canvas.addEventListener('pointerleave', () => {
@@ -104,6 +127,40 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     canvas.addEventListener('dblclick', () => fit())
     window.addEventListener('keydown', event => event.key === 'Escape' && visible && (focus = null))
     new ResizeObserver(resize).observe(canvas)
+  }
+
+  // Moving the view sideways (pan): the right button, Shift with the left, or two fingers (they pan and zoom) are the
+  // controls' own. This adds both buttons together: press the right one while the left is held, and the turn becomes a pan.
+  // The browser reports that as a move with both buttons down, not as a new press, so the controls are told the drag
+  // began again with the right button.
+  let chorded = false
+  const panOnBothButtons = event => {
+    if (event.pointerType !== 'mouse') return
+    if ((event.buttons & 3) !== 3) {
+      chorded = event.buttons !== 0 && chorded // every button up: the next drag may chord again
+      return
+    }
+    if (chorded) return
+    chorded = true
+    const same = { bubbles: true, cancelable: true, pointerId: event.pointerId, pointerType: 'mouse', isPrimary: true, clientX: event.clientX, clientY: event.clientY }
+    canvas.dispatchEvent(new PointerEvent('pointerup', { ...same, button: 0, buttons: 0 }))
+    canvas.dispatchEvent(new PointerEvent('pointerdown', { ...same, button: 2, buttons: 3 }))
+  }
+
+  // the arrow keys move the view sideways (Shift for bigger steps), when the Map is shown and no field has the keys
+  const panByKey = event => {
+    const dx = { ArrowLeft: -1, ArrowRight: 1 }[event.key] ?? 0
+    const dy = { ArrowDown: -1, ArrowUp: 1 }[event.key] ?? 0
+    if (!visible || !(dx || dy) || event.ctrlKey || event.metaKey || event.altKey) return
+    if (event.target.closest?.('input, select, textarea, [contenteditable], #settings')) return
+    const { Vector3 } = T.THREE
+    const step = camera.position.distanceTo(controls.target) * (event.shiftKey ? 0.18 : 0.06)
+    const move = new Vector3().setFromMatrixColumn(camera.matrix, 0).multiplyScalar(dx * step)
+    move.addScaledVector(new Vector3().setFromMatrixColumn(camera.matrix, 1), dy * step)
+    camera.position.add(move)
+    controls.target.add(move)
+    glide = null
+    event.preventDefault()
   }
 
   const resize = () => {
@@ -131,7 +188,8 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     glideTo(cam, center)
   }
 
-  const label = (text, serif) => {
+  // a name as a sprite, in `color` if given; the serif ones are the Nebula's folders' names
+  const label = (text, serif, color) => {
     const c = document.createElement('canvas')
     c.width = 256
     c.height = 64
@@ -139,15 +197,15 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     g.textAlign = 'center'
     g.textBaseline = 'middle'
     if (serif) {
-      g.font = 'italic 300 32px Georgia, serif'
-      g.shadowColor = 'rgba(160, 180, 255, 0.9)'
+      g.font = 'italic 400 32px Georgia, serif'
+      g.shadowColor = color
       g.shadowBlur = 12
-      g.fillStyle = 'rgba(226, 232, 255, 0.85)'
+      g.fillStyle = color
     } else {
       g.font = '600 30px ui-monospace, Consolas, monospace'
       g.shadowColor = 'rgba(0, 0, 0, 0.9)'
       g.shadowBlur = 8
-      g.fillStyle = 'rgba(232, 236, 245, 0.9)'
+      g.fillStyle = color ?? 'rgba(232, 236, 245, 0.9)'
     }
     g.fillText(text, 128, 32, 246)
     return new T.THREE.Sprite(new T.THREE.SpriteMaterial({ map: new T.THREE.CanvasTexture(c), depthTest: serif, transparent: true, depthWrite: false, opacity: serif ? 0.8 : 1 }))
@@ -178,6 +236,9 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     items = []
     dotSets.length = 0
     hovered = -1
+    legendLit = -1
+    legend.replaceChildren()
+    legend.hidden = true
     focus = null
     index.clear()
     if (fresh) born.clear()
@@ -207,22 +268,23 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     if (replay) stateNow() // the time-lapse's sizes, for the files as now numbered
   }
 
-  // soft glowing dots, drawn in the shader; `ring` draws each as a thin ring instead
-  const pointMaterial = ring =>
+  // soft glowing dots, drawn in the shader; `ring` draws each as a thin ring instead; `star` makes them the nebula's stars: a
+  // wider, brighter core, and never smaller than a few pixels however far off (a star of size 0 is not drawn)
+  const pointMaterial = (ring, star) =>
     new T.THREE.ShaderMaterial({
       uniforms: { uScale: { value: 600 } },
       vertexShader: `attribute float aSize; attribute vec3 aColor; attribute vec3 aHalo; attribute float aGlow;
         uniform float uScale; varying vec3 vC; varying vec3 vH; varying float vG;
         void main() { vec4 mv = modelViewMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * mv;
-          gl_PointSize = uScale * aSize * 6.0 / -mv.z; vC = aColor; vH = aHalo; vG = aGlow; }`,
+          gl_PointSize = ${star ? 'aSize > 0.0 ? max(uScale * aSize * 6.0 / -mv.z, 4.0) : 0.0' : 'uScale * aSize * 6.0 / -mv.z'}; vC = aColor; vH = aHalo; vG = aGlow; }`,
       fragmentShader: ring
         ? `varying vec3 vC; varying vec3 vH; varying float vG;
           void main() { float d = length(gl_PointCoord - 0.5) * 2.0; if (d > 1.0) discard;
             float band = exp(-pow((d - 0.82) * 9.0, 2.0)); gl_FragColor = vec4(vH * band * vG, 1.0); }`
         : `varying vec3 vC; varying vec3 vH; varying float vG;
           void main() { float d = length(gl_PointCoord - 0.5) * 2.0; if (d > 1.0) discard;
-            float core = exp(-d * d * 40.0); float halo = (exp(-d * d * 6.0) * 0.7 + pow(1.0 - d, 3.0) * 0.3) * vG;
-            gl_FragColor = vec4(vC * core * 1.3 + vH * halo, 1.0); }`,
+            float core = exp(-d * d * ${star ? '14.0' : '40.0'}); float halo = (exp(-d * d * 6.0) * 0.7 + pow(1.0 - d, 3.0) * 0.3) * vG;
+            gl_FragColor = vec4(vC * core * ${star ? '1.7' : '1.3'} + vH * halo, 1.0); }`,
       transparent: true,
       blending: T.THREE.AdditiveBlending,
       depthWrite: false,
@@ -230,12 +292,12 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
 
   // a set of dots whose size, colour and glow can change every frame
   const dotSets = []
-  const dotSet = (count, ring) => {
+  const dotSet = (count, ring, star) => {
     const { THREE } = T
     const attrs = { position: new Float32Array(count * 3), aSize: new Float32Array(count), aColor: new Float32Array(count * 3), aHalo: new Float32Array(count * 3), aGlow: new Float32Array(count) }
     const geometry = new THREE.BufferGeometry()
     for (const [name, array] of Object.entries(attrs)) geometry.setAttribute(name, new THREE.BufferAttribute(array, name === 'aSize' || name === 'aGlow' ? 1 : 3))
-    const points = new THREE.Points(geometry, pointMaterial(ring))
+    const points = new THREE.Points(geometry, pointMaterial(ring, star))
     points.frustumCulled = false
     const changed = (...names) => names.forEach(name => (geometry.attributes[name].needsUpdate = true))
     const set = { points, attrs, geometry, changed }
@@ -310,7 +372,7 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     const sparks = dotSet(MAX_SPARKS)
     const trail = dotSet(TRAILS * TAIL)
     group.add(lines, sparks.points, trail.points)
-    web = { spots, links, linksOf, curves, attrs, geometry, material, sparks, trail, arc, lit: new Set() }
+    web = { spots, links, linksOf, curves, attrs, geometry, material, sparks, trail, arc, shown: new Map(), at: 0 } // shown: link -> { glow, flow, color } as drawn now
   }
 
   const addNebula = (tree, fresh) => {
@@ -321,8 +383,8 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     group.userData.center = new THREE.Vector3()
     group.userData.cam = new THREE.Vector3(0, R * 0.55, R * 2.6)
     controls.maxDistance = R * 6
-    const cloudColor = c => new THREE.Color().setHSL(c.hue, 0.7, 0.62)
-    const starColor = c => new THREE.Color().setHSL(c.hue, 0.65, 0.76)
+    const cloudColor = c => new THREE.Color(c.color)
+    const starColor = c => new THREE.Color(c.color).lerp(new THREE.Color('#ffffff'), 0.2) // lit, but still its folder's colour
     number(nodes, fresh, n => Math.hypot(n.x, n.y, n.z) / R)
 
     // far stars all round, and faint dust in each cloud, more where there are more files
@@ -333,7 +395,7 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     const dust = dotSet(specks.length)
     specks.forEach((c, i) => {
       const spread = c.spread + 4
-      const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * spread * 1.1
+      const gauss = () => (Math.random() + Math.random() + Math.random() - 1.5) * spread * 0.7 // stays inside the cloud, so the space between clouds is empty
       dust.attrs.position.set([c.x + gauss(), c.y + gauss() * 0.7, c.z + gauss()], i * 3)
       dust.attrs.aSize[i] = 0.1 + Math.random() * 0.2
       const tint = cloudColor(c).multiplyScalar(0.06 + Math.random() * 0.07)
@@ -348,15 +410,16 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     const faint = Math.min(1, Math.sqrt(8 / big.length))
     for (const c of big) {
       const base = cloudColor(c)
-      const size = (c.spread + 8) * 2.6
+      const size = (c.spread + 6) * 1.9
       for (let k = 0; k < 3; k++) {
-        const material = new THREE.SpriteMaterial({ map: puffTexture(), color: base.clone().offsetHSL((k - 1) * 0.04, 0, 0), transparent: true, opacity: (0.11 * faint) / (1 + k * 0.3), blending: THREE.AdditiveBlending, depthWrite: false })
+        const opacity = (0.15 * faint) / (1 + k * 0.3)
+        const material = new THREE.SpriteMaterial({ map: puffTexture(), color: base.clone().offsetHSL((k - 1) * 0.02, 0, 0), transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false })
         const sprite = new THREE.Sprite(material)
         const off = (c.spread + 4) * 0.35
         sprite.position.set(c.x + (Math.random() - 0.5) * off, c.y + (Math.random() - 0.5) * off, c.z + (Math.random() - 0.5) * off)
         sprite.scale.setScalar(size * (1 - k * 0.22))
         material.rotation = Math.random() * Math.PI * 2
-        clouds.push({ sprite, spin: (Math.random() - 0.5) * 0.00008 })
+        clouds.push({ sprite, spin: (Math.random() - 0.5) * 0.00008, cloud: layout.clouds.indexOf(c), opacity })
         group.add(sprite)
       }
     }
@@ -366,20 +429,40 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     const linkLight = 0.11 * Math.min(1, Math.sqrt(150 / Math.max(layout.links.length, 1))) // fainter when there are many, so a big repo does not wash out
     addWeb(nodes, layout.links, i => colors[i], curvePoints, linkLight)
 
-    const stars = dotSet(nodes.length)
+    const stars = dotSet(nodes.length, false, true)
     nodes.forEach((n, i) => stars.attrs.position.set([n.x, n.y, n.z], i * 3))
-    const sizes = nodes.map(n => 0.22 + Math.sqrt(n.degree) * 0.09 + Math.log2(1 + n.lines) * 0.018)
+    // a file with many links is clearly bigger than one with none; a longer file a little bigger
+    const sizes = nodes.map(n => 0.4 + Math.sqrt(n.degree) * 0.2 + Math.log2(1 + n.lines) * 0.03)
     const phases = nodes.map((n, i) => (i * 2.399) % (Math.PI * 2))
     const rings = dotSet(RINGS, true)
     group.add(stars.points, rings.points)
-    sky = { stars, rings, colors, sizes, phases, clouds, R }
+    sky = { stars, rings, colors, sizes, phases, clouds, R, names: [], files: new Map() } // files: path -> its name's sprite, made when first near
 
     const name = folderNames(big.map(c => c.dir))
-    for (const c of big.filter(c => c.count > 1).sort((a, b) => b.count - a.count).slice(0, LABELS)) {
-      const sprite = label(name(c.dir), true)
-      sprite.scale.set(R * 0.4, R * 0.1, 1)
+    // folder names, in their colour; paintNebula shows them by how near the camera is (see names there)
+    const named = big.filter(c => c.count > 1).sort((a, b) => b.count - a.count).slice(0, CLOUD_LABELS)
+    sky.names = named.map((c, rank) => {
+      const sprite = label(name(c.dir), true, c.color)
       sprite.position.set(c.x, c.y + c.spread * 0.8 + 4, c.z)
       group.add(sprite)
+      return { sprite, rank, cloud: layout.clouds.indexOf(c), at: new THREE.Vector3(c.x, c.y, c.z), reach: c.spread + 4 }
+    })
+
+    // the key: each folder's colour and name; pointing at one lights that folder and dims the rest
+    legend.hidden = !named.length
+    for (const c of named.slice(0, LEGEND)) {
+      const chip = document.createElement('button')
+      chip.type = 'button'
+      const dot = document.createElement('span')
+      dot.style.background = c.color
+      chip.append(dot, name(c.dir))
+      const on = () => (legendLit = layout.clouds.indexOf(c))
+      const off = () => (legendLit = -1)
+      chip.addEventListener('pointerenter', on)
+      chip.addEventListener('focus', on)
+      chip.addEventListener('pointerleave', off)
+      chip.addEventListener('blur', off)
+      legend.append(chip)
     }
   }
 
@@ -403,15 +486,18 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
   // aHeat glows a building Claude is working on; aDim darkens one outside a blast radius
   const buildingMaterial = () =>
     new T.THREE.ShaderMaterial({
+      // what is the same over a whole building (its colour, size, lit share, seed, which wall) is passed flat, not interpolated:
+      // the random pick of lit windows below magnifies the tiny rounding of an interpolated value into a different pick on
+      // every pixel, which showed as the windows flickering whenever the camera moved
       vertexShader: `attribute vec3 aColor; attribute float aLit; attribute float aSeed; attribute vec3 aHeat; attribute float aDim;
-        varying vec3 vN; varying vec3 vL; varying vec3 vM; varying vec3 vSize; varying vec3 vC; varying float vLit; varying float vSeed; varying vec3 vHeat; varying float vDim;
+        varying vec3 vN; flat varying vec3 vL; varying vec3 vM; flat varying vec3 vSize; flat varying vec3 vC; flat varying float vLit; flat varying float vSeed; flat varying vec3 vHeat; flat varying float vDim;
         void main() {
           vL = normal; vDim = aDim;
           vSize = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
           vM = (position + 0.5) * vSize; vN = normalize(mat3(instanceMatrix) * normal);
           vC = aColor; vLit = aLit; vSeed = aSeed; vHeat = aHeat;
           gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `varying vec3 vN; varying vec3 vL; varying vec3 vM; varying vec3 vSize; varying vec3 vC; varying float vLit; varying float vSeed; varying vec3 vHeat; varying float vDim;
+      fragmentShader: `varying vec3 vN; flat varying vec3 vL; varying vec3 vM; flat varying vec3 vSize; flat varying vec3 vC; flat varying float vLit; flat varying float vSeed; flat varying vec3 vHeat; flat varying float vDim;
         float rand(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
         void main() {
           vec3 n = normalize(vN);
@@ -553,24 +639,29 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
       crowns.setColorAt(i, new THREE.Color('#21463a').offsetHSL((hash(`${i}`) - 0.5) * 0.06, 0, (hash(`${i}#l`) - 0.5) * 0.06))
     })
 
-    // the buildings: one per file, turned as the layout says, in its neighbourhood's colour (its folder, two levels
-    // deep: src/components), weathered grey the longer it has been left alone; a big file is a stepped skyscraper
+    // the buildings: one per file, turned as the layout says. Each neighbourhood (its folder, two levels deep: src/components)
+    // has its own colour and each building its own shade of it, a third in a material of their own (measure.js);
+    // weathered grey the longer it has been left alone. Each is one of many shapes, from houses to towers (city.js).
     const tops = []
     const hood = f => f.path.split('/').slice(0, -1).slice(0, 2).join('/')
     const hoods = [...new Set(files.map(hood))].sort()
-    const hueOf = f => DISTRICT_HUES[hoods.indexOf(hood(f)) % DISTRICT_HUES.length]
     const now = Date.now()
     const colors = []
-    const pieces = [] // { file, x, z, w, d, y0, y1, angle }, x, z the piece's middle, heights from the ground
+    const pieces = [] // { file, x, z, w, d, y0, y1, angle, top }, x, z the piece's middle, heights from the ground
+    const capList = [] // the roofs on them: { file, kind, x, z, w, d, y0, y1, angle }, the same way
     const bottom = slabTop(1)
     const lots = files.map((f, i) => {
-      const seed = hash(f.path)
-      const height = buildingHeight(tall(f))
-      const parts = buildingPieces(f.w, f.d, tall(f), seed)
-      for (const p of parts) pieces.push({ ...turn(f.x, f.z, p.x, p.z, f.angle), w: p.w, d: p.d, y0: bottom + p.y0, y1: bottom + p.y1, angle: f.angle, file: i, top: p.y1 === height })
-      const top = parts.find(p => p.y1 === height)
-      tops.push({ ...turn(f.x, f.z, top.x, top.z, f.angle), y: bottom + height })
-      return { w: f.w, d: f.d, bottom, height }
+      const shape = buildingShape(f.w, f.d, tall(f), hash(f.path))
+      for (const p of shape.pieces) pieces.push({ ...turn(f.x, f.z, p.x, p.z, f.angle), w: p.w, d: p.d, y0: bottom + p.y0, y1: bottom + p.y1, angle: f.angle, file: i, top: p.top })
+      for (const c of shape.caps) {
+        // a pitched roof's ridge runs along the longer side; a slanted one faces any of four ways
+        const along = c.kind === 'gable' && c.w > c.d
+        const spin = c.kind === 'slant' ? Math.floor(hash(`${f.path}#spin`) * 4) * (Math.PI / 2) : along ? Math.PI / 2 : 0
+        capList.push({ ...turn(f.x, f.z, c.x, c.z, f.angle), kind: c.kind, w: along ? c.d : c.w, d: along ? c.w : c.d, y0: bottom + c.y0, y1: bottom + c.y1, angle: f.angle + spin, file: i })
+      }
+      const roof = shape.pieces.filter(p => p.top).reduce((a, b) => (b.y1 > a.y1 ? b : a))
+      tops.push({ ...turn(f.x, f.z, roof.x, roof.z, f.angle), y: bottom + shape.rise })
+      return { w: f.w, d: f.d, bottom, height: buildingHeight(tall(f)), capped: shape.caps.length > 0 }
     })
     const shell = new THREE.BoxGeometry(1, 1, 1)
     const mesh = new THREE.InstancedMesh(shell, buildingMaterial(), pieces.length)
@@ -593,7 +684,10 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
         ? new THREE.Color(COLORS.folded)
         : tint
           ? new THREE.Color().setHSL(tint.h, tint.s, tint.l)
-          : new THREE.Color().setHSL(hueOf(f), 0.34, 0.4).lerp(new THREE.Color(COLORS.grey), ageLight(file.changed, now).grey)
+          : (() => {
+              const t = folderTint(f.path, hoods.indexOf(hood(f)))
+              return new THREE.Color().setHSL(t.h, t.s, t.l).lerp(new THREE.Color(COLORS.grey), ageLight(file.changed, now).grey)
+            })()
       colors.push(Object.assign(color, { lit: f.folded ? 0.1 : litOf(file, mapping.windows, now, most) }))
     })
     pieces.forEach((p, k) => {
@@ -605,8 +699,8 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     })
     number(files, fresh, f => Math.hypot(f.x - mid.x, f.z - mid.z) / (size * 0.71))
 
-    // small boxes on the roofs of the bigger buildings
-    const roofSpots = pieces.filter(p => p.top && p.w > 1.3 && p.d > 1.3)
+    // small boxes on the flat roofs of the bigger buildings (not under a pitched or pointed roof)
+    const roofSpots = pieces.filter(p => p.top && p.w > 1.3 && p.d > 1.3 && !lots[p.file].capped)
     const roofList = roofSpots.flatMap((p, k) =>
       [0, 1].map(j => {
         const r = hash(`${k}:${j}`)
@@ -615,6 +709,31 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
       }),
     )
     const roofs = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ color: COLORS.roof }), roofList.length)
+
+    // the pitched, slanted and pointed roofs on the buildings, each in its building's colour a little darker and greyer; unit
+    // shapes (a footprint of 1 by 1, from -0.5 to 0.5 high) that put() stretches to fit
+    const solid = triangles => {
+      const g = new THREE.BufferGeometry()
+      g.setAttribute('position', new THREE.Float32BufferAttribute(triangles.flat(2), 3))
+      return g
+    }
+    const [A, B, C, D] = [[-0.5, -0.5, -0.5], [0.5, -0.5, -0.5], [0.5, -0.5, 0.5], [-0.5, -0.5, 0.5]]
+    const [R1, R2, E, F] = [[0, 0.5, -0.5], [0, 0.5, 0.5], [0.5, 0.5, -0.5], [0.5, 0.5, 0.5]]
+    const capShapes = {
+      gable: solid([[A, D, R2], [A, R2, R1], [C, B, R1], [C, R1, R2], [A, R1, B], [D, C, R2]]), // the ridge runs along z
+      slant: solid([[A, D, F], [A, F, E], [B, E, F], [B, F, C], [A, E, B], [D, C, F]]), // rises toward +x
+      pyramid: new THREE.ConeGeometry(Math.SQRT1_2, 1, 4, 1, true).rotateY(Math.PI / 4), // open at the bottom: a base would lie flat on the roof below and shimmer
+    }
+    const capMaterial = new THREE.MeshLambertMaterial({ flatShading: true, side: THREE.DoubleSide })
+    const roofGrey = new THREE.Color(COLORS.roof)
+    const capMeshes = Object.entries(capShapes).flatMap(([kind, geometry]) => {
+      const list = capList.filter(c => c.kind === kind)
+      if (!list.length) return []
+      const m = new THREE.InstancedMesh(geometry, capMaterial, list.length)
+      m.frustumCulled = false // the instances move as the city rises
+      list.forEach((c, k) => m.setColorAt(k, colors[c.file].clone().lerp(roofGrey, 0.3).multiplyScalar(0.85)))
+      return [{ mesh: m, list }]
+    })
 
     // the buildings, roof boxes and pavement at their height now: rising when the city opens, and in the time-lapse
     // as tall as each file was then (0: not there yet); says whether any is still rising
@@ -633,6 +752,13 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
         const f = scale[r.file]
         put(roofs, k, r.x, r.z, f > 0 ? r.s : 1e-3, f > 0 ? r.s : 1e-3, bottom + (r.y0 - bottom) * f, bottom + (r.y1 - bottom) * f, r.angle)
       })
+      for (const { mesh: capMesh, list } of capMeshes) {
+        list.forEach((c, k) => {
+          const f = scale[c.file]
+          put(capMesh, k, c.x, c.z, f > 0 ? c.w : 1e-3, f > 0 ? c.d : 1e-3, bottom + (c.y0 - bottom) * f, bottom + (c.y1 - bottom) * f, c.angle)
+        })
+        capMesh.instanceMatrix.needsUpdate = true
+      }
       files.forEach((f, i) => put(pads, i, f.x, f.z, scale[i] > 0 ? f.r + 0.3 : 1e-3, scale[i] > 0 ? f.r + 0.3 : 1e-3, 0, slabTop(1)))
       for (const m of [mesh, roofs, pads]) m.instanceMatrix.needsUpdate = true
       mesh.computeBoundingSphere()
@@ -642,7 +768,7 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
 
     const far = farStars(size * 4, true)
     far.points.position.copy(mid)
-    group.add(ground, ...parks, roads, pads, lanes, lamps.points, crowns, mesh, roofs, far.points)
+    group.add(ground, ...parks, roads, pads, lanes, lamps.points, crowns, mesh, roofs, ...capMeshes.map(c => c.mesh), far.points)
     addWeb(tops, importLinks(tree, index), () => new THREE.Color(COLORS.arc), cityArc, 0.16 * Math.min(1, Math.sqrt(150 / Math.max(files.length, 1))))
 
     // searchlights for buildings being read, and room for cranes and their beacons on buildings being edited
@@ -663,7 +789,8 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
       const own = tops.filter((t, i) => files[i].district === di)
       if (own.length < 2 || di >= LABELS) return
       const tallest = Math.max(...own.map(t => t.y))
-      const sprite = label(name(d.path), false)
+      const sample = files.find(f => f.district === di)
+      const sprite = label(name(d.path), false, cloudColor(hoods.indexOf(hood(sample))))
       sprite.position.set(d.x, tallest + 2.5, d.z)
       const wide = Math.max(9, size * 0.07)
       sprite.scale.set(wide, wide / 4, 1)
@@ -731,7 +858,7 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
 
   const paintWeb = (now, busy, colorOf) => {
     const { THREE } = T
-    const { attrs, geometry, material, linksOf, links, curves, sparks, trail, lit } = web
+    const { attrs, geometry, material, linksOf, links, curves, sparks, trail, shown } = web
     const time = (now - origin) / 1000
     material.uniforms.uTime.value = time
     const tint = (scratch ??= new THREE.Color())
@@ -761,7 +888,8 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
       geometry.attributes.aShow.needsUpdate = true
     }
 
-    // the links that were lit and are not now go dark; the lit ones take their glow
+    // A link eases toward the glow it should have, so it fades in and out instead of switching; one that is no longer hot
+    // keeps fading, in the colour it had, until it is dark.
     const per = STEPS * 2
     const setLink = (l, glow, flow, color) => {
       for (let v = l * per; v < (l + 1) * per; v++) {
@@ -770,13 +898,27 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
         attrs.aHot.set([color.r, color.g, color.b], v * 3)
       }
     }
-    if (lit.size || hot.size) {
-      for (const l of lit) if (!hot.has(l)) setLink(l, 0, 1, tint.setRGB(0, 0, 0))
-      lit.clear()
-      for (const [l, h] of hot) {
-        setLink(l, h.glow, h.flow, h.color)
-        lit.add(l)
+    const k = 1 - Math.exp(-Math.min((now - (web.at || now)) / 1000, 0.1) / LINK_EASE_S) // the share of the way to go this frame
+    web.at = now
+    for (const [l, h] of hot) {
+      let link = shown.get(l)
+      if (!link) shown.set(l, (link = { glow: 0, flow: h.flow, color: h.color.clone() }))
+      link.flow = h.flow
+      link.glow += (h.glow - link.glow) * k
+      link.color.lerp(h.color, k)
+    }
+    let dark = false
+    for (const [l, link] of shown) {
+      if (hot.has(l)) continue
+      link.glow -= link.glow * k
+      if (link.glow < 0.01) {
+        shown.delete(l)
+        setLink(l, 0, 1, tint.setRGB(0, 0, 0))
+        dark = true
       }
+    }
+    if (shown.size || dark) {
+      for (const [l, link] of shown) setLink(l, link.glow, link.flow, link.color)
       for (const name of ['aGlow', 'aFlow', 'aHot']) geometry.attributes[name].needsUpdate = true
     }
 
@@ -785,17 +927,15 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     s.aSize.fill(0)
     let slot = 0
     if (!calm) {
-      for (const [l, h] of hot) {
-        const points = curves[l]
-        for (let k = 0; k < SPARKS && slot < MAX_SPARKS; k++, slot++) {
-          let along = (time * 0.45 + k / SPARKS + l * 0.137) % 1
-          if (h.flow < 0) along = 1 - along
-          const p = points[Math.round(along * STEPS)]
-          s.position.set([p.x, p.y, p.z], slot * 3)
-          s.aSize[slot] = 0.6 * h.glow * Math.sin(Math.PI * along) + 0.08
-          s.aGlow[slot] = h.glow
-          s.aColor.set([h.color.r, h.color.g, h.color.b], slot * 3)
-          s.aHalo.set([h.color.r, h.color.g, h.color.b], slot * 3)
+      for (const [l, link] of shown) {
+        for (let n = 0; n < SPARKS && slot < MAX_SPARKS; n++, slot++) {
+          let along = (time * 0.45 + n / SPARKS + l * 0.137) % 1
+          if (link.flow < 0) along = 1 - along
+          putOn(s.position, slot, curves[l], along)
+          s.aSize[slot] = (0.6 * link.glow * Math.sin(Math.PI * along) + 0.08) * Math.min(1, link.glow * 4)
+          s.aGlow[slot] = link.glow
+          s.aColor.set([link.color.r, link.color.g, link.color.b], slot * 3)
+          s.aHalo.set([link.color.r, link.color.g, link.color.b], slot * 3)
         }
       }
     }
@@ -812,8 +952,7 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
         const at = ti * TAIL + k
         const along = Math.min(1, p) - k * 0.028
         if (along < 0 || fade <= 0) continue
-        const point = tr.path[Math.min(tr.path.length - 1, Math.floor(ease(along) * (tr.path.length - 1)))]
-        t.position.set([point.x, point.y, point.z], at * 3)
+        putOn(t.position, at, tr.path, ease(along))
         t.aSize[at] = 0.55 * (1 - k / (TAIL + 2)) * fade + 0.1
         t.aGlow[at] = (1 - k / TAIL) * 0.9 * fade
         const mix = tint.set('#ffffff').lerp(kindColor(tr.kind), 0.4 + (0.6 * k) / TAIL)
@@ -824,11 +963,54 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
     trail.changed('position', 'aSize', 'aGlow', 'aColor', 'aHalo')
   }
 
+  // The names, by how near the camera is. Far off: only the biggest folders'. Coming up to a cloud: its name fades in. Right
+  // beside the stars: the nearest files' names. All stay one size on the screen, however near or far.
+  const showNames = lit => {
+    const cam = camera.position
+    const clamp = v => Math.min(Math.max(v, 0), 1)
+    for (const l of sky.names) {
+      const near = 1 - clamp((l.at.distanceTo(cam) - 2 * l.reach) / (2.5 * l.reach))
+      const show = l.cloud === lit ? 1 : Math.max(near, l.rank < TOP_NAMES ? 0.8 : 0)
+      l.sprite.material.opacity = show * 0.9
+      l.sprite.visible = show > 0.02
+      const h = l.sprite.position.distanceTo(cam) * NAME_SIZE
+      l.sprite.scale.set(h * 4, h, 1)
+    }
+    const close = []
+    items.forEach((n, i) => {
+      if (replay && !(replay.scale[i] > 0)) return
+      const d = Math.hypot(n.x - cam.x, n.y - cam.y, n.z - cam.z)
+      if (d < NAME_DIST) close.push([d, i])
+    })
+    close.sort((a, b) => a[0] - b[0]).length = Math.min(close.length, MAX_NAMES)
+    for (const sprite of sky.files.values()) sprite.visible = false
+    for (const [d, i] of close) {
+      const n = items[i]
+      let sprite = sky.files.get(n.path)
+      if (!sprite) {
+        sprite = label(n.path.split('/').pop(), false)
+        sky.files.set(n.path, sprite)
+        group.add(sprite)
+      }
+      sprite.position.set(n.x, n.y + 1.2, n.z)
+      sprite.material.opacity = 1 - clamp((d - NAME_DIST * 0.55) / (NAME_DIST * 0.45))
+      sprite.visible = true
+      sprite.scale.set(d * FILE_SIZE * 4, d * FILE_SIZE, 1)
+    }
+  }
+
   // the nebula each frame: stars fade in and twinkle; a busy star beats and sends rings out
   const paintNebula = (now, busy) => {
     const { stars, rings, colors, sizes, phases, clouds } = sky
     const time = (now - origin) / 1000
-    if (!calm) for (const c of clouds) c.sprite.material.rotation += c.spin * 16
+    // one folder lit and the rest dimmed: the one named in the key, else the one the pointer is on (not while a blast radius shows)
+    const lit = focus ? -1 : legendLit >= 0 ? legendLit : hovered >= 0 ? items[hovered].cloud : -1
+    const dim = legendLit >= 0 ? 0.3 : 0.6
+    for (const c of clouds) {
+      if (!calm) c.sprite.material.rotation += c.spin * 16
+      c.sprite.material.opacity = lit < 0 ? c.opacity : c.cloud === lit ? c.opacity * 2 : c.opacity * dim
+    }
+    showNames(lit)
     const touches = touchesNow()
     const tint = (scratch ??= new T.THREE.Color())
     const blast = kindColors.blast ?? (kindColors.blast = new T.THREE.Color(BLAST))
@@ -852,6 +1034,15 @@ export const createMap = ({ canvas, tip, bar, onTree }) => {
       if (i === hovered) {
         glow = Math.max(glow, 1)
         size *= 1.3
+      }
+      if (lit >= 0) {
+        if (n.cloud === lit) {
+          glow = Math.max(glow, 0.8)
+          size *= 1.2
+        } else {
+          glow *= dim
+          tint.multiplyScalar(dim + 0.2)
+        }
       }
       if (focus) {
         const step = focus.steps.get(i)

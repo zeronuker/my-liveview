@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { blastRadius, curvePoints, layoutNebula } from '../public/nebula.js'
+import { blastRadius, cloudColor, curvePoints, layoutNebula } from '../public/nebula.js'
 
 const FILES = [
   { path: 'README.md', lines: 40 },
@@ -38,6 +38,31 @@ test('layoutNebula: stars keep apart, and a folder stays closer together than th
   const own = inCloud.reduce((s, n) => s + dist(n, map.clouds[0]), 0) / inCloud.length
   const other = inCloud.reduce((s, n) => s + dist(n, map.clouds[4]), 0) / inCloud.length
   assert.ok(own < other, `${own} vs ${other}`)
+})
+
+test('layoutNebula: folders stay apart even when their files import each other, with empty space between', () => {
+  // six folders of 30 files, each file importing one in the next folder
+  const linked = Array.from({ length: 180 }, (_, i) => ({ path: `d${i % 6}/f${i}.js`, lines: 10, imports: [`d${(i + 1) % 6}/f${(i + 1) % 180}.js`] }))
+  const map = layoutNebula(linked)
+  const own = map.nodes.filter(n => {
+    const d = map.clouds.map(c => Math.hypot(n.x - c.x, n.y - c.y, n.z - c.z))
+    return d[n.cloud] <= Math.min(...d)
+  })
+  assert.ok(own.length >= map.nodes.length * 0.95, `${own.length} of ${map.nodes.length} sit nearest their own folder`)
+  let gap = Infinity
+  for (const a of map.nodes) for (const b of map.nodes) if (a.cloud < b.cloud) gap = Math.min(gap, dist(a, b))
+  assert.ok(gap > 9, `the clouds come within ${gap}`)
+})
+
+test('cloudColor: every folder gets a valid colour, and the first ones are well apart', () => {
+  const rgb = hex => [1, 3, 5].map(k => parseInt(hex.slice(k, k + 2), 16))
+  const colors = Array.from({ length: 40 }, (_, i) => cloudColor(i))
+  for (const c of colors) assert.match(c, /^#[0-9a-f]{6}$/)
+  assert.equal(new Set(colors).size, 40)
+  for (let i = 0; i < 9; i++) for (let j = i + 1; j < 9; j++) {
+    const d = Math.hypot(...rgb(colors[i]).map((v, k) => v - rgb(colors[j])[k]))
+    assert.ok(d >= 60, `${colors[i]} and ${colors[j]} are only ${Math.round(d)} apart`)
+  }
 })
 
 test('layoutNebula: an empty repo is an empty map', () => {

@@ -4,6 +4,8 @@ import http from 'node:http'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { parseView } from '../public/viewparam.js'
+import { openAppWindow } from './browser.js'
 import { applyEdit, makeRows } from './diff.js'
 import { gitKind, summarize, titleOf } from './summary.js'
 import { readStatuses } from './sessions.js'
@@ -280,6 +282,22 @@ const server = http.createServer((req, res) => {
       // always answer fast and empty: the hook must never hold Claude up
       res.writeHead(200, { 'content-type': 'application/json' }).end('{}')
     })
+    return
+  }
+
+  if (req.method === 'POST' && pathname === '/open') {
+    // the "New window" menu: a window like the main one, pinned to a view. Only a page of ours may ask, and only for a
+    // view we have (the same check the page makes of its own address).
+    const sameOrigin = !req.headers.origin || req.headers.origin === `http://${req.headers.host}`
+    if (!sameOrigin) {
+      res.writeHead(403).end()
+      return
+    }
+    if (!parseView(url.search)) {
+      res.writeHead(400).end()
+      return
+    }
+    res.writeHead(openAppWindow(`http://${HOST}:${PORT}/${url.search}`) ? 200 : 501).end()
     return
   }
 

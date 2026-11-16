@@ -382,6 +382,7 @@ body.paused .dot {
   display: flex;
   min-height: 0;
   position: relative;
+  overflow: hidden; /* a panel slid out of sight waits just outside it, and must not make the page scroll sideways */
 }
 
 nav,
@@ -619,6 +620,49 @@ body.map #map-canvas {
 
 #map-tip[hidden] {
   display: none;
+}
+
+/* the nebula's key: a colour and a name for each folder; pointing at one lights that folder */
+#map-legend {
+  display: none;
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  max-height: 60%;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 10px;
+}
+
+body.map #map-legend:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+}
+
+#map-legend button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #dfe6ff;
+  font: 12px ui-monospace, Consolas, monospace;
+  text-align: left;
+  cursor: default;
+}
+
+#map-legend button:hover,
+#map-legend button:focus-visible {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#map-legend span {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
 }
 
 #map-empty {
@@ -2085,3 +2129,123 @@ body.resizing:has(#panes.stacked #rz-split.dragging) {
 .phase.working { background: var(--nbg); color: var(--nfg); }
 .phase.planning { background: color-mix(in srgb, var(--acc) 22%, transparent); color: var(--acc); }
 .phase.waiting { background: var(--abg); color: var(--afg); }
+
+/* App motion: how the app moves from one view to another and opens and closes its panels. One speed for all of it, and none at
+   all for anyone whose system asks for less motion. A panel that hides with the hidden attribute fades out before it goes
+   (transition-behavior: allow-discrete, Chrome and Edge 116 and later; elsewhere it simply stays instant). */
+:root {
+  --motion: 240ms;
+  --motion-fast: 150ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes view-in {
+  from { opacity: 0; translate: 0 8px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* the view shown fades in as it comes up, and so does a pane that opens or a control that is now for this view */
+  #panes,
+  #office canvas {
+    animation: view-in var(--motion) var(--ease) both;
+  }
+
+  .pane,
+  .grp > * {
+    animation: fade-in var(--motion-fast) ease-out both;
+  }
+
+  .seg button {
+    transition: background-color 0.15s, color 0.15s;
+  }
+
+  /* menus and floating panels: they rise in and fade, and fade out when closed */
+  :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend) {
+    --rise: 8px;
+    transition: opacity var(--motion-fast) ease, translate var(--motion) var(--ease), display var(--motion-fast) allow-discrete;
+  }
+
+  .menu {
+    --rise: -6px;
+  }
+
+  :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend)[hidden] {
+    opacity: 0;
+    translate: 0 var(--rise);
+  }
+
+  @starting-style {
+    :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend) {
+      opacity: 0;
+      translate: 0 var(--rise);
+    }
+  }
+
+  /* the chats and the activity drawer slide shut instead of vanishing, and so does the top bar in full screen; once shut they
+     are hidden, so nothing in them takes a keypress */
+  nav,
+  #feed {
+    transition: flex-basis var(--motion) var(--ease), opacity var(--motion-fast) ease, border-width var(--motion) var(--ease), background-color 0.25s;
+  }
+
+  body:not(.nav-open) nav,
+  body:not(.feed-open) #feed,
+  body.full nav,
+  body.full #feed {
+    display: flex;
+    flex-basis: 0;
+    opacity: 0;
+    visibility: hidden;
+    border-width: 0;
+    transition: flex-basis var(--motion) var(--ease), opacity var(--motion-fast) ease, border-width var(--motion) var(--ease), visibility 0s linear var(--motion);
+  }
+
+  #top {
+    transition: height var(--motion) var(--ease), opacity var(--motion-fast) ease, border-width var(--motion) var(--ease);
+  }
+
+  body.full #top {
+    display: flex;
+    height: 0;
+    overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    border-bottom-width: 0;
+    transition: height var(--motion) var(--ease), opacity var(--motion-fast) ease, border-width var(--motion) var(--ease), visibility 0s linear var(--motion);
+  }
+
+  /* what is inside keeps its width while the panel narrows, so it is cut off and not squeezed */
+  @media (min-width: 1001px) {
+    nav > * {
+      min-width: var(--nav-w, 290px);
+    }
+
+    #feed > * {
+      min-width: var(--aside-w, 330px);
+    }
+  }
+
+  /* in a narrow window they float over the view, so they slide from their edge */
+  @media (max-width: 1000px) {
+    nav,
+    #feed {
+      transition: translate var(--motion) var(--ease), opacity var(--motion-fast) ease;
+    }
+
+    body:not(.nav-open) nav,
+    body.full nav {
+      translate: -100% 0;
+      transition: translate var(--motion) var(--ease), opacity var(--motion-fast) ease, visibility 0s linear var(--motion);
+    }
+
+    body:not(.feed-open) #feed,
+    body.full #feed {
+      translate: 100% 0;
+      transition: translate var(--motion) var(--ease), opacity var(--motion-fast) ease, visibility 0s linear var(--motion);
+    }
+  }
+}

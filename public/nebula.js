@@ -6,7 +6,7 @@
 // layoutNebula([{ path, lines, imports }]) gives { radius, nodes, links, clouds }
 //   nodes:  [{ path, lines, cloud, degree, x, y, z }]   only real files, no folders
 //   links:  [[a, b], ...]                               indexes into nodes, each pair once
-//   clouds: [{ dir, hue, x, y, z, spread, count }]      one per folder, hue 0..1
+//   clouds: [{ dir, color, x, y, z, spread, count }]    one per folder, color '#rrggbb'
 // importLinks(files, at) is the links alone, for the City too; blastRadius(links, i) what depends on file i.
 // curvePoints(a, b, steps) is the gentle arc a link is drawn along.
 
@@ -14,8 +14,22 @@ import { hash } from './city.js'
 
 const SPACE = 6 // about the gap between neighbouring stars, in world units
 const GOLDEN = Math.PI * (3 - Math.sqrt(5))
-const HUES = [0.58, 0.78, 0.9, 0.5, 0.68, 0.98, 0.62, 0.84, 0.45, 0.73] // blues, violets, pinks, teals
+// Folder colours, picked to be told apart on the dark sky: warm and cool alternate, no two near each other on the colour wheel.
+const PALETTE = ['#ffc23d', '#3dd9ff', '#ff4fa3', '#5be37d', '#6f6bff', '#ff6a3d', '#c35bff', '#c6e84a', '#2fb5a0']
 
+// the colour of the i-th folder, as '#rrggbb': the palette first, then steps round the colour wheel (a golden-ratio turn
+// each, so neighbours differ) with the lightness alternating
+export const cloudColor = i => {
+  if (i < PALETTE.length) return PALETTE[i]
+  const h = (i * 0.618034) % 1
+  const l = i % 2 ? 0.72 : 0.55
+  const f = n => {
+    const k = (n + h * 12) % 12
+    const c = l - 0.8 * Math.min(l, 1 - l) * Math.max(-1, Math.min(k - 3, 9 - k, 1))
+    return Math.round(c * 255).toString(16).padStart(2, '0')
+  }
+  return `#${f(0)}${f(8)}${f(4)}`
+}
 
 // the import links among some files: [[a, b], ...] as numbered by `at` (Map path -> number), each pair once
 export const importLinks = (files, at) => {
@@ -57,22 +71,55 @@ export const blastRadius = (links, start) => {
 
 const dirOf = path => path.slice(0, Math.max(path.lastIndexOf('/'), 0))
 
+const GAP = SPACE * 3 // the empty space left between two folders' clouds
+// about how far a cloud of this many files reaches from its middle
+const cloudRadius = count => SPACE * (1 + Math.cbrt(count) * 0.9)
+
+// pushes the clouds' middles apart until each is its radius plus the gap from the next (in place), drawing them in a little
+// as it goes so the whole stays compact
+const keepApart = (clouds, sizes) => {
+  for (let step = 0; step < 80; step++) {
+    for (let i = 0; i < clouds.length; i++) {
+      for (let j = i + 1; j < clouds.length; j++) {
+        const a = clouds[i]
+        const b = clouds[j]
+        const dx = b.x - a.x || 0.001 * (j - i)
+        const dy = b.y - a.y
+        const dz = b.z - a.z
+        const d = Math.hypot(dx, dy, dz)
+        const move = (sizes[i] + sizes[j] + GAP - d) / 2
+        if (move <= 0) continue
+        for (const [k, v] of [['x', dx], ['y', dy], ['z', dz]]) {
+          a[k] -= (v / d) * move * 0.5
+          b[k] += (v / d) * move * 0.5
+        }
+      }
+    }
+    for (const c of clouds) for (const k of ['x', 'y', 'z']) c[k] *= 0.985
+  }
+}
+
 export const layoutNebula = (files, iterations) => {
   const out = { radius: 0, nodes: [], links: [], clouds: [] }
   if (!files.length) return out
   const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : 1))
   const at = new Map(sorted.map((f, i) => [f.path, i]))
 
-  // clouds: one per folder, their middles spread evenly over a sphere
+  // clouds: one per folder, their middles spread over a sphere, then pushed apart so there is empty space between them
   const dirs = [...new Set(sorted.map(f => dirOf(f.path)))]
   const cloudOf = new Map(dirs.map((dir, i) => [dir, i]))
   const radius = Math.max(20, Math.cbrt(files.length) * SPACE * 1.4)
+  const counts = new Map()
+  for (const f of sorted) counts.set(dirOf(f.path), (counts.get(dirOf(f.path)) ?? 0) + 1)
+  const sizes = dirs.map(dir => cloudRadius(counts.get(dir)))
+  const shell = dirs.length === 1 ? 0 : Math.max(radius * 0.7, 1.4 * Math.cbrt(sizes.reduce((sum, r) => sum + r ** 3, 0)))
   out.clouds = dirs.map((dir, i) => {
     const y = dirs.length === 1 ? 0 : 1 - (2 * (i + 0.5)) / dirs.length
     const r = Math.sqrt(1 - y * y)
-    const d = dirs.length === 1 ? 0 : radius * 0.7
-    return { dir, hue: HUES[i % HUES.length], x: Math.cos(i * GOLDEN) * r * d, y: y * d, z: Math.sin(i * GOLDEN) * r * d, spread: 0, count: 0 }
+    return { dir, color: cloudColor(i), x: Math.cos(i * GOLDEN) * r * shell, y: y * shell, z: Math.sin(i * GOLDEN) * r * shell, spread: 0, count: 0 }
   })
+  // shortcut: the push is every pair of folders, so a repo with over 300 folders keeps the even spread, when it needs a grid
+  if (dirs.length > 1 && dirs.length <= 300) keepApart(out.clouds, sizes)
 
   // stars start in a small ball round their cloud's middle
   out.nodes = sorted.map(f => {
@@ -154,16 +201,17 @@ const settle = ({ nodes, links, clouds }, iterations) => {
       const dy = q.y - p.y
       const dz = q.z - p.z
       const d = Math.hypot(dx, dy, dz) || 1
-      const pull = p.cloud === q.cloud ? SPACE * 1.6 : SPACE * 4 // a link across clouds is longer
-      const f = ((d - pull) / d) * 0.06
+      const same = p.cloud === q.cloud
+      const pull = same ? SPACE * 1.6 : SPACE * 4 // a link across clouds is longer
+      const f = ((d - pull) / d) * (same ? 0.06 : 0.015) // and weaker, or the clouds would be pulled into each other
       vx[a] += dx * f; vy[a] += dy * f; vz[a] += dz * f
       vx[b] -= dx * f; vy[b] -= dy * f; vz[b] -= dz * f
     }
     nodes.forEach((p, i) => {
       const c = clouds[p.cloud]
-      vx[i] += (c.x - p.x) * 0.02 - p.x * 0.002
-      vy[i] += (c.y - p.y) * 0.02 - p.y * 0.002
-      vz[i] += (c.z - p.z) * 0.02 - p.z * 0.002
+      vx[i] += (c.x - p.x) * 0.05 - p.x * 0.002
+      vy[i] += (c.y - p.y) * 0.05 - p.y * 0.002
+      vz[i] += (c.z - p.z) * 0.05 - p.z * 0.002
       const v = Math.hypot(vx[i], vy[i], vz[i])
       const max = SPACE * 1.5 * heat + 0.05
       const k = v > max ? max / v : 1

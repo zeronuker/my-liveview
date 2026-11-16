@@ -65,6 +65,15 @@ test('stopping the server tells open windows to close, then it exits', () =>
     await exited
   }))
 
+test('a new app window is only opened for a view we have, and only at the page\'s own asking', () =>
+  withServer(async () => {
+    const open = (search, headers) => fetch(`${base}/open${search}`, { method: 'POST', headers })
+
+    assert.equal((await open('?view=nope')).status, 400)
+    assert.equal((await open('')).status, 400)
+    assert.equal((await open('?view=map', { origin: 'http://evil.example' })).status, 403)
+  }))
+
 test('a new window is told when the history ends and what follows is live', () =>
   withServer(async () => {
     const page = await listen()

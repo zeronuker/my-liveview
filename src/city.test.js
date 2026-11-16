@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { ROAD, ageLight, buildingHeight, buildingPieces, cityArc, foldFiles, fromRing, layoutCity, treeSpots } from '../public/city.js'
+import { ROAD, ageLight, buildingHeight, buildingShape, cityArc, foldFiles, fromRing, layoutCity, treeSpots } from '../public/city.js'
 
 const FILES = [
   { path: 'README.md', lines: 40 },
@@ -119,18 +119,37 @@ test('buildingHeight: from a low house to a skyscraper, and no taller past 3000 
   assert.equal(buildingHeight(3000), buildingHeight(50000))
 })
 
-test('buildingPieces: a small file is one box; a big one steps in as it rises, and the biggest carry a spire', () => {
-  assert.equal(buildingPieces(4, 4, 100, 0.5).length, 1)
-  assert.equal(buildingPieces(4, 4, 600, 0.5).length, 2)
-  const tower = buildingPieces(4, 4, 2500, 0.9)
-  assert.equal(tower.length, 4)
-  for (let i = 1; i < 3; i++) {
-    assert.ok(tower[i].w < tower[i - 1].w && tower[i].y0 === tower[i - 1].y1)
-    assert.ok(Math.abs(tower[i].x) + tower[i].w / 2 <= 2 + 1e-9) // inside the footprint
+const SEEDS = Array.from({ length: 40 }, (_, i) => (i + 0.5) / 40)
+const kinds = (w, d, lines) => new Set(SEEDS.map(seed => buildingShape(w, d, lines, seed).kind))
+
+test('buildingShape: every shape stands inside its footprint, on the ground, with its roofs on top pieces', () => {
+  for (const [w, d] of [[4, 4], [6, 2.5], [1, 3]]) {
+    for (const lines of [5, 100, 400, 1000, 1500, 2500, 5000]) {
+      for (const seed of SEEDS) {
+        const { pieces, caps, rise } = buildingShape(w, d, lines, seed)
+        const tops = pieces.filter(p => p.top)
+        assert.ok(tops.length >= 1, `${lines} lines, seed ${seed}: nothing carries the roof`)
+        for (const p of [...pieces, ...caps]) {
+          assert.ok(p.y0 >= 0 && p.y1 > p.y0, `${lines} lines, seed ${seed}: a part from ${p.y0} to ${p.y1}`)
+          assert.ok(Math.abs(p.x) + p.w / 2 <= w / 2 + 1e-9 && Math.abs(p.z) + p.d / 2 <= d / 2 + 1e-9, `${lines} lines, seed ${seed}: a part outside the footprint`)
+        }
+        for (const c of caps) assert.ok(tops.some(p => p.y1 === c.y0 && p.x === c.x && p.z === c.z), `${lines} lines, seed ${seed}: a roof in the air`)
+        assert.ok(rise >= Math.max(...tops.map(p => p.y1)) && rise <= buildingHeight(lines) * 1.31 + Math.max(w, d), `${lines} lines, seed ${seed}: a roof reaching ${rise}`) // a roof on a low house may stand about as tall as its walls
+      }
+    }
   }
-  assert.equal(tower[2].y1, buildingHeight(2500))
-  assert.ok(tower[3].y1 > tower[2].y1)
-  assert.equal(buildingPieces(0.8, 3, 2500, 0.5).length, 1) // too thin to step
+})
+
+test('buildingShape: each size has several shapes, a file always has the same one, and a thin lot stays one box and a roof', () => {
+  assert.deepEqual([...kinds(4, 4, 100)].sort(), ['block', 'house', 'wing'])
+  assert.deepEqual([...kinds(4, 4, 600)].sort(), ['glass', 'podium', 'slab', 'stepped'])
+  assert.deepEqual([...kinds(4, 4, 2500)].sort(), ['deco', 'glass', 'setback', 'twin'])
+  assert.deepEqual(buildingShape(4, 4, 2500, 0.3), buildingShape(4, 4, 2500, 0.3))
+  for (const seed of SEEDS) assert.equal(buildingShape(0.8, 3, 2500, seed).pieces.length, 1)
+  const deco = buildingShape(4, 4, 2500, 0.1)
+  assert.equal(deco.pieces.length, 4) // three tiers and a spire
+  assert.equal(deco.caps[0].kind, 'pyramid')
+  assert.ok(deco.rise > buildingHeight(2500))
 })
 
 test('foldFiles: past the limit the shortest files merge into one block per folder', () => {
