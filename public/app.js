@@ -92,7 +92,7 @@ const queue = [] // edits waiting for a pane to be free, in the order they came
 let viewGen = 0 // bumped when the view is reset, so edits still on their way are dropped
 let selected = '' // '' for every chat, else one chat's id
 let isListsDue = false
-let isPaused = false
+const paused = { code: false, office: false } // Pause is each view's own
 let isStopped = false
 let isReplaying = true // the server's history comes first, then live events
 
@@ -126,7 +126,7 @@ const panes = [0, 1, 2, 3].map(index =>
   createPane({
     index,
     getPrefs: () => prefs,
-    isPaused: () => isPaused,
+    isPaused: () => paused.code,
     didFail: id => results.get(id) === false,
     onSettle: () => drain(),
     onStatus: () => refreshState(),
@@ -344,7 +344,7 @@ const refreshState = () => {
   const failed = panes.some(pane => pane.current && results.get(pane.current.id) === false)
   $('b-skip').disabled = !prefs.office && busy.length === 0 && queue.length === 0
   const waiting = queue.length > 0 ? ` · ${queue.length} waiting` : ''
-  if (isPaused) setState('paused', waiting)
+  if (paused.code) setState('paused', waiting)
   else if (failed) setState('failed')
   else if (busy.length > 0) setState('writing', waiting)
   else if (panes.some(pane => pane.current)) setState('edited')
@@ -797,26 +797,30 @@ const apply = () => {
   for (const button of $('speed').querySelectorAll('button')) press(button, prefs[speedKey()] === Number(button.dataset.speed))
   for (const swatch of document.querySelectorAll('.swatch')) press(swatch, swatch.dataset.theme === prefs.theme)
   $('size-out').textContent = `${prefs.size} px`
+  showPause()
   for (const pane of panes) pane.updateBox()
   syncAwake()
 }
 
-const setPaused = on => {
-  isPaused = on
+// Pause and Skip act on the view shown: Code (the panes) or the Office
+const viewKey = () => (prefs.office ? 'office' : 'code')
+const showPause = () => {
+  const on = paused[viewKey()]
   document.body.classList.toggle('paused', on)
   $('b-pause').setAttribute('aria-label', on ? 'Resume' : 'Pause')
   $('b-pause').title = on ? 'Resume' : 'Pause'
   $('b-pause').setAttribute('aria-pressed', String(on))
-  office.setPaused(on)
-  for (const pane of panes) pane.refresh()
+}
+const setPaused = (view, on) => {
+  paused[view] = on
+  if (view === 'office') office.setPaused(on)
+  else for (const pane of panes) pane.refresh()
+  showPause()
   refreshState()
 }
 
-$('b-pause').onclick = () => setPaused(!isPaused)
-$('b-skip').onclick = () => {
-  skipAll()
-  office.skip()
-}
+$('b-pause').onclick = () => setPaused(viewKey(), !paused[viewKey()])
+$('b-skip').onclick = () => (prefs.office ? office.skip() : skipAll())
 // a choice that is on or off, from its button in the floating controls or its switch in Settings
 for (const el of document.querySelectorAll('[data-pref]')) {
   el.onclick = () => {
@@ -864,18 +868,31 @@ document.addEventListener('click', event => {
   if (!$('map-show').hidden && !event.target.closest('#map-show, #b-layers')) setOpen($('b-layers'), $('map-show'), false)
 })
 
-// full screen: only the view and its own controls; the browser's own full screen too, where it has one
-const setFull = on => {
-  document.body.classList.toggle('full', on)
-  press($('b-full'), on)
-  $('b-full').setAttribute('aria-label', on ? 'Leave full screen' : 'Full screen')
-  $('b-full').title = on ? 'Leave full screen' : 'Full screen'
-  if (on && !document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(() => {})
-  if (!on && document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
+// Full screen, in steps: 1 the panels close and the view fills the app window; 2 the whole screen too (where the
+// browser can); then back to the window as it was. Escape goes straight back from either step.
+let fullStep = 0
+let canTrue = typeof document.documentElement.requestFullscreen === 'function'
+const setFull = step => {
+  fullStep = step
+  document.body.classList.toggle('full', step > 0)
+  const next = step === 0 ? 'Full screen' : step === 1 && canTrue ? 'Full screen: the whole screen' : 'Windowed'
+  const button = $('b-full')
+  press(button, step > 0)
+  button.setAttribute('aria-label', next)
+  button.title = next
+  button.dataset.icon = step === 0 || (step === 1 && canTrue) ? 'enter' : 'exit'
+  button.querySelector('.full-label').textContent = step === 0 ? '' : step === 1 && canTrue ? 'Whole screen' : 'Windowed'
+  if (step === 2 && !document.fullscreenElement)
+    document.documentElement.requestFullscreen().catch(() => {
+      canTrue = false // refused: this browser stays in the window
+      setFull(1)
+    })
+  if (step < 2 && document.fullscreenElement) document.exitFullscreen?.().catch(() => {})
   for (const pane of panes) pane.updateBox()
 }
-$('b-full').onclick = () => setFull(!document.body.classList.contains('full'))
-document.addEventListener('fullscreenchange', () => !document.fullscreenElement && document.body.classList.contains('full') && setFull(false))
+$('b-full').onclick = () => setFull(fullStep === 0 ? 1 : fullStep === 1 && canTrue ? 2 : 0)
+// leaving the browser's full screen (its own Escape) goes back to the window as it was
+document.addEventListener('fullscreenchange', () => !document.fullscreenElement && fullStep === 2 && setFull(0))
 
 // the Map's repos folder: read again when the person stops typing (on change)
 $('repos-dir').value = prefs.reposDir
@@ -904,7 +921,7 @@ document.addEventListener('keydown', event => {
   if (!$('settings').hidden) setSettings(false)
   else if (!$('pop-menu').hidden) setOpen($('b-pop'), $('pop-menu'), false)
   else if (!$('map-show').hidden) setOpen($('b-layers'), $('map-show'), false)
-  else if (document.body.classList.contains('full') && !document.fullscreenElement) setFull(false)
+  else if (fullStep > 0) setFull(0)
 })
 
 // turn the angled view a quarter turn: the buttons, or [ and ] (not while typing in a field)

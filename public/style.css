@@ -534,14 +534,23 @@ body:not(.city) .only-city {
 
 #b-pause .ic-play,
 #b-pause[aria-pressed='true'] .ic-pause,
-#b-full .ic-exit,
-body.full #b-full .ic-enter {
+#b-full[data-icon='enter'] .ic-exit,
+#b-full[data-icon='exit'] .ic-enter {
   display: none;
 }
 
-#b-pause[aria-pressed='true'] .ic-play,
-body.full #b-full .ic-exit {
+#b-pause[aria-pressed='true'] .ic-play {
   display: block;
+}
+
+/* Full screen: an icon at first; then it says what the next press does (the whole screen, or back to a window) */
+#b-full[aria-pressed='false'] {
+  width: 44px;
+  padding: 0;
+}
+
+.full-label:empty {
+  display: none;
 }
 
 .rec {

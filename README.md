@@ -22,8 +22,8 @@ A slim bar at the top: the chats button at the left, the three views in the midd
 - **Chats** (left, opened and closed by the button at the top left): every chat with what it is doing (Working 2/7, Planning, Waiting for you, Quiet) and, under its name, how many files it changed, the lines added and removed, and how long ago it started. Its files are under it. Double-click a chat to rename it. In the Map, **Repos** are listed under the chats.
 - **Activity** (right, a drawer opened and closed by its button): what each tool did and in which chat, the same in every view.
 - **The view's own controls** float at the bottom of it, only those that apply: in Code, Pause, Skip, speed, Wrap, Whole file, Side by side, Follow and text size; in the Office, Pause, Skip, speed, Flat or Angled (and the turn buttons), zoom, Fit, Sound and Record; in the Map, Nebula or City, Time-lapse, Layers (City) and Fit.
-- **Speed** is each view's own: Code and the Office each keep theirs (½×, 1×, 2×, Max).
-- **Full screen:** the button at the right end of the view's controls closes everything but the view and its controls (and asks the browser for full screen too). Press it again, or Escape, to come back.
+- **Pause, Skip and speed** are each view's own: pausing Code leaves the Office playing, Skip skips only in the view shown, and Code and the Office each keep their speed (½×, 1×, 2×, Max).
+- **Full screen,** the button at the right end of the view's controls, in steps: the first press closes everything but the view and its controls, inside the app window; the second makes it fill the whole screen (where the browser can); the third, which says **Windowed**, goes back to the window as it was. Escape goes straight back from either step.
 - **Settings** (the gear): tabs for General (theme, window size, keep the screen on), Code, Office and Map, with switches. Three themes: Dark (the default), Light, and Contrast (blue and orange for colourblind eyes).
 - **Small windows and touch:** the buttons are big enough for a finger; in a narrow window (a tablet held upright) the chats and the drawer start closed and open over the view.
 
