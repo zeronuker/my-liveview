@@ -1,23 +1,24 @@
-// The Map's layout: the repo's files as a city. Each top folder is a district: a block of its own shape,
-// scattered round the middle with uneven gaps, ringed by a road, with curving main roads joining the
-// districts. Inside a district every folder is a block and every file a lot; a lot's footprint grows with
-// the file's length. Plain data in, plain data out, so it can be tested; map.js draws the result.
+// The Map's layout: the repo's files as a city that grew without a plan. Each top folder is a district: its
+// buildings are dropped in no particular order round the district's middle (each folder's files near each other),
+// pushed apart until none overlap, and turned a little this way and that; the district's edge is whatever shape
+// that makes, with a ring road round it and parks where the buildings left room. Districts are scattered round
+// the middle with uneven gaps and joined by curving main roads. Plain data in, plain data out, so it can be
+// tested; map.js draws the result.
 //
 // layoutCity([{ path: 'src/a.js', lines: 12 }, ...]) gives
-//   { width, depth,                                  the ground it all stands on, from 0,0
-//     districts: [{ path, x, z, w, d }],             the top folders ('' for the files at the top), a big one split
-//     dirs:  [{ path, x, z, w, d }],                 every folder's block, districts included
-//     files: [{ path, x, z, w, d, lines, folded }],  folded: how many files a "…" block stands for
-//     roads: [[{ x, z }, ...], ...] }                the main roads, as points along each
-// roadLines(city) gives the ring roads' middles; treeSpots(city) where trees can stand.
-// buildingHeight(lines) and buildingPieces(lot, lines, seed) shape the buildings, cityArc(a, b) is the arc
-// an import is drawn along, and ageLight(changed, now) how lit a building's windows are.
+//   { width, depth,                                   the ground it all stands on, from 0,0
+//     districts: [{ path, x, z, ring }],              the top folders ('' for the files at the top), a big one split;
+//                                                     ring: the points round the middle of its ring road
+//     files: [{ path, x, z, w, d, angle, r, lines, folded, district }],  x, z the middle; r the room it keeps round it
+//     roads: [[{ x, z }, ...], ...] }                 the main roads, as points along each
+// treeSpots(city) gives where trees can stand. buildingHeight(lines) and buildingPieces(w, d, lines, seed) shape
+// the buildings, cityArc(a, b) is the arc an import is drawn along, and ageLight(changed, now) how lit a
+// building's windows are.
 
 export const MAX_FILES = 5000 // lots drawn one each; the rest are merged, one block per folder
-const PAD = 0.6 // the gap that makes a folder's edge, in world units
-const WALK = 0.5 // the pavement round a district, inside its ring road
 export const ROAD = 1.6 // a road's width
-const GAP = 2.5 // the least ground between two districts' ring roads; more is added at random
+const SET_BACK = 0.5 // between the buildings and the ring road
+const GAP = 3 // the least open ground between two districts' ring roads; more is added at random
 const GOLDEN = Math.PI * (3 - Math.sqrt(5))
 const MAX_DISTRICTS = 16
 const DAY = 86400000
@@ -45,47 +46,6 @@ export const foldFiles = (files, max = MAX_FILES) => {
   return [...sorted.slice(0, max), ...folded.values()]
 }
 
-const worst = (row, sum, side) => {
-  const values = row.map(r => r.v)
-  return Math.max((side * side * Math.max(...values)) / (sum * sum), (sum * sum) / (side * side * Math.min(...values)))
-}
-
-// Squarified treemap: rects { node, x, z, w, d } that fill the box, each as big as its value.
-const squarify = (nodes, x, z, w, d) => {
-  const scale = (w * d) / nodes.reduce((sum, n) => sum + n.v, 0)
-  let queue = nodes.map(node => ({ node, v: node.v * scale }))
-  const rects = []
-  while (queue.length) {
-    const side = Math.min(w, d)
-    let row = [queue[0]]
-    let sum = queue[0].v
-    let i = 1
-    for (; i < queue.length; i++) {
-      const next = [...row, queue[i]]
-      const nextSum = sum + queue[i].v
-      if (worst(next, nextSum, side) > worst(row, sum, side)) break
-      row = next
-      sum = nextSum
-    }
-    queue = queue.slice(i)
-    const thick = sum / side
-    let at = 0
-    for (const r of row) {
-      const len = r.v / thick
-      rects.push(w >= d ? { node: r.node, x, z: z + at, w: thick, d: len } : { node: r.node, x: x + at, z, w: len, d: thick })
-      at += len
-    }
-    if (w >= d) {
-      x += thick
-      w -= thick
-    } else {
-      z += thick
-      d -= thick
-    }
-  }
-  return rects
-}
-
 export const buildTree = files => {
   const root = { path: '', kids: new Map() }
   for (const file of files) {
@@ -102,27 +62,46 @@ export const buildTree = files => {
   return root
 }
 
-// a folder's blocks and lots inside the box x, z, w, d
-const fill = (out, dir, x, z, w, d) => {
-  const kids = [...dir.kids.values()].sort((a, b) => b.v - a.v || (a.path < b.path ? -1 : 1))
-  for (const r of squarify(kids, x, z, w, d)) {
-    const { node } = r
-    if (!node.kids) {
-      out.files.push({ path: node.path, x: r.x, z: r.z, w: r.w, d: r.d, lines: node.lines, folded: node.folded ?? 0 })
-      continue
+// the convex hull of some points (monotone chain), anticlockwise
+const hull = points => {
+  const p = [...points].sort((a, b) => a.x - b.x || a.z - b.z)
+  if (p.length < 3) return p
+  const cross = (o, a, b) => (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x)
+  const half = list => {
+    const out = []
+    for (const q of list) {
+      while (out.length >= 2 && cross(out.at(-2), out.at(-1), q) <= 0) out.pop()
+      out.push(q)
     }
-    out.dirs.push({ path: node.path, x: r.x, z: r.z, w: r.w, d: r.d })
-    const pad = Math.min(PAD, r.w / 4, r.d / 4)
-    fill(out, node, r.x + pad, r.z + pad, r.w - 2 * pad, r.d - 2 * pad)
+    out.pop()
+    return out
   }
+  return [...half(p), ...half(p.reverse())]
 }
 
-const overlaps = (a, b, gap) => a.x < b.x + b.w + gap && b.x < a.x + a.w + gap && a.z < b.z + b.d + gap && b.z < a.z + a.d + gap
+// the line round some circles, `extra` further out: [{ x, z }]
+const around = (items, extra) =>
+  hull(items.flatMap(f => Array.from({ length: 12 }, (_, k) => ({ x: f.x + Math.cos((k * Math.PI) / 6) * (f.r + extra), z: f.z + Math.sin((k * Math.PI) / 6) * (f.r + extra) }))))
+
+// how far a point is from a closed line, and whether it is inside it (the line goes anticlockwise round a hull)
+export const fromRing = (ring, x, z) => {
+  let near = Infinity
+  let inside = ring.length > 2
+  for (let i = 0; i < ring.length; i++) {
+    const a = ring[i]
+    const b = ring[(i + 1) % ring.length]
+    const [dx, dz] = [b.x - a.x, b.z - a.z]
+    const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (z - a.z) * dz) / (dx * dx + dz * dz || 1)))
+    near = Math.min(near, Math.hypot(a.x + dx * t - x, a.z + dz * t - z))
+    if (dx * (z - a.z) - dz * (x - a.x) < 0) inside = false
+  }
+  return { near, inside }
+}
 
 export const layoutCity = (files, max = MAX_FILES) => {
-  const out = { width: 0, depth: 0, districts: [], dirs: [], files: [], roads: [] }
+  const out = { width: 0, depth: 0, districts: [], files: [], roads: [] }
   if (files.length === 0) return out
-  const root = buildTree(foldFiles(files, max))
+  const root = buildTree(foldFiles([...files].sort((a, b) => (a.path < b.path ? -1 : 1)), max))
 
   // the districts: each top folder, and the files at the top together; a folder holding most of the repo is split
   // into its own folders (and its loose files), again and again, so one big folder (app/src/main/...) is not one block
@@ -137,61 +116,153 @@ export const layoutCity = (files, max = MAX_FILES) => {
     groups = [...groups.slice(1), ...split(groups[0])].sort(byWeight)
   }
 
-  // each gets a shape of its own, then a place: the first in the middle, each next one at the first free spot
-  // along a spiral out from the middle, keeping clear of the others by a road on each side and a little ground
-  const placed = []
-  for (const g of groups) {
-    const aspect = 0.6 + hash(`${g.path}#shape`) * 1.0
-    const w = Math.sqrt(g.v * aspect) + 2 * WALK
-    const d = g.v / (w - 2 * WALK) + 2 * WALK
-    const gap = 2 * ROAD + GAP + hash(`${g.path}#gap`) * 3
-    const turn = hash(`${g.path}#turn`) * Math.PI * 2
-    let spot = { x: -w / 2, z: -d / 2, w, d }
-    for (let k = 1; placed.some(p => overlaps(spot, p.box, Math.max(gap, p.gap))); k++) {
-      const r = Math.sqrt(k) * 0.9
-      spot = { x: Math.cos(k * GOLDEN + turn) * r - w / 2, z: Math.sin(k * GOLDEN + turn) * r - d / 2, w, d }
+  // the buildings: a footprint of the file's size and a shape of its own; `sub` is the folder inside the district
+  // it belongs to, so a folder's files stay together
+  const items = []
+  groups.forEach((g, di) => {
+    const walk = (node, sub) => {
+      for (const k of node.kids.values()) {
+        if (k.kids) {
+          walk(k, sub ?? k.path)
+          continue
+        }
+        const area = weight(k.lines) * 0.5
+        const aspect = 0.55 + hash(`${k.path}#aspect`) * 0.9
+        const w = Math.sqrt(area * aspect)
+        const d = area / w
+        items.push({ path: k.path, lines: k.lines, folded: k.folded ?? 0, w, d, r: Math.hypot(w, d) / 2 + 0.25, di, sub: sub ?? g.path, x: 0, z: 0 })
+      }
     }
-    placed.push({ g, box: spot, gap })
+    walk(g, null)
+  })
+
+  // the districts' middles: the first in the middle, each next at the first free spot along a spiral out from it
+  const ring = SET_BACK + ROAD
+  const seeds = []
+  groups.forEach((g, di) => {
+    const own = items.filter(f => f.di === di)
+    const radius = Math.sqrt(own.reduce((sum, f) => sum + f.r * f.r, 0)) * 1.2 + ring + GAP / 2 + hash(`${g.path}#gap`) * 2
+    const turn = hash(`${g.path}#turn`) * Math.PI * 2
+    let spot = { x: 0, z: 0 }
+    for (let k = 1; seeds.some(s => Math.hypot(s.x - spot.x, s.z - spot.z) < s.radius + radius); k++) {
+      const r = Math.sqrt(k) * 0.9
+      spot = { x: Math.cos(k * GOLDEN + turn) * r, z: Math.sin(k * GOLDEN + turn) * r }
+    }
+    seeds.push({ ...spot, radius })
+  })
+
+  // every building starts near its folder's spot in its district, in no order, and they are pushed apart until
+  // none overlap (with a road and open ground between districts), each drawn back towards its folder and district
+  const subSpot = new Map()
+  for (const f of items) {
+    if (subSpot.has(f.sub)) continue
+    const s = seeds[f.di]
+    const subs = new Set(items.filter(g => g.di === f.di).map(g => g.sub)).size
+    const a = hash(`${f.sub}#where`) * Math.PI * 2
+    const r = subs > 1 ? (s.radius - ring) * (0.2 + hash(`${f.sub}#far`) * 0.35) : 0
+    subSpot.set(f.sub, { x: s.x + Math.cos(a) * r, z: s.z + Math.sin(a) * r })
+  }
+  for (const f of items) {
+    const s = subSpot.get(f.sub)
+    const spread = Math.sqrt(seeds[f.di].radius) * 1.5
+    f.x = s.x + (hash(`${f.path}#x`) - 0.5) * spread
+    f.z = s.z + (hash(`${f.path}#z`) - 0.5) * spread
+  }
+  const apart = 2 * ring + GAP
+  const cell = 2 * Math.max(...items.map(f => f.r)) + apart
+  const rounds = Math.round(Math.max(40, Math.min(160, 300000 / items.length)))
+  const settle = rounds + 80 // the last rounds only push apart, so nothing is left overlapping
+  for (let round = 0; round < settle; round++) {
+    const grid = new Map()
+    items.forEach((f, i) => {
+      const key = `${Math.floor(f.x / cell)},${Math.floor(f.z / cell)}`
+      ;(grid.get(key) ?? grid.set(key, []).get(key)).push(i)
+    })
+    items.forEach((f, i) => {
+      const gx = Math.floor(f.x / cell)
+      const gz = Math.floor(f.z / cell)
+      for (let a = -1; a <= 1; a++) {
+        for (let b = -1; b <= 1; b++) {
+          for (const j of grid.get(`${gx + a},${gz + b}`) ?? []) {
+            if (j <= i) continue
+            const g = items[j]
+            const need = f.r + g.r + (f.di === g.di ? 0 : apart)
+            let dx = g.x - f.x
+            let dz = g.z - f.z
+            let dist = Math.hypot(dx, dz)
+            if (dist >= need) continue
+            if (dist < 1e-6) [dx, dz, dist] = [Math.cos(i + j), Math.sin(i + j), 1]
+            const push = ((need - dist) / dist) * 0.5
+            f.x -= dx * push
+            f.z -= dz * push
+            g.x += dx * push
+            g.z += dz * push
+          }
+        }
+      }
+    })
+    if (round >= rounds) continue
+    const pull = (1 - round / rounds) ** 2
+    const mids = new Map()
+    for (const f of items) {
+      const m = mids.get(f.sub) ?? mids.set(f.sub, { x: 0, z: 0, n: 0 }).get(f.sub)
+      m.x += f.x
+      m.z += f.z
+      m.n++
+    }
+    for (const f of items) {
+      const m = mids.get(f.sub)
+      const s = seeds[f.di]
+      f.x += ((m.x / m.n - f.x) * 0.03 + (s.x - f.x) * 0.01) * pull
+      f.z += ((m.z / m.n - f.z) * 0.03 + (s.z - f.z) * 0.01) * pull
+    }
   }
 
-  // the ground: everything moved so the city, its ring roads and a margin start at 0,0
-  const margin = ROAD + GAP
-  const minX = Math.min(...placed.map(p => p.box.x)) - margin
-  const minZ = Math.min(...placed.map(p => p.box.z)) - margin
-  out.width = Math.max(...placed.map(p => p.box.x + p.box.w)) + margin - minX
-  out.depth = Math.max(...placed.map(p => p.box.z + p.box.d)) + margin - minZ
-  for (const { g, box } of placed) {
-    const x = box.x - minX
-    const z = box.z - minZ
-    out.districts.push({ path: g.path, x, z, w: box.w, d: box.d })
-    if (g.path) out.dirs.push({ path: g.path, x, z, w: box.w, d: box.d })
-    fill(out, g, x + WALK, z + WALK, box.w - 2 * WALK, box.d - 2 * WALK)
+  // each building turned a little: the district's own way, its folder's, and its own
+  for (const f of items) f.angle = hash(`${groups[f.di].path}#angle`) * Math.PI + (hash(`${f.sub}#angle`) - 0.5) * 0.8 + (hash(`${f.path}#angle`) - 0.5) * 0.4
+
+  // the ground: everything moved so the city, its roads and a margin start at 0,0
+  const rings = groups.map((g, di) => around(items.filter(f => f.di === di), SET_BACK + ROAD / 2))
+  const all = rings.flat()
+  const margin = ROAD + GAP + 2
+  const minX = Math.min(...all.map(p => p.x)) - margin
+  const minZ = Math.min(...all.map(p => p.z)) - margin
+  out.width = Math.max(...all.map(p => p.x)) + margin - minX
+  out.depth = Math.max(...all.map(p => p.z)) + margin - minZ
+  for (const p of all) {
+    p.x -= minX
+    p.z -= minZ
   }
+  for (const f of items) {
+    f.x -= minX
+    f.z -= minZ
+    out.files.push({ path: f.path, x: f.x, z: f.z, w: f.w, d: f.d, angle: f.angle, r: f.r, lines: f.lines, folded: f.folded, district: f.di })
+  }
+  groups.forEach((g, di) => {
+    const own = items.filter(f => f.di === di)
+    out.districts.push({ path: g.path, x: own.reduce((sum, f) => sum + f.x, 0) / own.length, z: own.reduce((sum, f) => sum + f.z, 0) / own.length, ring: rings[di] })
+  })
 
   // the main roads: the shortest set of links that joins every district (a spanning tree), each a gentle curve
   // from one ring road to the other
   const ds = out.districts
-  const mid = r => ({ x: r.x + r.w / 2, z: r.z + r.d / 2 })
-  const edge = (r, toward) => {
-    const half = ROAD / 2
-    return { x: Math.min(Math.max(toward.x, r.x - half), r.x + r.w + half), z: Math.min(Math.max(toward.z, r.z - half), r.z + r.d + half) }
-  }
+  const nearest = (ringPoints, to) => ringPoints.reduce((best, p) => (Math.hypot(p.x - to.x, p.z - to.z) < Math.hypot(best.x - to.x, best.z - to.z) ? p : best))
   const joined = new Set([0])
   while (joined.size < ds.length) {
     let best = null
     for (const i of joined) {
       for (let j = 0; j < ds.length; j++) {
         if (joined.has(j)) continue
-        const gap = Math.hypot(mid(ds[i]).x - mid(ds[j]).x, mid(ds[i]).z - mid(ds[j]).z)
+        const gap = Math.hypot(ds[i].x - ds[j].x, ds[i].z - ds[j].z)
         if (!best || gap < best.gap) best = { i, j, gap }
       }
     }
     joined.add(best.j)
-    const a = edge(ds[best.i], mid(ds[best.j]))
-    const b = edge(ds[best.j], mid(ds[best.i]))
-    const length = Math.hypot(b.x - a.x, b.z - a.z)
+    const a = nearest(ds[best.i].ring, ds[best.j])
+    const b = nearest(ds[best.j].ring, ds[best.i])
+    const length = Math.hypot(b.x - a.x, b.z - a.z) || 1
     const bend = (hash(`${ds[best.i].path}>${ds[best.j].path}`) - 0.5) * 0.5
-    const c = { x: (a.x + b.x) / 2 - ((b.z - a.z) / (length || 1)) * length * bend, z: (a.z + b.z) / 2 + ((b.x - a.x) / (length || 1)) * length * bend }
+    const c = { x: (a.x + b.x) / 2 - ((b.z - a.z) / length) * length * bend, z: (a.z + b.z) / 2 + ((b.x - a.x) / length) * length * bend }
     out.roads.push(
       Array.from({ length: 13 }, (_, i) => {
         const t = i / 12
@@ -202,49 +273,44 @@ export const layoutCity = (files, max = MAX_FILES) => {
   return out
 }
 
-// past 3000 lines (about 21 high) a building grows no taller; a short file is a low house
-export const buildingHeight = lines => 0.5 + 0.38 * Math.sqrt(Math.min(lines, 3000))
+// past 3000 lines (about 28 high) a building grows no taller; a short file is a low house, a long one a skyscraper
+export const buildingHeight = lines => 0.6 + 0.5 * Math.sqrt(Math.min(lines, 3000))
 
-// the boxes a building is made of, each { x, z, w, d, y0, y1 } from its base: one box for a small file;
-// a big one steps in as it rises (two tiers, three past 1200 lines), and past 2000 lines it carries a spire
-export const buildingPieces = (lot, lines, seed) => {
+// the boxes a building of footprint w x d is made of, each { x, z, w, d, y0, y1 } with x, z its middle's offset from
+// the building's: one box for a small file; a big one steps in as it rises (two tiers, three past 1200 lines), the
+// top tier off-centre on some, and past 2000 lines it carries a spire
+export const buildingPieces = (w, d, lines, seed) => {
   const h = buildingHeight(lines)
-  const box = (inset, y0, y1) => ({ x: lot.x + lot.w * inset, z: lot.z + lot.d * inset, w: lot.w * (1 - 2 * inset), d: lot.d * (1 - 2 * inset), y0, y1 })
-  if (lines < 250 || Math.min(lot.w, lot.d) < 1.2) return [box(0, 0, h)]
-  const low = h * (0.45 + seed * 0.2)
-  if (lines < 1200) return [box(0, 0, low), box(0.16, low, h)]
+  const box = (inset, y0, y1, shift = 0) => ({ x: shift * w, z: -shift * d, w: w * (1 - 2 * inset), d: d * (1 - 2 * inset), y0, y1 })
+  if (lines < 250 || Math.min(w, d) < 1.2) return [box(0, 0, h)]
+  const low = h * (0.4 + seed * 0.25)
+  const lean = seed > 0.5 ? (seed - 0.5) * 0.25 : 0
+  if (lines < 1200) return [box(0, 0, low), box(0.16, low, h, lean)]
   const mid = low + (h - low) * 0.6
-  const pieces = [box(0, 0, low), box(0.14, low, mid), box(0.28, mid, h)]
+  const pieces = [box(0, 0, low), box(0.13, low, mid, lean / 2), box(0.26, mid, h, lean)]
   if (lines >= 2000) {
-    const s = Math.min(lot.w, lot.d) * 0.06
-    pieces.push({ x: lot.x + lot.w / 2 - s / 2, z: lot.z + lot.d / 2 - s / 2, w: s, d: s, y0: h, y1: h * 1.22 })
+    const s = Math.min(w, d) * 0.06
+    pieces.push({ x: lean * w, z: -lean * d, w: s, d: s, y0: h, y1: h * 1.2 })
   }
   return pieces
 }
 
-// the middles of the ring roads round each district, as segments [x1, z1, x2, z2]
-export const roadLines = city =>
-  city.districts.flatMap(({ x, z, w, d }) => {
-    const [x0, z0, x1, z1] = [x - ROAD / 2, z - ROAD / 2, x + w + ROAD / 2, z + d + ROAD / 2]
-    return [[x0, z0, x1, z0], [x1, z0, x1, z1], [x1, z1, x0, z1], [x0, z1, x0, z0]]
-  })
-
-// where trees can stand: on open ground near the districts, clear of the blocks, ring roads and main roads,
-// at most `max`: [{ x, z, size }]
-export const treeSpots = (city, max = 600) => {
+// where trees can stand: in the parks the buildings left inside a district, and on the open ground round the
+// districts, clear of buildings and roads; at most `max`: [{ x, z, size }]
+export const treeSpots = (city, max = 800) => {
   const out = []
-  const clear = ROAD + 0.4
-  const near = 7
   const nearRoad = (x, z) => city.roads.some(road => road.some(p => Math.hypot(p.x - x, p.z - z) < ROAD * 1.2))
   for (let x = 0.5; x < city.width && out.length < max; x += 1.3) {
     for (let z = 0.5; z < city.depth && out.length < max; z += 1.3) {
       const key = `${x.toFixed(1)},${z.toFixed(1)}`
-      if (hash(`${key}#tree`) > 0.42) continue
+      if (hash(`${key}#tree`) > 0.45) continue
       const px = x + (hash(`${key}#x`) - 0.5) * 1.1
       const pz = z + (hash(`${key}#z`) - 0.5) * 1.1
-      const dist = Math.min(...city.districts.map(r => Math.max(r.x - px, 0, px - r.x - r.w, r.z - pz, pz - r.z - r.d))) // square, like the ring road's corners
-      if (dist < clear || dist > near || nearRoad(px, pz)) continue
-      out.push({ x: px, z: pz, size: 0.6 + hash(`${key}#s`) * 0.6 })
+      const rings = city.districts.map(d => fromRing(d.ring, px, pz))
+      if (rings.some(r => r.near < ROAD / 2 + 0.4) || nearRoad(px, pz)) continue
+      const inPark = rings.some(r => r.inside) && city.files.every(f => Math.hypot(f.x - px, f.z - pz) > f.r + 0.3)
+      const outside = rings.every(r => !r.inside) && Math.min(...rings.map(r => r.near)) < 7
+      if (inPark || outside) out.push({ x: px, z: pz, size: 0.6 + hash(`${key}#s`) * 0.6 })
     }
   }
   return out

@@ -4,7 +4,7 @@
 // Both share the links that light up with running light, and the comets from one file to the next.
 // glow.js says what is lit. This draws it with three.js, which is only loaded the first time the Map is shown.
 
-import { ROAD, ageLight, buildingHeight, buildingPieces, cityArc, hash, layoutCity, roadLines, treeSpots } from './city.js'
+import { ROAD, ageLight, buildingHeight, buildingPieces, cityArc, hash, layoutCity, treeSpots } from './city.js'
 import { FADE_MS, glowLevel, touchOf } from './glow.js'
 import { curvePoints, importLinks, layoutNebula } from './nebula.js'
 
@@ -390,26 +390,28 @@ export const createMap = ({ canvas, tip }) => {
   const buildingMaterial = () =>
     new T.THREE.ShaderMaterial({
       vertexShader: `attribute vec3 aColor; attribute float aLit; attribute float aSeed; attribute vec3 aHeat;
-        varying vec3 vN; varying vec3 vM; varying vec3 vSize; varying vec3 vC; varying float vLit; varying float vSeed; varying vec3 vHeat;
+        varying vec3 vN; varying vec3 vL; varying vec3 vM; varying vec3 vSize; varying vec3 vC; varying float vLit; varying float vSeed; varying vec3 vHeat;
         void main() {
+          vL = normal;
           vSize = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
           vM = (position + 0.5) * vSize; vN = normalize(mat3(instanceMatrix) * normal);
           vC = aColor; vLit = aLit; vSeed = aSeed; vHeat = aHeat;
           gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `varying vec3 vN; varying vec3 vM; varying vec3 vSize; varying vec3 vC; varying float vLit; varying float vSeed; varying vec3 vHeat;
+      fragmentShader: `varying vec3 vN; varying vec3 vL; varying vec3 vM; varying vec3 vSize; varying vec3 vC; varying float vLit; varying float vSeed; varying vec3 vHeat;
         float rand(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
         void main() {
           vec3 n = normalize(vN);
           float shade = 0.42 + 0.58 * max(dot(n, normalize(vec3(-0.4, 1.0, 0.3))), 0.0);
           vec3 color = vC * shade;
           float glass = 0.0;
-          if (abs(n.y) < 0.5) {
-            float along = abs(n.x) > 0.5 ? vM.z : vM.x;
+          vec3 l = normalize(vL);
+          if (abs(l.y) < 0.5) {
+            float along = abs(l.x) > 0.5 ? vM.z : vM.x;
             vec2 cell = vec2(along / 0.42, (vM.y - 0.2) / 0.52);
             vec2 f = fract(cell);
             float inside = step(0.22, f.x) * step(f.x, 0.78) * step(0.28, f.y) * step(f.y, 0.78);
-            inside *= step(0.0, cell.y) * step(vM.y + 0.25, vSize.y) * step(0.12, along) * step(along, (abs(n.x) > 0.5 ? vSize.z : vSize.x) - 0.12);
-            float on = step(rand(floor(cell) + vec2(vSeed * 31.0, n.x * 7.0 + n.z * 13.0)), vLit);
+            inside *= step(0.0, cell.y) * step(vM.y + 0.25, vSize.y) * step(0.12, along) * step(along, (abs(l.x) > 0.5 ? vSize.z : vSize.x) - 0.12);
+            float on = step(rand(floor(cell) + vec2(vSeed * 31.0, l.x * 7.0 + l.z * 13.0)), vLit);
             color = mix(color, color * 0.32 + vec3(0.02, 0.03, 0.05), inside);
             glass = inside * on;
             color += glass * vec3(1.0, 0.8, 0.48) * 0.95;
@@ -421,19 +423,24 @@ export const createMap = ({ canvas, tip }) => {
   const addCity = (tree, fresh) => {
     const { THREE } = T
     const city = layoutCity(tree)
-    const size = Math.max(city.width, city.depth, 10)
+    const tallest = Math.max(0, ...city.files.map(f => buildingHeight(f.lines)))
+    const size = Math.max(city.width, city.depth, tallest * 2, 10)
     const mid = new THREE.Vector3(city.width / 2, 0, city.depth / 2)
-    group.userData.center = mid
-    group.userData.cam = new THREE.Vector3(mid.x, size * 0.55, mid.z + size * 0.9)
+    group.userData.center = new THREE.Vector3(mid.x, tallest * 0.2, mid.z)
+    group.userData.cam = new THREE.Vector3(mid.x, size * 0.5, mid.z + size * 0.85)
     controls.maxDistance = size * 4
     const box = new THREE.BoxGeometry(1, 1, 1)
     const dummy = new THREE.Object3D()
-    const put = (m, i, x, z, w, d, y0, y1) => {
-      dummy.position.set(x + w / 2, (y0 + y1) / 2, z + d / 2)
+    // a box with its middle at x, z (turned by angle round y) from y0 to y1
+    const put = (m, i, x, z, w, d, y0, y1, angle = 0) => {
+      dummy.position.set(x, (y0 + y1) / 2, z)
+      dummy.rotation.set(0, angle, 0)
       dummy.scale.set(w, Math.max(y1 - y0, 1e-3), d)
       dummy.updateMatrix()
       m.setMatrixAt(i, dummy.matrix)
     }
+    // a point offset by dx, dz from x, z, turned by angle
+    const turn = (x, z, dx, dz, angle) => ({ x: x + dx * Math.cos(angle) + dz * Math.sin(angle), z: z - dx * Math.sin(angle) + dz * Math.cos(angle) })
 
     // the ground fading into the night
     const fade = document.createElement('canvas')
@@ -451,52 +458,62 @@ export const createMap = ({ canvas, tip }) => {
     ground.rotation.x = -Math.PI / 2
     ground.position.set(mid.x, -0.01, mid.z)
 
-    // each district: a ring road of asphalt, the pavement inside it, and a block for each folder within
-    const inner = city.dirs.filter(d => d.path.includes('/'))
-    const slabs = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial(), city.districts.length * 2 + inner.length)
-    let n = 0
-    for (const d of city.districts) {
-      put(slabs, n, d.x - ROAD, d.z - ROAD, d.w + 2 * ROAD, d.d + 2 * ROAD, 0, 0.12)
-      slabs.setColorAt(n++, new THREE.Color(COLORS.asphalt))
-      put(slabs, n, d.x, d.z, d.w, d.d, 0, slabTop(1))
-      slabs.setColorAt(n++, new THREE.Color(COLORS.walk))
-    }
-    for (const dir of inner) {
-      const depth = depthOf(dir.path)
-      put(slabs, n, dir.x, dir.z, dir.w, dir.d, 0, slabTop(depth))
-      slabs.setColorAt(n++, new THREE.Color(COLORS.walk).offsetHSL(0, 0, Math.min(depth - 1, 5) * 0.012))
-    }
+    // inside each ring road: park ground, with a patch of pavement under every building
+    const parks = city.districts.map(d => {
+      const shape = new THREE.Shape(d.ring.map(p => new THREE.Vector2(p.x, -p.z)))
+      const m = new THREE.Mesh(new THREE.ShapeGeometry(shape), new THREE.MeshLambertMaterial({ color: '#15281f' }))
+      m.rotation.x = -Math.PI / 2
+      m.position.y = 0.04
+      return m
+    })
+    const files = city.files
+    const pads = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 14), new THREE.MeshLambertMaterial({ color: COLORS.walk }), files.length)
+    files.forEach((f, i) => put(pads, i, f.x, f.z, f.r + 0.3, f.r + 0.3, 0, slabTop(1)))
+    pads.instanceMatrix.needsUpdate = true
 
-    // the main roads: curving strips of asphalt between the districts
+    // the roads: a ring road round each district and curving main roads between them, with lane lines and lamps
     const strip = []
-    for (const road of city.roads) {
-      for (let i = 1; i < road.length; i++) {
-        const [p, q] = [road[i - 1], road[i]]
-        const length = Math.hypot(q.x - p.x, q.z - p.z) || 1
-        const [nx, nz] = [(-(q.z - p.z) / length) * (ROAD / 2), ((q.x - p.x) / length) * (ROAD / 2)]
-        const v = (x, z) => strip.push(x, 0.08, z)
-        v(p.x + nx, p.z + nz)
-        v(p.x - nx, p.z - nz)
-        v(q.x + nx, q.z + nz)
-        v(q.x + nx, q.z + nz)
-        v(p.x - nx, p.z - nz)
-        v(q.x - nx, q.z - nz)
+    const ribbon = (points, closed) => {
+      const n = points.length
+      const side = i => {
+        const a = points[closed ? (i - 1 + n) % n : Math.max(i - 1, 0)]
+        const b = points[closed ? (i + 1) % n : Math.min(i + 1, n - 1)]
+        const length = Math.hypot(b.x - a.x, b.z - a.z) || 1
+        return { x: (-(b.z - a.z) / length) * (ROAD / 2), z: ((b.x - a.x) / length) * (ROAD / 2) }
+      }
+      for (let i = 0; i < (closed ? n : n - 1); i++) {
+        const [p, q] = [points[i], points[(i + 1) % n]]
+        const [sp, sq] = [side(i), side((i + 1) % n)]
+        const v = (x, z) => strip.push(x, 0.1, z)
+        v(p.x + sp.x, p.z + sp.z)
+        v(p.x - sp.x, p.z - sp.z)
+        v(q.x + sq.x, q.z + sq.z)
+        v(q.x + sq.x, q.z + sq.z)
+        v(p.x - sp.x, p.z - sp.z)
+        v(q.x - sq.x, q.z - sq.z)
       }
     }
+    for (const d of city.districts) ribbon(d.ring, true)
+    for (const road of city.roads) ribbon(road, false)
     const roadGeometry = new THREE.BufferGeometry()
     roadGeometry.setAttribute('position', new THREE.Float32BufferAttribute(strip, 3))
-    const mainRoads = new THREE.Mesh(roadGeometry, new THREE.MeshBasicMaterial({ color: COLORS.asphalt, side: THREE.DoubleSide }))
-
-    // the lane lines down the middle of every road, and street lamps along both sides
-    const segments = [...roadLines(city), ...city.roads.flatMap(road => road.slice(1).map((q, i) => [road[i].x, road[i].z, q.x, q.z]))]
-    const lanePoints = segments.flatMap(([x1, z1, x2, z2]) => [new THREE.Vector3(x1, 0.14, z1), new THREE.Vector3(x2, 0.14, z2)])
-    const lanes = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(lanePoints), new THREE.LineDashedMaterial({ color: COLORS.lane, dashSize: 0.45, gapSize: 0.45, transparent: true, opacity: 0.5 }))
+    const roads = new THREE.Mesh(roadGeometry, new THREE.MeshBasicMaterial({ color: COLORS.asphalt, side: THREE.DoubleSide }))
+    const segments = [
+      ...city.districts.flatMap(d => d.ring.map((p, i) => [p, d.ring[(i + 1) % d.ring.length]])),
+      ...city.roads.flatMap(road => road.slice(1).map((q, i) => [road[i], q])),
+    ]
+    const lanes = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segments.flatMap(([p, q]) => [new THREE.Vector3(p.x, 0.13, p.z), new THREE.Vector3(q.x, 0.13, q.z)])), new THREE.LineDashedMaterial({ color: COLORS.lane, dashSize: 0.45, gapSize: 0.45, transparent: true, opacity: 0.5 }))
     lanes.computeLineDistances()
     const lampSpots = []
-    for (const [x1, z1, x2, z2] of roadLines(city)) {
-      const length = Math.hypot(x2 - x1, z2 - z1)
-      const [nx, nz] = [-(z2 - z1) / length, (x2 - x1) / length]
-      for (let s = 1.2; s < length; s += 3) for (const side of [-1, 1]) lampSpots.push([x1 + ((x2 - x1) * s) / length + nx * side * ROAD * 0.62, z1 + ((z2 - z1) * s) / length + nz * side * ROAD * 0.62])
+    for (const d of city.districts) {
+      let walked = 0
+      d.ring.forEach((p, i) => {
+        const q = d.ring[(i + 1) % d.ring.length]
+        const length = Math.hypot(q.x - p.x, q.z - p.z)
+        const [nx, nz] = [-(q.z - p.z) / (length || 1), (q.x - p.x) / (length || 1)]
+        for (let s = (3 - (walked % 3)) % 3; s < length; s += 3) for (const k of [-1, 1]) lampSpots.push([p.x + ((q.x - p.x) * s) / length + nx * k * ROAD * 0.62, p.z + ((q.z - p.z) * s) / length + nz * k * ROAD * 0.62])
+        walked += length
+      })
     }
     const lamps = dotSet(lampSpots.length)
     const lamp = new THREE.Color(COLORS.lamp)
@@ -508,20 +525,20 @@ export const createMap = ({ canvas, tip }) => {
       lamps.attrs.aGlow[i] = 0.7
     })
 
-    // trees on the open ground between the districts
+    // trees in the parks and round the districts
     const treeList = treeSpots(city)
     const crowns = new THREE.InstancedMesh(new THREE.ConeGeometry(0.5, 1.6, 7), new THREE.MeshLambertMaterial(), treeList.length)
     treeList.forEach((t, i) => {
-      dummy.position.set(t.x, 0.8 * t.size + 0.15, t.z)
+      dummy.position.set(t.x, 0.8 * t.size + 0.1, t.z)
+      dummy.rotation.set(0, 0, 0)
       dummy.scale.setScalar(t.size)
       dummy.updateMatrix()
       crowns.setMatrixAt(i, dummy.matrix)
       crowns.setColorAt(i, new THREE.Color('#21463a').offsetHSL((hash(`${i}`) - 0.5) * 0.06, 0, (hash(`${i}#l`) - 0.5) * 0.06))
     })
 
-    // the buildings: one per file, in its neighbourhood's colour (its folder, two levels deep: src/components),
-    // weathered grey the longer it has been left alone; a big file is a stepped tower of a few boxes
-    const files = city.files
+    // the buildings: one per file, turned as the layout says, in its neighbourhood's colour (its folder, two levels
+    // deep: src/components), weathered grey the longer it has been left alone; a big file is a stepped skyscraper
     const tops = []
     const hood = f => f.path.split('/').slice(0, -1).slice(0, 2).join('/')
     const hoods = [...new Set(files.map(hood))].sort()
@@ -529,15 +546,16 @@ export const createMap = ({ canvas, tip }) => {
     const now = Date.now()
     const byPath = new Map(tree.map(f => [f.path, f]))
     const colors = []
-    const pieces = [] // { file, x, z, w, d, y0, y1 } with heights from the ground
+    const pieces = [] // { file, x, z, w, d, y0, y1, angle }, x, z the piece's middle, heights from the ground
+    const bottom = slabTop(1)
     const lots = files.map((f, i) => {
-      const bottom = slabTop(Math.max(depthOf(f.path) - 1, 1))
       const seed = hash(f.path)
-      const inset = Math.min(0.12 + seed * 0.22, f.w / 4, f.d / 4)
-      const lot = { x: f.x + inset, z: f.z + inset, w: f.w - 2 * inset, d: f.d - 2 * inset, bottom, height: buildingHeight(f.lines) }
-      for (const p of buildingPieces(lot, f.folded ? 0 : f.lines, seed)) pieces.push({ ...p, file: i, y0: bottom + p.y0, y1: bottom + p.y1 })
-      tops.push({ x: lot.x + lot.w / 2, y: bottom + lot.height, z: lot.z + lot.d / 2 })
-      return lot
+      const height = buildingHeight(f.folded ? 0 : f.lines)
+      const parts = buildingPieces(f.w, f.d, f.folded ? 0 : f.lines, seed)
+      for (const p of parts) pieces.push({ ...turn(f.x, f.z, p.x, p.z, f.angle), w: p.w, d: p.d, y0: bottom + p.y0, y1: bottom + p.y1, angle: f.angle, file: i, top: p.y1 === height })
+      const top = parts.find(p => p.y1 === height)
+      tops.push({ ...turn(f.x, f.z, top.x, top.z, f.angle), y: bottom + height })
+      return { w: f.w, d: f.d, bottom, height }
     })
     const shell = new THREE.BoxGeometry(1, 1, 1)
     const mesh = new THREE.InstancedMesh(shell, buildingMaterial(), pieces.length)
@@ -563,14 +581,13 @@ export const createMap = ({ canvas, tip }) => {
       aLit.setX(k, c.lit)
       aSeed.setX(k, hash(`${files[p.file].path}#${k}`))
     })
-    number(files, fresh, f => Math.hypot(f.x + f.w / 2 - mid.x, f.z + f.d / 2 - mid.z) / (size * 0.71))
+    number(files, fresh, f => Math.hypot(f.x - mid.x, f.z - mid.z) / (size * 0.71))
     const raise = now => {
       let rising = false
       pieces.forEach((p, k) => {
         const grow = ease((now - born.get(files[p.file].path)) / GROW_MS)
         if (grow < 1) rising = true
-        const base = lots[p.file].bottom
-        put(mesh, k, p.x, p.z, p.w, p.d, base + (p.y0 - base) * grow, base + (p.y1 - base) * grow)
+        put(mesh, k, p.x, p.z, p.w, p.d, bottom + (p.y0 - bottom) * grow, bottom + (p.y1 - bottom) * grow, p.angle)
       })
       mesh.instanceMatrix.needsUpdate = true
       mesh.computeBoundingSphere()
@@ -579,19 +596,20 @@ export const createMap = ({ canvas, tip }) => {
     raise(now)
 
     // small boxes on the roofs of the bigger buildings
-    const roofSpots = files.map((f, i) => pieces[piecesOf[i].at(-1)]).filter(p => p.w > 1.3 && p.d > 1.3 && p.w > 0.3)
+    const roofSpots = pieces.filter(p => p.top && p.w > 1.3 && p.d > 1.3)
     const roofs = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ color: COLORS.roof }), roofSpots.length * 2)
     roofSpots.forEach((p, k) => {
       for (let j = 0; j < 2; j++) {
         const r = hash(`${k}:${j}`)
         const s = 0.22 + r * 0.22
-        put(roofs, k * 2 + j, p.x + 0.2 + r * (p.w - s - 0.4), p.z + 0.2 + hash(`${j}:${k}`) * (p.d - s - 0.4), s, s, p.y1, p.y1 + (j ? 0 : 0.25 + r * 0.2))
+        const at = turn(p.x, p.z, (r - 0.5) * (p.w - s - 0.4), (hash(`${j}:${k}`) - 0.5) * (p.d - s - 0.4), p.angle)
+        put(roofs, k * 2 + j, at.x, at.z, s, s, p.y1, p.y1 + (j ? 0.12 : 0.25 + r * 0.2), p.angle)
       }
     })
 
     const far = farStars(size * 4, true)
     far.points.position.copy(mid)
-    group.add(ground, mainRoads, slabs, lanes, lamps.points, crowns, mesh, roofs, far.points)
+    group.add(ground, ...parks, roads, pads, lanes, lamps.points, crowns, mesh, roofs, far.points)
     addWeb(tops, importLinks(tree, index), () => new THREE.Color(COLORS.arc), cityArc, 0.16 * Math.min(1, Math.sqrt(150 / Math.max(files.length, 1))))
 
     // searchlights for buildings being read, and room for cranes and their beacons on buildings being edited
@@ -608,14 +626,16 @@ export const createMap = ({ canvas, tip }) => {
 
     // the districts' names, over their tallest building
     const name = folderNames(city.districts.map(d => d.path))
-    for (const d of [...city.districts].sort((a, b) => b.w * b.d - a.w * a.d).slice(0, LABELS)) {
-      const tallest = Math.max(0, ...tops.filter(t => t.x > d.x && t.x < d.x + d.w && t.z > d.z && t.z < d.z + d.d).map(t => t.y))
+    city.districts.forEach((d, di) => {
+      const own = tops.filter((t, i) => files[i].district === di)
+      if (own.length < 2 || di >= LABELS) return
+      const tallest = Math.max(...own.map(t => t.y))
       const sprite = label(name(d.path), false)
-      sprite.position.set(d.x + d.w / 2, tallest + 2, d.z + d.d / 2)
-      const wide = Math.min(Math.max(d.w, 6) * 0.7, 12)
+      sprite.position.set(d.x, tallest + 2.5, d.z)
+      const wide = Math.max(9, size * 0.07)
       sprite.scale.set(wide, wide / 4, 1)
       group.add(sprite)
-    }
+    })
   }
 
   // a tower crane on a building Claude has edited: mast, jib, counter-jib and a hanging cable
