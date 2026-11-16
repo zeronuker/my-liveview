@@ -6,8 +6,11 @@
 
 import { ROAD, ageLight, buildingHeight, buildingPieces, cityArc, hash, layoutCity, treeSpots } from './city.js'
 import { FADE_MS, glowLevel, touchOf } from './glow.js'
-import { curvePoints, importLinks, layoutNebula } from './nebula.js'
+import { litOf, sizeOf, tintOf } from './measure.js'
+import { blastRadius, curvePoints, importLinks, layoutNebula } from './nebula.js'
+import { changesBetween, stateAt, timeline } from './replay.js'
 
+const BLAST = '#8fe9ff' // the colour of a blast radius
 const COLORS = {
   folded: '#4a4d55', read: '#6cb4ff', edit: '#ffb347', new: '#7bf0a0', sky: '#05060f', night: '#060b0d',
   asphalt: '#161a21', walk: '#222833', lane: '#d8c48a', lamp: '#ffcf7a', roof: '#5a6170', crane: '#f0b43c', arc: '#5fd3e6', grey: '#6d7079',
@@ -29,13 +32,17 @@ const RINGS = 48 // pulse rings drawn at once (nebula)
 const CRANES = 40 // cranes on buildings Claude has edited (city)
 const LIGHTS = 12 // searchlights on buildings Claude is reading (city)
 const PULSE_S = 1.3 // a busy file beats once in this long
+const BLAST_MS = 260 // the blast radius spreads one step out in this long
+const REPLAY_MS = 30000 // the time-lapse plays the whole history in this long at speed 1
 const GLIDE_MS = 900
 
 const depthOf = path => (path ? path.split('/').length : 0)
 const slabTop = depth => 0.2 + Math.min(depth, 6) * 0.03
 const ease = t => 1 - (1 - Math.min(Math.max(t, 0), 1)) ** 3
 
-export const createMap = ({ canvas, tip }) => {
+// canvas and tip are the Map's canvas and its pointer tip; bar is the time-lapse bar's parts:
+// { box, open, play, time, date, speed, close }
+export const createMap = ({ canvas, tip, bar }) => {
   let T = null // { THREE, OrbitControls }, once loaded
   let scene, camera, renderer, controls, raycaster
   let group = null // everything drawn for the current repo
@@ -55,6 +62,10 @@ export const createMap = ({ canvas, tip }) => {
   let frame = 0
   let refetch = 0
   let pressed = null
+  let mapping = { height: 'lines', footprint: 'lines', colour: 'folder', windows: 'recent' } // what a building shows (measure.js)
+  let focus = null // the blast radius shown: { i, at, steps: Map(number -> steps away) }
+  let replay = null // the time-lapse: { line, t, playing, speed, touches, wall }
+  let restore = false // the time-lapse has closed: put everything back as it is now
   const origin = Date.now()
   const index = new Map() // path -> its number in items
   const born = new Map() // path -> when its star or building starts to appear
@@ -91,6 +102,7 @@ export const createMap = ({ canvas, tip }) => {
     canvas.addEventListener('pointerdown', event => (pressed = { x: event.clientX, y: event.clientY }))
     canvas.addEventListener('click', click)
     canvas.addEventListener('dblclick', () => fit())
+    window.addEventListener('keydown', event => event.key === 'Escape' && visible && (focus = null))
     new ResizeObserver(resize).observe(canvas)
   }
 
@@ -166,6 +178,7 @@ export const createMap = ({ canvas, tip }) => {
     items = []
     dotSets.length = 0
     hovered = -1
+    focus = null
     index.clear()
     if (fresh) born.clear()
     group = new T.THREE.Group()
@@ -191,6 +204,7 @@ export const createMap = ({ canvas, tip }) => {
       index.set(item.path, i)
       if (!born.has(item.path)) born.set(item.path, calm || !fresh ? now - GROW_MS : now + distance(item) * SPREAD_MS)
     })
+    if (replay) stateNow() // the time-lapse's sizes, for the files as now numbered
   }
 
   // soft glowing dots, drawn in the shader; `ring` draws each as a thin ring instead
@@ -250,7 +264,7 @@ export const createMap = ({ canvas, tip }) => {
   const addWeb = (spots, links, colorOf, arc, light) => {
     const { THREE } = T
     const count = links.length * STEPS * 2
-    const attrs = { position: new Float32Array(count * 3), aColor: new Float32Array(count * 3), aT: new Float32Array(count), aStart: new Float32Array(count), aGlow: new Float32Array(count), aFlow: new Float32Array(count), aHot: new Float32Array(count * 3) }
+    const attrs = { position: new Float32Array(count * 3), aColor: new Float32Array(count * 3), aT: new Float32Array(count), aStart: new Float32Array(count), aGlow: new Float32Array(count), aFlow: new Float32Array(count), aHot: new Float32Array(count * 3), aShow: new Float32Array(count).fill(1) }
     const curves = []
     const linksOf = spots.map(() => [])
     links.forEach(([a, b], l) => {
@@ -278,15 +292,15 @@ export const createMap = ({ canvas, tip }) => {
     const geometry = new THREE.BufferGeometry()
     for (const [name, array] of Object.entries(attrs)) geometry.setAttribute(name, new THREE.BufferAttribute(array, array.length === count ? 1 : 3))
     const material = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uMove: { value: calm ? 0 : 1 } },
-      vertexShader: `attribute vec3 aColor; attribute float aT; attribute float aStart; attribute float aGlow; attribute float aFlow; attribute vec3 aHot;
+      uniforms: { uTime: { value: 0 }, uMove: { value: calm ? 0 : 1 }, uDim: { value: 1 } },
+      vertexShader: `attribute vec3 aColor; attribute float aT; attribute float aStart; attribute float aGlow; attribute float aFlow; attribute vec3 aHot; attribute float aShow;
         uniform float uTime; varying vec3 vC; varying vec3 vH; varying float vT; varying float vG; varying float vF; varying float vIn;
-        void main() { vC = aColor; vH = aHot; vT = aT; vG = aGlow; vF = aFlow; vIn = smoothstep(aStart, aStart + 0.4, uTime);
+        void main() { vC = aColor; vH = aHot; vT = aT; vG = aGlow; vF = aFlow; vIn = smoothstep(aStart, aStart + 0.4, uTime) * aShow;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform float uTime; uniform float uMove; varying vec3 vC; varying vec3 vH; varying float vT; varying float vG; varying float vF; varying float vIn;
+      fragmentShader: `uniform float uTime; uniform float uMove; uniform float uDim; varying vec3 vC; varying vec3 vH; varying float vT; varying float vG; varying float vF; varying float vIn;
         void main() { float along = vF < 0.0 ? 1.0 - vT : vT;
           float wave = pow(0.5 + 0.5 * sin((along * 3.0 - uTime * 1.6 * uMove) * 6.2832), 6.0);
-          gl_FragColor = vec4((vC + vH * vG * (0.7 + 2.4 * wave)) * vIn, 1.0); }`,
+          gl_FragColor = vec4((vC * uDim + vH * vG * (0.7 + 2.4 * wave)) * vIn, 1.0); }`,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
@@ -386,18 +400,18 @@ export const createMap = ({ canvas, tip }) => {
   }
 
   // the buildings' walls: a grid of windows, some lit (more for recent work), drawn in the shader;
-  // aHeat glows a building Claude is working on
+  // aHeat glows a building Claude is working on; aDim darkens one outside a blast radius
   const buildingMaterial = () =>
     new T.THREE.ShaderMaterial({
-      vertexShader: `attribute vec3 aColor; attribute float aLit; attribute float aSeed; attribute vec3 aHeat;
-        varying vec3 vN; varying vec3 vL; varying vec3 vM; varying vec3 vSize; varying vec3 vC; varying float vLit; varying float vSeed; varying vec3 vHeat;
+      vertexShader: `attribute vec3 aColor; attribute float aLit; attribute float aSeed; attribute vec3 aHeat; attribute float aDim;
+        varying vec3 vN; varying vec3 vL; varying vec3 vM; varying vec3 vSize; varying vec3 vC; varying float vLit; varying float vSeed; varying vec3 vHeat; varying float vDim;
         void main() {
-          vL = normal;
+          vL = normal; vDim = aDim;
           vSize = vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));
           vM = (position + 0.5) * vSize; vN = normalize(mat3(instanceMatrix) * normal);
           vC = aColor; vLit = aLit; vSeed = aSeed; vHeat = aHeat;
           gl_Position = projectionMatrix * modelViewMatrix * instanceMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `varying vec3 vN; varying vec3 vL; varying vec3 vM; varying vec3 vSize; varying vec3 vC; varying float vLit; varying float vSeed; varying vec3 vHeat;
+      fragmentShader: `varying vec3 vN; varying vec3 vL; varying vec3 vM; varying vec3 vSize; varying vec3 vC; varying float vLit; varying float vSeed; varying vec3 vHeat; varying float vDim;
         float rand(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
         void main() {
           vec3 n = normalize(vN);
@@ -416,14 +430,18 @@ export const createMap = ({ canvas, tip }) => {
             glass = inside * on;
             color += glass * vec3(1.0, 0.8, 0.48) * 0.95;
           } else color *= 0.72;
-          color += vHeat * (0.45 + glass * 0.9);
+          color = color * vDim + vHeat * (0.45 + glass * 0.9);
           gl_FragColor = vec4(color, 1.0); }`,
     })
 
   const addCity = (tree, fresh) => {
     const { THREE } = T
-    const city = layoutCity(tree)
-    const tallest = Math.max(0, ...city.files.map(f => buildingHeight(f.lines)))
+    // what each part shows (measure.js): the footprint sets the layout, the height each building's height
+    const most = Math.max(1, ...tree.map(f => f.changes ?? 0))
+    const byPath = new Map(tree.map(f => [f.path, f]))
+    const city = layoutCity(tree.map(f => ({ ...f, size: sizeOf(f, mapping.footprint, most) })))
+    const tall = f => (f.folded ? 0 : sizeOf(byPath.get(f.path) ?? f, mapping.height, most))
+    const tallest = Math.max(0, ...city.files.map(f => buildingHeight(tall(f))))
     const size = Math.max(city.width, city.depth, tallest * 2, 10)
     const mid = new THREE.Vector3(city.width / 2, 0, city.depth / 2)
     group.userData.center = new THREE.Vector3(mid.x, tallest * 0.2, mid.z)
@@ -468,8 +486,6 @@ export const createMap = ({ canvas, tip }) => {
     })
     const files = city.files
     const pads = new THREE.InstancedMesh(new THREE.CylinderGeometry(1, 1, 1, 14), new THREE.MeshLambertMaterial({ color: COLORS.walk }), files.length)
-    files.forEach((f, i) => put(pads, i, f.x, f.z, f.r + 0.3, f.r + 0.3, 0, slabTop(1)))
-    pads.instanceMatrix.needsUpdate = true
 
     // the roads: a ring road round each district and curving main roads between them, with lane lines and lamps
     const strip = []
@@ -544,14 +560,13 @@ export const createMap = ({ canvas, tip }) => {
     const hoods = [...new Set(files.map(hood))].sort()
     const hueOf = f => DISTRICT_HUES[hoods.indexOf(hood(f)) % DISTRICT_HUES.length]
     const now = Date.now()
-    const byPath = new Map(tree.map(f => [f.path, f]))
     const colors = []
     const pieces = [] // { file, x, z, w, d, y0, y1, angle }, x, z the piece's middle, heights from the ground
     const bottom = slabTop(1)
     const lots = files.map((f, i) => {
       const seed = hash(f.path)
-      const height = buildingHeight(f.folded ? 0 : f.lines)
-      const parts = buildingPieces(f.w, f.d, f.folded ? 0 : f.lines, seed)
+      const height = buildingHeight(tall(f))
+      const parts = buildingPieces(f.w, f.d, tall(f), seed)
       for (const p of parts) pieces.push({ ...turn(f.x, f.z, p.x, p.z, f.angle), w: p.w, d: p.d, y0: bottom + p.y0, y1: bottom + p.y1, angle: f.angle, file: i, top: p.y1 === height })
       const top = parts.find(p => p.y1 === height)
       tops.push({ ...turn(f.x, f.z, top.x, top.z, f.angle), y: bottom + height })
@@ -568,11 +583,18 @@ export const createMap = ({ canvas, tip }) => {
     const aLit = attr('aLit', 1)
     const aSeed = attr('aSeed', 1)
     const aHeat = attr('aHeat', 3)
+    const aDim = attr('aDim', 1)
+    aDim.array.fill(1)
     const piecesOf = files.map(() => [])
     files.forEach(f => {
-      const age = ageLight(byPath.get(f.path)?.changed, now)
-      const color = f.folded ? new THREE.Color(COLORS.folded) : new THREE.Color().setHSL(hueOf(f), 0.34, 0.4).lerp(new THREE.Color(COLORS.grey), age.grey)
-      colors.push(Object.assign(color, { lit: f.folded ? 0.1 : age.lit }))
+      const file = byPath.get(f.path) ?? f
+      const tint = tintOf(file, mapping.colour, now, most)
+      const color = f.folded
+        ? new THREE.Color(COLORS.folded)
+        : tint
+          ? new THREE.Color().setHSL(tint.h, tint.s, tint.l)
+          : new THREE.Color().setHSL(hueOf(f), 0.34, 0.4).lerp(new THREE.Color(COLORS.grey), ageLight(file.changed, now).grey)
+      colors.push(Object.assign(color, { lit: f.folded ? 0.1 : litOf(file, mapping.windows, now, most) }))
     })
     pieces.forEach((p, k) => {
       const c = colors[p.file]
@@ -582,30 +604,41 @@ export const createMap = ({ canvas, tip }) => {
       aSeed.setX(k, hash(`${files[p.file].path}#${k}`))
     })
     number(files, fresh, f => Math.hypot(f.x - mid.x, f.z - mid.z) / (size * 0.71))
-    const raise = now => {
-      let rising = false
-      pieces.forEach((p, k) => {
-        const grow = ease((now - born.get(files[p.file].path)) / GROW_MS)
-        if (grow < 1) rising = true
-        put(mesh, k, p.x, p.z, p.w, p.d, bottom + (p.y0 - bottom) * grow, bottom + (p.y1 - bottom) * grow, p.angle)
-      })
-      mesh.instanceMatrix.needsUpdate = true
-      mesh.computeBoundingSphere()
-      return rising
-    }
-    raise(now)
 
     // small boxes on the roofs of the bigger buildings
     const roofSpots = pieces.filter(p => p.top && p.w > 1.3 && p.d > 1.3)
-    const roofs = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ color: COLORS.roof }), roofSpots.length * 2)
-    roofSpots.forEach((p, k) => {
-      for (let j = 0; j < 2; j++) {
+    const roofList = roofSpots.flatMap((p, k) =>
+      [0, 1].map(j => {
         const r = hash(`${k}:${j}`)
         const s = 0.22 + r * 0.22
-        const at = turn(p.x, p.z, (r - 0.5) * (p.w - s - 0.4), (hash(`${j}:${k}`) - 0.5) * (p.d - s - 0.4), p.angle)
-        put(roofs, k * 2 + j, at.x, at.z, s, s, p.y1, p.y1 + (j ? 0.12 : 0.25 + r * 0.2), p.angle)
-      }
-    })
+        return { ...turn(p.x, p.z, (r - 0.5) * (p.w - s - 0.4), (hash(`${j}:${k}`) - 0.5) * (p.d - s - 0.4), p.angle), s, y0: p.y1, y1: p.y1 + (j ? 0.12 : 0.25 + r * 0.2), angle: p.angle, file: p.file }
+      }),
+    )
+    const roofs = new THREE.InstancedMesh(box, new THREE.MeshLambertMaterial({ color: COLORS.roof }), roofList.length)
+
+    // the buildings, roof boxes and pavement at their height now: rising when the city opens, and in the time-lapse
+    // as tall as each file was then (0: not there yet); says whether any is still rising
+    const shape = now => {
+      let rising = false
+      const scale = files.map((f, i) => {
+        const grow = ease((now - born.get(f.path)) / GROW_MS)
+        if (grow < 1) rising = true
+        return grow * (replay ? replay.scale[i] : 1)
+      })
+      pieces.forEach((p, k) => {
+        const f = scale[p.file]
+        put(mesh, k, p.x, p.z, f > 0 ? p.w : 1e-3, f > 0 ? p.d : 1e-3, bottom + (p.y0 - bottom) * f, bottom + (p.y1 - bottom) * f, p.angle)
+      })
+      roofList.forEach((r, k) => {
+        const f = scale[r.file]
+        put(roofs, k, r.x, r.z, f > 0 ? r.s : 1e-3, f > 0 ? r.s : 1e-3, bottom + (r.y0 - bottom) * f, bottom + (r.y1 - bottom) * f, r.angle)
+      })
+      files.forEach((f, i) => put(pads, i, f.x, f.z, scale[i] > 0 ? f.r + 0.3 : 1e-3, scale[i] > 0 ? f.r + 0.3 : 1e-3, 0, slabTop(1)))
+      for (const m of [mesh, roofs, pads]) m.instanceMatrix.needsUpdate = true
+      mesh.computeBoundingSphere()
+      return rising
+    }
+    shape(now)
 
     const far = farStars(size * 4, true)
     far.points.position.copy(mid)
@@ -622,7 +655,7 @@ export const createMap = ({ canvas, tip }) => {
     })
     const beacons = dotSet(CRANES)
     group.add(beacons.points)
-    town = { mesh, lots, tops, colors, aHeat, piecesOf, owner: pieces.map(p => p.file), raise, rising: true, lights, beacons, cranes: new Map(), heated: new Set(), size }
+    town = { mesh, lots, tops, colors, aHeat, aDim, aLit, piecesOf, owner: pieces.map(p => p.file), shape, rising: true, lights, beacons, cranes: new Map(), heated: new Set(), size }
 
     // the districts' names, over their tallest building
     const name = folderNames(city.districts.map(d => d.path))
@@ -679,9 +712,11 @@ export const createMap = ({ canvas, tip }) => {
   const kindColors = {}
   const kindColor = kind => (kindColors[kind] ??= new T.THREE.Color(COLORS[kind]))
   let scratch = null
+  // what has been touched: Claude's work, or in the time-lapse the files the commits changed
+  const touchesNow = () => (replay ? replay.touches : touchesOf(shownCwd))
   const busyFiles = now => {
-    const touches = touchesOf(shownCwd)
-    const latest = resting.has(shownCwd) ? undefined : index.get(lastPath.get(shownCwd))
+    const touches = touchesNow()
+    const latest = replay || resting.has(shownCwd) ? undefined : index.get(lastPath.get(shownCwd))
     const out = new Map() // number -> { touch, level, beat, color }
     for (const [path, touch] of touches) {
       const i = index.get(path)
@@ -706,6 +741,25 @@ export const createMap = ({ canvas, tip }) => {
     }
     for (const [i, b] of busy) if (b.level > 0) heat(i, b.level, b.color)
     if (hovered >= 0) heat(hovered, 0.5, colorOf(hovered))
+    // the blast radius: each link from a file to one that uses it lights up as the blast reaches it
+    material.uniforms.uDim.value = focus ? 0.3 : 1
+    if (focus) {
+      const blast = tint.set(BLAST).clone()
+      links.forEach(([a, b], l) => {
+        const step = focus.steps.get(a)
+        if (step === undefined || focus.steps.get(b) !== step - 1 || now - focus.at < step * BLAST_MS) return
+        hot.set(l, { glow: Math.max(0.35, 1 - step * 0.15), flow: -1, color: blast })
+      })
+    }
+    // the time-lapse: a link shows once both its files are there
+    if (replay) {
+      const per = STEPS * 2
+      links.forEach(([a, b], l) => attrs.aShow.fill(replay.scale[a] > 0 && replay.scale[b] > 0 ? 1 : 0, l * per, (l + 1) * per))
+      geometry.attributes.aShow.needsUpdate = true
+    } else if (restore) {
+      attrs.aShow.fill(1)
+      geometry.attributes.aShow.needsUpdate = true
+    }
 
     // the links that were lit and are not now go dark; the lit ones take their glow
     const per = STEPS * 2
@@ -775,11 +829,12 @@ export const createMap = ({ canvas, tip }) => {
     const { stars, rings, colors, sizes, phases, clouds } = sky
     const time = (now - origin) / 1000
     if (!calm) for (const c of clouds) c.sprite.material.rotation += c.spin * 16
-    const touches = touchesOf(shownCwd)
+    const touches = touchesNow()
     const tint = (scratch ??= new T.THREE.Color())
+    const blast = kindColors.blast ?? (kindColors.blast = new T.THREE.Color(BLAST))
     const { attrs } = stars
     items.forEach((n, i) => {
-      const grow = ease((now - born.get(n.path)) / GROW_MS)
+      const grow = ease((now - born.get(n.path)) / GROW_MS) * (replay ? Math.sqrt(replay.scale[i]) : 1)
       let size = sizes[i] * grow
       let glow = (0.35 + (calm ? 0 : 0.12 * Math.sin(time * 1.3 + phases[i]))) * grow
       tint.copy(colors[i])
@@ -797,6 +852,17 @@ export const createMap = ({ canvas, tip }) => {
       if (i === hovered) {
         glow = Math.max(glow, 1)
         size *= 1.3
+      }
+      if (focus) {
+        const step = focus.steps.get(i)
+        if (step !== undefined && now - focus.at >= step * BLAST_MS) {
+          halo = blast
+          glow = Math.max(glow, 1.4 - step * 0.15)
+          size *= step ? 1.2 : 1.6
+        } else {
+          glow *= 0.25
+          tint.multiplyScalar(0.35)
+        }
       }
       attrs.aSize[i] = size
       attrs.aGlow[i] = glow
@@ -823,9 +889,9 @@ export const createMap = ({ canvas, tip }) => {
   // one it is busy with glows and beats; edited ones get a crane with a blinking beacon, read ones a searchlight
   const paintCity = (now, busy) => {
     const { THREE } = T
-    if (town.rising) town.rising = town.raise(now)
-    const { aHeat, heated, lights, beacons, cranes, tops, lots, piecesOf } = town
-    const touches = touchesOf(shownCwd)
+    if (town.rising || replay || restore) town.rising = town.shape(now)
+    const { aHeat, aDim, aLit, heated, lights, beacons, cranes, tops, lots, piecesOf, owner, colors } = town
+    const touches = touchesNow()
     const glow = new Map() // number -> heat colour
     for (const [path, touch] of touches) {
       const i = index.get(path)
@@ -833,9 +899,27 @@ export const createMap = ({ canvas, tip }) => {
       const b = busy.get(i)
       const level = 0.12 + (b?.level > 0 ? b.level * (0.45 + 0.45 * b.beat) : 0)
       glow.set(i, kindColor(touch.kind).clone().multiplyScalar(level))
-      if ((touch.kind === 'edit' || touch.kind === 'new') && !cranes.has(i) && cranes.size < CRANES) cranes.set(i, addCrane(i))
+      if (!replay && (touch.kind === 'edit' || touch.kind === 'new') && !cranes.has(i) && cranes.size < CRANES) cranes.set(i, addCrane(i))
     }
     if (hovered >= 0) glow.set(hovered, (glow.get(hovered) ?? new THREE.Color()).clone().add(new THREE.Color(0.18, 0.2, 0.24)))
+
+    // the blast radius: the clicked building and all that depend on it glow, step by step; the rest go dark
+    if (focus || aDim.array[0] !== 1) {
+      const blast = new THREE.Color(BLAST)
+      owner.forEach((i, k) => {
+        const step = focus?.steps.get(i)
+        const reached = step !== undefined && now - focus.at >= step * BLAST_MS
+        aDim.setX(k, !focus || reached ? 1 : 0.25)
+        if (reached) glow.set(i, blast.clone().multiplyScalar(step ? Math.max(0.2, 0.55 - step * 0.08) : 0.9))
+      })
+      aDim.needsUpdate = true
+    }
+
+    // the time-lapse: windows lit for work done shortly before the day shown
+    if (replay || restore) {
+      owner.forEach((i, k) => aLit.setX(k, replay && mapping.windows === 'recent' ? ageLight(replay.changed[i], replay.t).lit : colors[i].lit))
+      aLit.needsUpdate = true
+    }
     for (const i of heated) if (!glow.has(i)) for (const k of piecesOf[i]) aHeat.setXYZ(k, 0, 0, 0)
     heated.clear()
     for (const [i, c] of glow) {
@@ -888,8 +972,8 @@ export const createMap = ({ canvas, tip }) => {
   const show = (event, rect, file) => {
     tip.hidden = !file
     if (!file) return
-    const links = web?.linksOf[index.get(file.path)]?.length ?? 0
-    const linked = ` · ${links} link${links === 1 ? '' : 's'}`
+    const users = web ? blastRadius(web.links, index.get(file.path)).size - 1 : 0
+    const linked = ` · ${users} depend${users === 1 ? 's' : ''} on it`
     tip.textContent = file.folded ? `${file.path} (${file.folded} files)` : `${file.path} · ${file.lines} lines${linked}`
     tip.style.left = `${event.clientX - rect.left + 12}px`
     tip.style.top = `${event.clientY - rect.top + 12}px`
@@ -926,10 +1010,12 @@ export const createMap = ({ canvas, tip }) => {
     show(event, canvas.getBoundingClientRect(), items[hovered])
   }
 
-  // a click on a file (not the end of a drag) glides the camera up close to it
+  // a click on a file (not the end of a drag) shows its blast radius and glides the camera up close to it;
+  // a click on empty ground clears it
   const click = event => {
     if (!web || !pressed || Math.hypot(event.clientX - pressed.x, event.clientY - pressed.y) > 4) return
     const i = fileAt(event)
+    focus = i < 0 ? null : { i, at: Date.now(), steps: blastRadius(web.links, i) }
     if (i < 0) return
     const spot = web.spots[i]
     const target = new T.THREE.Vector3(spot.x, spot.y, spot.z)
@@ -953,10 +1039,12 @@ export const createMap = ({ canvas, tip }) => {
       const now = Date.now()
       const scale = canvas.height / (2 * Math.tan((camera.fov * Math.PI) / 360))
       for (const set of dotSets) set.points.material.uniforms.uScale.value = scale
+      if (replay) playReplay(now)
       const busy = busyFiles(now)
       paintWeb(now, busy, i => (sky ? sky.colors[i] : town.colors[i]))
       if (sky) paintNebula(now, busy)
       else paintCity(now, busy)
+      restore = false
     }
     renderer.render(scene, camera)
   }
@@ -979,6 +1067,7 @@ export const createMap = ({ canvas, tip }) => {
   // which repo to show: a chat's folder
   const setRepo = next => {
     if (next === cwd) return
+    closeReplay()
     cwd = next
     if (visible) load()
   }
@@ -1009,6 +1098,83 @@ export const createMap = ({ canvas, tip }) => {
     }
   }
 
+  // the time-lapse: the repo's history played back (replay.js). Each frame the day shown moves on; the files the
+  // commits in between changed flash as Claude's work does, and each file is as long as it was then.
+  const day = t => new Date(t).toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+  const showReplay = () => {
+    const { start, end } = replay.line
+    bar.time.value = String(Math.round(((replay.t - start) / Math.max(end - start, 1)) * 1000))
+    bar.date.textContent = day(replay.t)
+    bar.play.textContent = replay.playing ? '❚❚' : '▶'
+    bar.play.setAttribute('aria-label', replay.playing ? 'Pause' : 'Play')
+  }
+  const stateNow = () => {
+    const states = items.map(f => stateAt(replay.line, f, replay.t))
+    replay.scale = states.map((st, i) => (st.exists ? Math.min(1, Math.max(0.12, Math.sqrt(st.lines / Math.max(items[i].lines, 1)))) : 0))
+    replay.changed = states.map(st => st.changed)
+  }
+  const playReplay = now => {
+    const wall = performance.now()
+    const { start, end } = replay.line
+    if (replay.playing) {
+      const next = Math.min(end, replay.t + ((end - start || 1) / REPLAY_MS) * replay.speed * Math.min(wall - replay.wall, 100))
+      for (const { path, kind } of changesBetween(replay.line, replay.t, next)) replay.touches.set(path, { kind, at: now })
+      replay.t = next
+      if (next >= end) replay.playing = false
+      showReplay()
+    }
+    replay.wall = wall
+    stateNow()
+  }
+  const openReplay = async () => {
+    if (!shownCwd || !lastTree) return
+    bar.box.hidden = false
+    bar.open.setAttribute('aria-pressed', 'true')
+    bar.date.textContent = 'Reading the history...'
+    const res = await fetch(`/history?cwd=${encodeURIComponent(shownCwd)}`).catch(() => null)
+    const commits = res?.ok ? await res.json() : []
+    if (!commits.length) {
+      bar.date.textContent = 'No git history here'
+      return
+    }
+    const line = timeline(lastTree, commits)
+    replay = { line, t: line.start - 1, playing: !calm, speed: Number(bar.speed.value) || 1, touches: new Map(), wall: performance.now() }
+    focus = null
+    trails.length = 0
+    stateNow()
+    showReplay()
+  }
+  const closeReplay = () => {
+    bar.box.hidden = true
+    bar.open.setAttribute('aria-pressed', 'false')
+    if (!replay) return
+    replay = null
+    restore = true
+  }
+  bar.open.onclick = () => (bar.box.hidden ? openReplay() : closeReplay())
+  bar.close.onclick = closeReplay
+  bar.play.onclick = () => {
+    if (!replay) return
+    if (replay.t >= replay.line.end) replay.t = replay.line.start - 1
+    replay.playing = !replay.playing
+    showReplay()
+  }
+  bar.time.oninput = () => {
+    if (!replay) return
+    const { start, end } = replay.line
+    replay.t = start + (Number(bar.time.value) / 1000) * (end - start)
+    replay.playing = false
+    showReplay()
+  }
+  bar.speed.onchange = () => replay && (replay.speed = Number(bar.speed.value) || 1)
+
+  // what each part of a City building shows: { height, footprint, colour, windows } (measure.js)
+  const setMapping = next => {
+    if (JSON.stringify(next) === JSON.stringify(mapping)) return
+    mapping = { ...next }
+    if (visible && lastTree && mode === 'city') build(lastTree)
+  }
+
   // 'nebula' or 'city'
   const setMode = next => {
     if (next === mode) return
@@ -1016,5 +1182,5 @@ export const createMap = ({ canvas, tip }) => {
     if (visible && lastTree) build(lastTree)
   }
 
-  return { feed, setRepo, setMode, setVisible, resetView: fit }
+  return { feed, setRepo, setMode, setMapping, setVisible, resetView: fit }
 }

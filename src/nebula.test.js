@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { curvePoints, layoutNebula } from '../public/nebula.js'
+import { blastRadius, curvePoints, layoutNebula } from '../public/nebula.js'
 
 const FILES = [
   { path: 'README.md', lines: 40 },
@@ -51,4 +51,11 @@ test('curvePoints: starts and ends on the two stars', () => {
   assert.equal(points.length, 9)
   assert.deepEqual(points[0], a)
   assert.ok(dist(points[8], b) < 1e-9)
+})
+
+test('blastRadius: every file that depends on one, directly or through others, with how many steps away', () => {
+  // 1 imports 0, 2 imports 1, 3 imports 0 and 2, 4 imports 3; 0 imports 5 (not a dependent of 0)
+  const links = [[1, 0], [2, 1], [3, 0], [3, 2], [4, 3], [0, 5]]
+  assert.deepEqual([...blastRadius(links, 0)].sort(), [[0, 0], [1, 1], [2, 2], [3, 1], [4, 2]])
+  assert.deepEqual([...blastRadius(links, 4)], [[4, 0]])
 })

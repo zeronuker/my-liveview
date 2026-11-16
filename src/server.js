@@ -8,7 +8,7 @@ import { applyEdit, makeRows } from './diff.js'
 import { gitKind, summarize, titleOf } from './summary.js'
 import { readStatuses } from './sessions.js'
 import { readAppTitle } from './titles.js'
-import { isRepo, listRepos, scanTree } from './tree-scan.js'
+import { gitHistory, isRepo, listRepos, scanTree } from './tree-scan.js'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.PORT) || 4747
@@ -205,6 +205,8 @@ const files = {
   '/city.js': ['city.js', 'text/javascript; charset=utf-8'],
   '/glow.js': ['glow.js', 'text/javascript; charset=utf-8'],
   '/nebula.js': ['nebula.js', 'text/javascript; charset=utf-8'],
+  '/measure.js': ['measure.js', 'text/javascript; charset=utf-8'],
+  '/replay.js': ['replay.js', 'text/javascript; charset=utf-8'],
   '/map.js': ['map.js', 'text/javascript; charset=utf-8'],
   '/vendor/three.module.min.js': ['vendor/three.module.min.js', 'text/javascript; charset=utf-8'],
   '/vendor/OrbitControls.js': ['vendor/OrbitControls.js', 'text/javascript; charset=utf-8'],
@@ -243,11 +245,13 @@ const server = http.createServer((req, res) => {
     return
   }
 
-  if (req.method === 'GET' && pathname === '/tree') {
-    // the files, their lengths and imports in a folder, for the Map; only a folder a hook has named, or a git repo
+  if (req.method === 'GET' && (pathname === '/tree' || pathname === '/history')) {
+    // for the Map: the files, their lengths and imports in a folder (/tree), or its latest commits (/history, for the
+    // time-lapse); only a folder a hook has named, or a git repo
     const cwd = url.searchParams.get('cwd')
     const json = data => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(data))
-    Promise.resolve(Boolean(cwd) && (seenCwds.has(cwd) || isRepo(cwd))).then(ok => (ok ? scanTree(cwd).then(json) : res.writeHead(404).end()))
+    const read = pathname === '/tree' ? scanTree : gitHistory
+    Promise.resolve(Boolean(cwd) && (seenCwds.has(cwd) || isRepo(cwd))).then(ok => (ok ? read(cwd).then(json) : res.writeHead(404).end()))
     return
   }
 

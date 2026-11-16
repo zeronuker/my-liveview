@@ -5,7 +5,7 @@
 // the middle with uneven gaps and joined by curving main roads. Plain data in, plain data out, so it can be
 // tested; map.js draws the result.
 //
-// layoutCity([{ path: 'src/a.js', lines: 12 }, ...]) gives
+// layoutCity([{ path: 'src/a.js', lines: 12, size? }, ...]) gives (size, if given, sets the footprint in place of lines)
 //   { width, depth,                                   the ground it all stands on, from 0,0
 //     districts: [{ path, x, z, ring }],              the top folders ('' for the files at the top), a big one split;
 //                                                     ring: the points round the middle of its ring road
@@ -126,7 +126,7 @@ export const layoutCity = (files, max = MAX_FILES) => {
           walk(k, sub ?? k.path)
           continue
         }
-        const area = weight(k.lines) * 0.5
+        const area = weight(k.size ?? k.lines) * 0.5 // size: what the footprint shows, if not the lines
         const aspect = 0.55 + hash(`${k.path}#aspect`) * 0.9
         const w = Math.sqrt(area * aspect)
         const d = area / w

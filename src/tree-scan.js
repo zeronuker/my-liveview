@@ -24,29 +24,47 @@ const readFile = async (file, size, rel) => {
   return { lines: n, specs: importsOf(rel, buf.toString('utf8')) }
 }
 
-// git's word on when each file last changed: Map(path below `dir` -> ms), from the latest commits,
-// and now for a file changed but not committed yet; empty when `dir` is not in a git repo
 const git = (dir, args) =>
   new Promise(resolve => execFile('git', args, { cwd: dir, maxBuffer: 64 * 1024 * 1024, timeout: 8000 }, (error, out) => resolve(error ? '' : out)))
+
+// the repo's latest commits below `dir`, oldest first: [{ at: ms, files: [[path, lines added, lines removed], ...] }];
+// [] when `dir` is not in a git repo. Read-only.
+export const gitHistory = async dir => {
+  const log = await git(dir, ['log', '-n', '3000', '--relative', '--no-renames', '--format=@%ct', '--numstat'])
+  const commits = []
+  for (const line of log.split('\n')) {
+    if (line.startsWith('@')) commits.push({ at: Number(line.slice(1)) * 1000, files: [] })
+    else if (line && commits.length) {
+      const [added, removed, ...rest] = line.split('\t')
+      const path = rest.join('\t')
+      if (path) commits.at(-1).files.push([path, Number(added) || 0, Number(removed) || 0])
+    }
+  }
+  return commits.reverse()
+}
+
+// git's word on each file: Map(path below `dir` -> { changed: ms of its last change, changes: how many commits
+// touched it }), from the latest commits; a file changed but not committed yet changed now
 export const gitChanged = async dir => {
   const out = new Map()
-  const [log, diff, untracked] = await Promise.all([
-    git(dir, ['log', '-n', '3000', '--relative', '--no-renames', '--format=@%ct', '--name-only']),
+  const [history, diff, untracked] = await Promise.all([
+    gitHistory(dir),
     git(dir, ['diff', '--name-only', '--relative', 'HEAD']),
     git(dir, ['ls-files', '--others', '--exclude-standard']),
   ])
-  const now = Date.now()
-  for (const path of [...diff.split('\n'), ...untracked.split('\n')]) if (path) out.set(path, now)
-  let at = 0
-  for (const line of log.split('\n')) {
-    if (line.startsWith('@')) at = Number(line.slice(1)) * 1000
-    else if (line && !out.has(line)) out.set(line, at)
+  for (const { at, files } of history) {
+    for (const [path] of files) {
+      const was = out.get(path)
+      out.set(path, { changed: at, changes: (was?.changes ?? 0) + 1 })
+    }
   }
+  const now = Date.now()
+  for (const path of [...diff.split('\n'), ...untracked.split('\n')]) if (path) out.set(path, { changed: now, changes: out.get(path)?.changes ?? 0 })
   return out
 }
 
-// [{ path: 'src/a.js', lines: 12, imports: ['src/b.js'], changed: ms }], paths below `root` with forward slashes;
-// imports only when the file imports other files in the repo, changed only when git knows the file
+// [{ path: 'src/a.js', lines: 12, imports: ['src/b.js'], changed: ms, changes: 3 }], paths below `root` with forward
+// slashes; imports only when the file imports other files in the repo, changed and changes only when git knows the file
 export const scanTree = async root => {
   const out = []
   const specs = new Map()
@@ -71,7 +89,7 @@ export const scanTree = async root => {
   const imports = resolveImports(specs, out.map(f => f.path))
   for (const f of out) {
     if (imports.has(f.path)) f.imports = imports.get(f.path)
-    if (changed.has(f.path)) f.changed = changed.get(f.path)
+    if (changed.has(f.path)) Object.assign(f, changed.get(f.path))
   }
   return out
 }

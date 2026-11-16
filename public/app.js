@@ -18,6 +18,7 @@ const SPEEDS = [
 ]
 const THEMES = ['dark', 'light', 'midnight', 'terminal', 'contrast']
 const MAP_MODES = ['nebula', 'city']
+const MAP_SHOW = { height: ['lines', 'changes'], footprint: ['lines', 'changes'], colour: ['folder', 'age', 'changes', 'type'], windows: ['recent', 'changes'] }
 const STATES = { writing: 'writing', edited: 'edited', failed: 'NOT APPLIED', paused: 'paused', idle: 'idle' }
 const STATUS_MARK = { running: '...', done: 'ok', failed: 'failed' }
 const FEED_MAX = 100
@@ -60,6 +61,7 @@ const prefs = {
   office: store.get('office', false) === true,
   map: store.get('map', false) === true, // with office on: the Map in place of the Office
   mapMode: pick(store.get('mapMode', 'nebula'), v => MAP_MODES.includes(v), 'nebula'),
+  mapShow: Object.fromEntries(Object.entries(MAP_SHOW).map(([part, options]) => [part, pick(store.get('mapShow', {})?.[part], v => options.includes(v), options[0])])), // what a City building shows
   sound: store.get('sound', false) === true,
   angled: store.get('angled', false) === true, // the Office from an angle
   rotation: pick(store.get('rotation', 0), v => Number.isInteger(v) && v >= 0 && v <= 3, 0), // and turned this many quarter turns
@@ -143,7 +145,11 @@ function showInspector(who) {
 }
 const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[prefs.speed - 1].mult, getChatName: id => nameOfChat(id), onView: zoomed => ($('z-fit').disabled = !zoomed), onInspect: showInspector })
 
-const map = createMap({ canvas: $('map-canvas'), tip: $('map-tip') })
+const map = createMap({
+  canvas: $('map-canvas'),
+  tip: $('map-tip'),
+  bar: { box: $('replay'), open: $('m-replay'), play: $('r-play'), time: $('r-time'), date: $('r-date'), speed: $('r-speed'), close: $('r-close') },
+})
 // the Map shows the repo of the chat picked, else of the chat that was active last
 // the Map shows a repo picked under Repos, else the chosen chat's folder, else the latest chat's
 let pickedRepo = ''
@@ -775,6 +781,9 @@ const apply = () => {
   document.body.classList.toggle('angled', prefs.office && !isMap && prefs.angled) // the buttons that turn the view
   office.setVisible(prefs.office && !isMap)
   map.setMode(prefs.mapMode)
+  map.setMapping(prefs.mapShow)
+  document.body.classList.toggle('city', prefs.mapMode === 'city')
+  for (const part of Object.keys(MAP_SHOW)) $(`show-${part}`).value = prefs.mapShow[part]
   map.setVisible(isMap)
   for (const mode of MAP_MODES) $(`m-${mode}`).setAttribute('aria-pressed', String(prefs.mapMode === mode))
   if (prefs.office) $('files').append($('feed'))
@@ -832,6 +841,7 @@ $('v-code').onclick = () => setView('code')
 $('v-office').onclick = () => setView('office')
 $('v-map').onclick = () => setView('map')
 for (const mode of MAP_MODES) $(`m-${mode}`).onclick = () => save('mapMode', mode)
+for (const part of Object.keys(MAP_SHOW)) $(`show-${part}`).onchange = () => save('mapShow', { ...prefs.mapShow, [part]: $(`show-${part}`).value })
 $('b-sound').onclick = () => save('sound', !prefs.sound)
 $('b-angled').onclick = () => save('angled', !prefs.angled)
 $('b-folded').onclick = () => {

@@ -7,7 +7,7 @@
 //   nodes:  [{ path, lines, cloud, degree, x, y, z }]   only real files, no folders
 //   links:  [[a, b], ...]                               indexes into nodes, each pair once
 //   clouds: [{ dir, hue, x, y, z, spread, count }]      one per folder, hue 0..1
-// importLinks(files, at) is the links alone, for the City too.
+// importLinks(files, at) is the links alone, for the City too; blastRadius(links, i) what depends on file i.
 // curvePoints(a, b, steps) is the gentle arc a link is drawn along.
 
 import { hash } from './city.js'
@@ -30,6 +30,27 @@ export const importLinks = (files, at) => {
       seen.add(key)
       out.push([a, b])
     }
+  }
+  return out
+}
+
+// the blast radius of one file: every file that depends on it, directly or through others, with how many steps
+// away it is: Map(number -> steps), the file itself 0. links are [[importer, imported], ...] as importLinks gives them
+export const blastRadius = (links, start) => {
+  const users = new Map()
+  for (const [a, b] of links) (users.get(b) ?? users.set(b, []).get(b)).push(a)
+  const out = new Map([[start, 0]])
+  let ring = [start]
+  for (let steps = 1; ring.length; steps++) {
+    const next = []
+    for (const i of ring) {
+      for (const a of users.get(i) ?? []) {
+        if (out.has(a)) continue
+        out.set(a, steps)
+        next.push(a)
+      }
+    }
+    ring = next
   }
   return out
 }

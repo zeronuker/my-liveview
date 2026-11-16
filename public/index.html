@@ -118,7 +118,21 @@
         <span id="map-modes" class="group" role="group" aria-label="Map style">
           <button id="m-nebula" type="button" title="Every file a star, linked to the files it imports, each folder a coloured cloud">Nebula</button>
           <button id="m-city" type="button" title="Files as buildings in a city">City</button>
+          <button id="m-replay" type="button" title="Play the repo's git history: watch it grow">Time-lapse</button>
         </span>
+        <div id="map-show" role="group" aria-label="What each building shows">
+          <label>Height <select id="show-height"><option value="lines">Lines</option><option value="changes">Changes</option></select></label>
+          <label>Footprint <select id="show-footprint"><option value="lines">Lines</option><option value="changes">Changes</option></select></label>
+          <label>Colour <select id="show-colour"><option value="folder">Folder</option><option value="age">Age</option><option value="changes">Changes</option><option value="type">File type</option></select></label>
+          <label>Windows <select id="show-windows"><option value="recent">Recent work</option><option value="changes">Changes</option></select></label>
+        </div>
+        <div id="replay" role="group" aria-label="Time-lapse" hidden>
+          <button id="r-play" type="button" aria-label="Play">&#9654;</button>
+          <input id="r-time" type="range" min="0" max="1000" value="0" aria-label="Day shown">
+          <span id="r-date"></span>
+          <select id="r-speed" aria-label="Speed"><option value="0.5">0.5&times;</option><option value="1" selected>1&times;</option><option value="2">2&times;</option><option value="4">4&times;</option></select>
+          <button id="r-close" type="button" aria-label="Close the time-lapse">&#10005;</button>
+        </div>
         <div id="banner" role="status" hidden></div>
         <div id="inspector" hidden></div>
         <div id="zoom" role="group" aria-label="Zoom">

@@ -4,7 +4,7 @@ import os from 'node:os'
 import path from 'node:path'
 import { test } from 'node:test'
 
-import { isRepo, listRepos, scanTree } from './tree-scan.js'
+import { gitHistory, isRepo, listRepos, scanTree } from './tree-scan.js'
 
 test('scanTree: lists files with their line counts and imports, skipping build folders and binaries', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lv-tree-'))
@@ -46,7 +46,7 @@ test('listRepos: the git repos directly inside a folder, by name; isRepo says wh
   }
 })
 
-test('scanTree: in a git repo each file says when it last changed; an uncommitted change is now', async () => {
+test('scanTree: in a git repo each file says when it last changed and how often; an uncommitted change is now; gitHistory lists the commits', async () => {
   const { execFileSync } = await import('node:child_process')
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lv-git-'))
   try {
@@ -59,9 +59,11 @@ test('scanTree: in a git repo each file says when it last changed; an uncommitte
     fs.writeFileSync(path.join(dir, 'edited.js'), 'y\n')
     fs.writeFileSync(path.join(dir, 'new.js'), 'z\n')
     const before = Date.now()
-    const tree = Object.fromEntries((await scanTree(dir)).map(f => [f.path, f.changed]))
-    assert.equal(tree['old.js'], Date.parse('2020-01-02T00:00:00Z'))
-    assert.ok(tree['edited.js'] >= before && tree['new.js'] >= before)
+    const tree = Object.fromEntries((await scanTree(dir)).map(f => [f.path, f]))
+    assert.equal(tree['old.js'].changed, Date.parse('2020-01-02T00:00:00Z'))
+    assert.equal(tree['old.js'].changes, 1)
+    assert.ok(tree['edited.js'].changed >= before && tree['new.js'].changed >= before)
+    assert.deepEqual(await gitHistory(dir), [{ at: Date.parse('2020-01-02T00:00:00Z'), files: [['edited.js', 1, 0], ['old.js', 1, 0]] }])
   } finally {
     fs.rmSync(dir, { recursive: true, force: true })
   }
