@@ -901,18 +901,70 @@ $('repos-dir').onchange = () => {
   scheduleLists()
 }
 
-// Settings: the gear opens it; the cross, a click outside it, or Escape closes it; a tab for each part of the app
-const setSettings = on => {
-  $('settings').hidden = !on
-  $('b-gear').setAttribute('aria-expanded', String(on))
-  if (on) document.querySelector('.stab[aria-selected="true"]').focus()
+// Settings: the gear opens it; the cross, a click outside it, or Escape closes it; a tab for each part of the app.
+// It pops in (slides up in a narrow window) and back out; changing tab slides the page and glides the highlight.
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)')
+let settingsTimer = 0
+const placeTabMark = glide => {
+  const mark = document.querySelector('.cbs-ind')
+  const on = document.querySelector('.stab[aria-selected="true"]')
+  if (!mark || !on || $('settings').hidden) return
+  if (!glide) mark.style.transition = 'none'
+  mark.style.transform = `translate(${on.offsetLeft}px, ${on.offsetTop}px)`
+  mark.style.width = `${on.offsetWidth}px`
+  mark.style.height = `${on.offsetHeight}px`
+  if (!glide) {
+    void mark.offsetWidth
+    mark.style.transition = ''
+  }
 }
+const setSettings = on => {
+  const box = $('settings')
+  clearTimeout(settingsTimer)
+  $('b-gear').setAttribute('aria-expanded', String(on))
+  if (on) {
+    box.classList.remove('closing')
+    box.hidden = false
+    placeTabMark(false)
+    box.querySelector('.cbs').focus({ preventScroll: true }) // the window itself: no focus ring until the keyboard is used
+    return
+  }
+  if (box.hidden) return
+  box.classList.add('closing')
+  settingsTimer = setTimeout(() => {
+    box.hidden = true
+    box.classList.remove('closing')
+  }, reduceMotion.matches ? 0 : 210)
+}
+const tabOrder = [...document.querySelectorAll('.stab')].map(el => el.dataset.tab)
 const showTab = tab => {
-  for (const el of document.querySelectorAll('.stab')) el.setAttribute('aria-selected', String(el.dataset.tab === tab))
-  for (const el of document.querySelectorAll('.spanel')) el.hidden = el.dataset.panel !== tab
-  $('tab-title').textContent = document.querySelector(`.stab[data-tab="${tab}"]`).textContent
+  const before = document.querySelector('.stab[aria-selected="true"]')?.dataset.tab
+  for (const el of document.querySelectorAll('.stab')) {
+    el.setAttribute('aria-selected', String(el.dataset.tab === tab))
+    el.tabIndex = el.dataset.tab === tab ? 0 : -1
+  }
+  for (const el of document.querySelectorAll('.spanel')) {
+    el.hidden = el.dataset.panel !== tab
+    if (el.hidden || before === tab || reduceMotion.matches) continue
+    el.style.setProperty('--dir', tabOrder.indexOf(tab) >= tabOrder.indexOf(before) ? 1 : -1)
+    el.classList.remove('anim')
+    void el.offsetWidth
+    el.classList.add('anim')
+  }
+  document.querySelector('.cbs-pane').scrollTop = 0
+  placeTabMark(true)
 }
 for (const el of document.querySelectorAll('.stab')) el.onclick = () => showTab(el.dataset.tab)
+// up and down move between the tabs, like any list of tabs
+document.querySelector('.cbs-rail').addEventListener('keydown', event => {
+  if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return
+  event.preventDefault()
+  const at = tabOrder.indexOf(document.querySelector('.stab[aria-selected="true"]').dataset.tab)
+  const next = tabOrder[(at + (event.key === 'ArrowDown' ? 1 : -1) + tabOrder.length) % tabOrder.length]
+  showTab(next)
+  document.querySelector(`.stab[data-tab="${next}"]`).focus()
+})
+addEventListener('resize', () => placeTabMark(false))
 $('b-gear').onclick = () => setSettings(true)
 $('settings-close').onclick = () => setSettings(false)
 $('settings').addEventListener('click', event => event.target === $('settings') && setSettings(false))

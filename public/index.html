@@ -191,63 +191,65 @@
       </aside>
     </div>
 
-    <div id="settings" class="overlay" hidden>
-      <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="settings-title">
-        <div class="tabs" role="tablist" aria-label="Settings">
-          <span id="settings-title" class="sheet-title">Settings</span>
-          <button class="stab" type="button" role="tab" data-tab="general" aria-selected="true">General</button>
-          <button class="stab" type="button" role="tab" data-tab="code" aria-selected="false">Code</button>
-          <button class="stab" type="button" role="tab" data-tab="office" aria-selected="false">Office</button>
-          <button class="stab" type="button" role="tab" data-tab="map" aria-selected="false">Map</button>
-        </div>
-        <div class="sheet-body">
-          <div class="sheet-head">
-            <span id="tab-title">General</span>
-            <button id="settings-close" class="icon-btn" type="button" aria-label="Close settings">
-              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
-            </button>
+    <!-- Settings: the ClaudeBorne Settings window shared by every app (tabs at the left, the chosen tab at the right;
+         full screen with a slim column of icons in a narrow window). Styles: the .cbs-* block in style.css. -->
+    <div id="settings" class="cbs-overlay" hidden>
+      <div class="cbs" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabindex="-1">
+        <div class="cf-l1"><div class="cf-l2"><div class="cf-l3"><div class="cf-l4">
+        <header class="cbs-head">
+          <div class="cbs-title"><h2 id="settings-title">Settings</h2><div>Live View</div></div>
+          <button id="settings-close" class="cbs-x" type="button" aria-label="Close settings">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>
+          </button>
+        </header>
+        <div class="cbs-body">
+          <div class="cbs-rail" role="tablist" aria-label="Settings" aria-orientation="vertical">
+            <i class="cbs-ind" aria-hidden="true"></i>
+            <button class="stab cbs-tab" type="button" role="tab" data-tab="general" aria-selected="true"><svg class="cbs-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"></path><circle cx="15" cy="7" r="2"></circle><circle cx="9" cy="17" r="2"></circle></svg><span class="cbs-tl">General</span><span class="cbs-th">theme · window · screen</span></button>
+            <button class="stab cbs-tab" type="button" role="tab" data-tab="views" aria-selected="false" tabindex="-1"><svg class="cbs-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="14"></rect><path d="M9.5 5v14M15 5v14"></path></svg><span class="cbs-tl">Views</span><span class="cbs-th">code · office · map</span></button>
           </div>
-
-          <div class="spanel" data-panel="general" role="tabpanel">
-            <div class="srow"><div><span>Theme</span><small>How the whole app looks</small></div>
-              <div class="seg" role="group" aria-label="Theme">
-                <button class="swatch" type="button" data-theme="dark">Dark</button><button class="swatch" type="button" data-theme="light">Light</button><button class="swatch" type="button" data-theme="contrast">Contrast</button>
-              </div>
-            </div>
-            <div class="srow"><div><label for="win-size">Window size</label><small>Resize this window to a preset</small></div>
-              <select id="win-size">
+          <div class="cbs-pane">
+          <div class="spanel cbs-pane-in" data-panel="general" role="tabpanel">
+            <h3 class="cbs-pane-title">General</h3><div class="cbs-pane-hint">theme · window · screen</div>
+            <section class="cbs-sec">
+              <div class="cbs-sec-h"><span>Look</span><i></i></div>
+              <div class="cbs-row wide"><div class="cbs-row-l"><div class="cbs-lab">Theme</div><div class="cbs-hint">How the whole app looks</div></div><div class="cbs-row-c"><div class="seg" role="group" aria-label="Theme"><button class="swatch" type="button" data-theme="dark">Dark</button><button class="swatch" type="button" data-theme="light">Light</button><button class="swatch" type="button" data-theme="contrast">Contrast</button></div></div></div>
+            </section>
+            <section class="cbs-sec">
+              <div class="cbs-sec-h"><span>Window</span><i></i></div>
+              <div class="cbs-row wide"><div class="cbs-row-l"><div class="cbs-lab"><label for="win-size">Window size</label></div><div class="cbs-hint">Resize this window to a preset</div></div><div class="cbs-row-c"><select id="win-size">
                 <option value="" selected>Keep as is</option>
                 <option value="small">Small 1000 &times; 700</option>
                 <option value="medium">Medium 1200 &times; 800</option>
                 <option value="large">Large 1600 &times; 1000</option>
                 <option value="half">Half screen, full height</option>
-              </select>
-            </div>
-            <div class="srow"><div><span>Keep the screen on</span><small>While this window is visible</small></div><button class="switch" type="button" role="switch" data-pref="awake" aria-checked="false" aria-label="Keep the screen on"><span></span></button></div>
+              </select></div></div>
+              <div class="cbs-row"><div class="cbs-row-l"><div class="cbs-lab">Keep the screen on</div><div class="cbs-hint">While this window is visible</div></div><div class="cbs-row-c"><button class="switch" type="button" role="switch" data-pref="awake" aria-checked="false" aria-label="Keep the screen on"><span></span></button></div></div>
+            </section>
           </div>
-
-          <div class="spanel" data-panel="code" role="tabpanel" hidden>
-            <div class="srow"><div><span>Text size</span><small id="size-out">13 px</small></div>
-              <div class="pair"><button id="s-smaller" class="icon-btn txt" type="button" aria-label="Smaller text">A&minus;</button><button id="s-larger" class="icon-btn txt" type="button" aria-label="Larger text">A+</button></div>
-            </div>
-            <div class="srow"><div><span>Wrap long lines</span><small>Long lines fold instead of scrolling</small></div><button class="switch" type="button" role="switch" data-pref="wrap" aria-checked="false" aria-label="Wrap long lines"><span></span></button></div>
-            <div class="srow"><div><span>Show the whole file</span><small>Not just the lines round the edit</small></div><button class="switch" type="button" role="switch" data-pref="whole" aria-checked="true" aria-label="Show the whole file"><span></span></button></div>
-            <div class="srow"><div><span>Old and new side by side</span><small>Removed lines stay in red</small></div><button class="switch" type="button" role="switch" data-pref="side" aria-checked="false" aria-label="Old and new side by side"><span></span></button></div>
-            <div class="srow"><div><span>Follow the newest edit</span><small>Jump to each new edit as it starts</small></div><button class="switch" type="button" role="switch" data-pref="follow" aria-checked="true" aria-label="Follow the newest edit"><span></span></button></div>
+          <div class="spanel cbs-pane-in" data-panel="views" role="tabpanel" hidden>
+            <h3 class="cbs-pane-title">Views</h3><div class="cbs-pane-hint">code · office · map</div>
+            <section class="cbs-sec">
+              <div class="cbs-sec-h"><span>Code</span><i></i></div>
+              <div class="cbs-row"><div class="cbs-row-l"><div class="cbs-lab">Text size</div><div class="cbs-hint"><span id="size-out">13 px</span></div></div><div class="cbs-row-c"><div class="pair"><button id="s-smaller" class="icon-btn txt" type="button" aria-label="Smaller text">A&minus;</button><button id="s-larger" class="icon-btn txt" type="button" aria-label="Larger text">A+</button></div></div></div>
+              <div class="cbs-row"><div class="cbs-row-l"><div class="cbs-lab">Wrap long lines</div><div class="cbs-hint">Long lines fold instead of scrolling</div></div><div class="cbs-row-c"><button class="switch" type="button" role="switch" data-pref="wrap" aria-checked="false" aria-label="Wrap long lines"><span></span></button></div></div>
+              <div class="cbs-row"><div class="cbs-row-l"><div class="cbs-lab">Show the whole file</div><div class="cbs-hint">Not just the lines round the edit</div></div><div class="cbs-row-c"><button class="switch" type="button" role="switch" data-pref="whole" aria-checked="true" aria-label="Show the whole file"><span></span></button></div></div>
+              <div class="cbs-row"><div class="cbs-row-l"><div class="cbs-lab">Old and new side by side</div><div class="cbs-hint">Removed lines stay in red</div></div><div class="cbs-row-c"><button class="switch" type="button" role="switch" data-pref="side" aria-checked="false" aria-label="Old and new side by side"><span></span></button></div></div>
+              <div class="cbs-row"><div class="cbs-row-l"><div class="cbs-lab">Follow the newest edit</div><div class="cbs-hint">Jump to each new edit as it starts</div></div><div class="cbs-row-c"><button class="switch" type="button" role="switch" data-pref="follow" aria-checked="true" aria-label="Follow the newest edit"><span></span></button></div></div>
+            </section>
+            <section class="cbs-sec">
+              <div class="cbs-sec-h"><span>Office</span><i></i></div>
+              <div class="cbs-row"><div class="cbs-row-l"><div class="cbs-lab">Sounds</div><div class="cbs-hint">A chime, a buzz, a tick and soft typing</div></div><div class="cbs-row-c"><button class="switch" type="button" role="switch" data-pref="sound" aria-checked="false" aria-label="Sounds"><span></span></button></div></div>
+            </section>
+            <section class="cbs-sec">
+              <div class="cbs-sec-h"><span>Map</span><i></i></div>
+              <div class="cbs-row wide"><div class="cbs-row-l"><div class="cbs-lab"><label for="repos-dir">Repos folder</label></div><div class="cbs-hint">The git repos in this folder are listed under Repos in the Map. Empty: the folder Claude last worked in.</div></div><div class="cbs-row-c"><input id="repos-dir" type="text" spellcheck="false" placeholder="e.g. C:\Users\you\code" /></div></div>
+            </section>
           </div>
-
-          <div class="spanel" data-panel="office" role="tabpanel" hidden>
-            <div class="srow"><div><span>Sounds</span><small>A chime, a buzz, a tick and soft typing</small></div><button class="switch" type="button" role="switch" data-pref="sound" aria-checked="false" aria-label="Sounds"><span></span></button></div>
-          </div>
-
-          <div class="spanel" data-panel="map" role="tabpanel" hidden>
-            <div class="sfield">
-              <label for="repos-dir">Repos folder</label>
-              <input id="repos-dir" type="text" spellcheck="false" placeholder="e.g. C:\Users\you\code (empty: the folder Claude last worked in)" />
-              <small>The git repos in this folder are listed under Repos in the Map.</small>
-            </div>
           </div>
         </div>
+        <footer class="cbs-foot"><span>Live View</span><span>Changes save as you go</span></footer>
+        </div></div></div></div>
       </div>
     </div>
 
