@@ -67,6 +67,7 @@ const prefs = {
   mapMode: pick(store.get('mapMode', 'nebula'), v => MAP_MODES.includes(v), 'nebula'),
   mapShow: Object.fromEntries(Object.entries(MAP_SHOW).map(([part, options]) => [part, pick(store.get('mapShow', {})?.[part], v => options.includes(v), options[0])])), // what a City building shows
   sound: store.get('sound', false) === true,
+  drone: store.get('drone', false) === true, // the Nebula's camera roams by itself
   angled: store.get('angled', false) === true, // the Office from an angle
   rotation: pick(store.get('rotation', 0), v => Number.isInteger(v) && v >= 0 && v <= 3, 0), // and turned this many quarter turns
   reposDir: pick(store.get('reposDir', ''), v => typeof v === 'string', ''), // the folder that holds the person's repos (the Map's list)
@@ -784,6 +785,7 @@ const apply = () => {
   document.body.classList.toggle('city', prefs.mapMode === 'city')
   office.setVisible(prefs.office && !isMap)
   map.setMode(prefs.mapMode)
+  map.setDrone(prefs.drone)
   map.setMapping(prefs.mapShow)
   map.setVisible(isMap)
   office.setSound(prefs.sound)

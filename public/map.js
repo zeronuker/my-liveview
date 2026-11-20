@@ -42,6 +42,9 @@ const PULSE_S = 1.3 // a busy file beats once in this long
 const BLAST_MS = 260 // the blast radius spreads one step out in this long
 const REPLAY_MS = 30000 // the time-lapse plays the whole history in this long at speed 1
 const GLIDE_MS = 900
+const DRONE_QUIET_MS = 10000 // the drone takes over again this long after the person last touched the view
+const DRONE_DWELL_MS = [3000, 6000] // it hovers this long (from, to) at each stop
+const DRONE_SPEED = 0.12 // the nebula's radius it crosses each second
 
 const depthOf = path => (path ? path.split('/').length : 0)
 const slabTop = depth => 0.2 + Math.min(depth, 6) * 0.03
@@ -77,6 +80,10 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
   let shownMode = ''
   let lastTree = null // the repo's files as last read, so a change of style needs no new read
   let glide = null // the camera easing to a new place
+  let drone = false // nebula: the camera roams from cloud to cloud and star to star by itself
+  let tour = null // the drone's present leg: { from, bend, to, fromTarget, toTarget, at, ms, dwell, star, arrived }
+  let touched = -Infinity // when the person last moved the view; the drone waits DRONE_QUIET_MS after it
+  let stopBag = [] // the clouds the drone has yet to visit, in random order
   let hovered = -1 // the file under the pointer
   let legendLit = -1 // the nebula folder whose name in the key is under the pointer
   let loadGen = 0
@@ -114,6 +121,10 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
     controls = new OrbitControls(camera, canvas)
     controls.enableDamping = true
     controls.addEventListener('start', () => (glide = null))
+    // any touch of the view stops the drone where it is; it flies again once it has been left alone
+    const touch = () => ((touched = performance.now()), (tour = null))
+    for (const name of ['pointerdown', 'wheel']) canvas.addEventListener(name, touch, { passive: true })
+    window.addEventListener('keydown', event => visible && event.key.startsWith('Arrow') && touch())
     canvas.addEventListener('pointermove', panOnBothButtons)
     window.addEventListener('keydown', panByKey)
     raycaster = new THREE.Raycaster()
@@ -173,6 +184,64 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
   }
 
   const glideTo = (cam, target) => (glide = { at: performance.now(), from: camera.position.clone(), fromTarget: controls.target.clone(), to: cam, toTarget: target })
+
+  // The drone: a curved flight through the nebula to the next stop, then a slow turn round it. The stops go in turns: a
+  // folder's cloud (the camera ends up inside it), then one of that cloud's stars (its blast radius shown, as when it is
+  // clicked), then the next cloud, each cloud once before any comes round again.
+  const nextLeg = prev => {
+    const { Vector3 } = T.THREE
+    const toStar = prev?.star === null
+    if (!toStar && !stopBag.length) stopBag = sky.stops.filter(s => s.stars.length).sort(() => Math.random() - 0.5)
+    const stop = toStar ? prev.stop : stopBag.pop()
+    const star = toStar ? stop.stars[Math.floor(Math.random() * stop.stars.length)] : null
+    const spot = star === null ? stop.c : web.spots[star]
+    const toTarget = new Vector3(spot.x, spot.y, spot.z)
+    const from = camera.position.clone()
+    const dir = toTarget.clone().sub(from)
+    const dist = dir.length()
+    dir.normalize()
+    const stand = star === null ? stop.c.spread * 0.6 + 6 : Math.max(sky.R * 0.04, 5) // how far short of the stop it hovers
+    const to = toTarget.clone().addScaledVector(dir, -stand)
+    const sideways = new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).cross(dir).setLength(dist * 0.25)
+    const bend = from.clone().add(to).multiplyScalar(0.5).add(sideways) // the flight bows out to one side
+    const ms = Math.min(Math.max((dist / (sky.R * DRONE_SPEED)) * 1000, 3500), 12000)
+    const dwell = DRONE_DWELL_MS[0] + Math.random() * (DRONE_DWELL_MS[1] - DRONE_DWELL_MS[0])
+    return { stop, star, from, bend, to, fromTarget: controls.target.clone(), toTarget, at: performance.now(), ms, dwell, arrived: false }
+  }
+
+  // moves the camera along the drone's leg; true while it hovers at a stop (the controls then turn it round)
+  const flyDrone = now => {
+    if (!drone || !sky || mode !== 'nebula' || calm || glide || now - touched < DRONE_QUIET_MS) {
+      tour = null
+      return false
+    }
+    tour ??= nextLeg(null)
+    const t = (now - tour.at) / tour.ms
+    if (t < 1) {
+      const k = t * t * (3 - 2 * t)
+      camera.position.copy(tour.from).multiplyScalar((1 - k) ** 2).addScaledVector(tour.bend, 2 * (1 - k) * k).addScaledVector(tour.to, k * k)
+      controls.target.lerpVectors(tour.fromTarget, tour.toTarget, k)
+      return false
+    }
+    if (!tour.arrived) {
+      camera.position.copy(tour.to)
+      controls.target.copy(tour.toTarget)
+      tour.arrived = true
+      if (tour.star !== null) focus = { i: tour.star, at: Date.now(), steps: blastRadius(web.links, tour.star) }
+    }
+    if (now < tour.at + tour.ms + tour.dwell) return true
+    if (tour.star !== null) focus = null
+    tour = nextLeg(tour)
+    return false
+  }
+
+  const setDrone = on => {
+    if (on === drone) return
+    if (!on && tour?.star != null) focus = null
+    drone = on
+    touched = -Infinity // it starts at once
+    tour = null
+  }
 
   // Where the camera stands to show a picture whole, looking at `center` from the direction `dir`: the nearest place where
   // `FIT_FILL` of the window's height or width holds all of `points` but the farthest `FIT_TRIM` of them (a few strays do not
@@ -467,7 +536,9 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
     const phases = nodes.map((n, i) => (i * 2.399) % (Math.PI * 2))
     const rings = dotSet(RINGS, true)
     group.add(stars.points, rings.points)
-    sky = { stars, rings, colors, sizes, phases, clouds, R, names: [], files: new Map() } // files: path -> its name's sprite, made when first near
+    // stops: the clouds the drone visits, each with its stars' numbers
+    const stops = big.map(c => ({ c, stars: nodes.flatMap((n, i) => (layout.clouds[n.cloud] === c ? [i] : [])) }))
+    sky = { stars, rings, colors, sizes, phases, clouds, R, stops, names: [], files: new Map() } // files: path -> its name's sprite, made when first near
 
     const name = folderNames(big.map(c => c.dir))
     // folder names, in their colour; paintNebula shows them by how near the camera is (see names there)
@@ -1260,6 +1331,11 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
       controls.target.lerpVectors(glide.fromTarget, glide.toTarget, k)
       if (k >= 1) glide = null
     }
+    const hovering = flyDrone(performance.now())
+    if (sky) {
+      controls.autoRotate = !calm && (!drone || hovering) // the drone turns the view only while it hovers
+      controls.autoRotateSpeed = drone ? 1 : 0.3
+    }
     controls.update()
     if (web) {
       const now = Date.now()
@@ -1408,5 +1484,5 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
     if (visible && lastTree) build(lastTree)
   }
 
-  return { feed, setRepo, setMode, setMapping, setVisible, resetView: fit }
+  return { feed, setRepo, setMode, setDrone, setMapping, setVisible, resetView: fit }
 }

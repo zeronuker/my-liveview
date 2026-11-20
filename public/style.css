@@ -529,6 +529,7 @@ body:not(.map) .only-map,
 body.map .only-play,
 body.office .only-code,
 body:not(.office) .only-picture,
+body.city .only-nebula,
 body:not(.city) .only-city {
   display: none;
 }
