@@ -21,7 +21,6 @@ const OLD_THEMES = { midnight: 'dark', terminal: 'dark' } // themes there were b
 const MAP_MODES = ['nebula', 'city']
 const MAP_SHOW = { height: ['lines', 'changes'], footprint: ['lines', 'changes'], colour: ['folder', 'age', 'changes', 'type'], windows: ['recent', 'changes'] }
 const STATES = { writing: 'writing', edited: 'edited', failed: 'NOT APPLIED', paused: 'paused', idle: 'idle' }
-const STATUS_MARK = { running: '···', done: 'ok', failed: 'fail' }
 const FEED_MAX = 100
 const ACTIVE_MS = 4000 // a chat that did something this recently counts as working
 
@@ -60,7 +59,6 @@ const prefs = {
   side: store.get('side', false) === true,
   follow: store.get('follow', true) !== false,
   nav: store.get('nav', true) !== false, // the chats at the left are open
-  drawer: store.get('drawer', true) !== false, // the Activity drawer at the right is open
   awake: store.get('awake', false) === true,
   office: store.get('office', false) === true,
   map: store.get('map', false) === true, // with office on: the Map in place of the Office
@@ -72,8 +70,8 @@ const prefs = {
   rotation: pick(store.get('rotation', 0), v => Number.isInteger(v) && v >= 0 && v <= 3, 0), // and turned this many quarter turns
   reposDir: pick(store.get('reposDir', ''), v => typeof v === 'string', ''), // the folder that holds the person's repos (the Map's list)
 }
-// a narrow window starts with the chats and the drawer closed: they would cover the view
-if (window.innerWidth < 1000) Object.assign(prefs, { nav: false, drawer: false })
+// a narrow window starts with the chats closed: they would cover the view
+if (window.innerWidth < 1000) prefs.nav = false
 if (pinned) {
   const { name, ...choices } = pinned
   Object.assign(prefs, choices)
@@ -226,12 +224,11 @@ const recorder = createRecorder({
 const DEFAULT_NAV = 290 // the chat list's width until the person drags it
 const sizes = {
   nav: pick(store.get('navW', DEFAULT_NAV), v => Number.isFinite(v) && v >= 180 && v <= 480, DEFAULT_NAV),
-  aside: pick(store.get('asideW', 300), v => Number.isFinite(v) && v >= 200 && v <= 520, 300),
   split: pick(store.get('split', 0.5), v => Number.isFinite(v) && v >= 0.2 && v <= 0.8, 0.5),
 }
 const panesEl = $('panes')
 const splitEl = $('rz-split')
-const widthRoom = () => window.innerWidth - 320 // what the two side panels may take together
+const widthRoom = () => window.innerWidth - 320 // what the chat list may take
 
 // the share the first of two panes takes, side by side or one above the other
 const applySplit = () => {
@@ -247,7 +244,6 @@ const applySplit = () => {
 
 const applySizes = () => {
   document.documentElement.style.setProperty('--nav-w', `${sizes.nav}px`)
-  document.documentElement.style.setProperty('--aside-w', `${sizes.aside}px`)
   applySplit()
   for (const pane of panes) pane.updateBox()
 }
@@ -274,7 +270,7 @@ makeResizer({
   size: () => sizes.nav,
   fromPointer: event => event.clientX - $('files').getBoundingClientRect().left,
   min: () => 180,
-  max: () => Math.min(480, widthRoom() - sizes.aside),
+  max: () => Math.min(480, widthRoom()),
   step: 16,
   set: value => {
     sizes.nav = value
@@ -283,25 +279,6 @@ makeResizer({
   commit: () => store.set('navW', sizes.nav),
   reset: () => {
     sizes.nav = DEFAULT_NAV
-    applySizes()
-  },
-})
-makeResizer({
-  el: $('rz-aside'),
-  label: 'Resize the activity panel',
-  size: () => sizes.aside,
-  grows: -1, // its edge is on its left: moving left makes it wider
-  fromPointer: event => $('feed').getBoundingClientRect().right - event.clientX,
-  min: () => 200,
-  max: () => Math.min(520, widthRoom() - sizes.nav),
-  step: 16,
-  set: value => {
-    sizes.aside = value
-    applySizes()
-  },
-  commit: () => store.set('asideW', sizes.aside),
-  reset: () => {
-    sizes.aside = 300
     applySizes()
   },
 })
@@ -327,11 +304,10 @@ makeResizer({
   },
 })
 
-// a window made smaller takes room back from the side panels (not remembered: it may grow again)
+// a window made smaller takes room back from the chat list (not remembered: it may grow again)
 window.addEventListener('resize', () => {
-  if (sizes.nav + sizes.aside <= widthRoom()) return
-  sizes.aside = clamp(widthRoom() - sizes.nav, 200, sizes.aside)
-  sizes.nav = clamp(widthRoom() - sizes.aside, 180, sizes.nav)
+  if (sizes.nav <= widthRoom()) return
+  sizes.nav = clamp(widthRoom(), 180, sizes.nav)
   applySizes()
 })
 applySizes()
@@ -575,6 +551,34 @@ const chatMeta = (chat, own) => {
 }
 const changeCount = file => item('span', 'counts', span('pos', `+${file.adds}`), ' ', span('neg', `−${file.dels}`))
 
+// What each tool did, under a chat (its own) and under All chats (the latest of every chat), newest first
+const ACTIVITY_SHOWN = 5 // under a chat, until "Show earlier" is pressed
+const ACTIVITY_ALL = 3 // under All chats
+const KIND = { Read: 'read', Edit: 'edit', Write: 'new' } // the dot's colour, as on the Map
+const wholeActivity = new Set() // chats whose whole activity is listed
+const ago = at => {
+  const secs = Math.max(0, Math.round((Date.now() - at) / 1000))
+  return secs < 60 ? `${secs}s` : secs < 3600 ? `${Math.floor(secs / 60)}m` : `${Math.floor(secs / 3600)}h`
+}
+const activityRow = entry => {
+  const text = entry.path ? `${entry.tool.toLowerCase()} · ${baseName(entry.path)}` : entry.summary
+  const when = entry.status === 'running' ? '···' : entry.status === 'failed' ? 'failed' : ago(entry.at)
+  const row = item('li', `act ${entry.status}`, span(`kind ${KIND[entry.tool] ?? ''}`), span('atext', text), span('atime', when))
+  row.title = `${nameOfChat(entry.sessionId)}: ${entry.summary}`
+  return row
+}
+const earlierRow = (id, total) => {
+  const isWhole = wholeActivity.has(id)
+  const button = item('button', 'amore', isWhole ? 'Show fewer' : `Show ${total - ACTIVITY_SHOWN} earlier`)
+  button.type = 'button'
+  button.onclick = () => {
+    if (!wholeActivity.delete(id)) wholeActivity.add(id)
+    scheduleLists()
+  }
+  return item('li', 'act-more', button)
+}
+const section = text => item('li', 'ksec', text)
+
 const renameChat = chat => {
   const name = window.prompt('Name this chat (leave it empty to go back to the automatic name)', labelOf(chat))
   if (name === null) return
@@ -622,28 +626,25 @@ const chatTree = () => {
   })
   const rootState = kidsOf.some(kid => kid.state === 'working') ? 'working' : kidsOf.some(kid => kid.state === 'waiting') ? 'waiting' : null
 
-  return node({
-    key: 'c:all',
-    iconName: 'layers',
-    label: 'All chats',
-    right: plainCount(list.reduce((sum, chat) => sum + chat.count, 0)),
-    isSelected: selected === '',
-    activity: rootState,
-    onPress: () => pickChat(''),
-    kids: kidsOf.map(({ chat, own, state }) => {
-      const labels = fileLabels(own.map(file => file.path), chat.cwd)
-      return node({
-        key: `c:${chat.id}`,
-        iconName: 'chat',
-        label: labelOf(chat),
-        title: `${baseName(chat.cwd)} · ${chat.id.slice(0, 6)}\n${chat.cwd}\nDouble-click to rename`,
-        right: phasePill(chat),
-        meta: chatMeta(chat, own),
-        isSelected: selected === chat.id,
-        activity: state,
-        onPress: () => pickChat(chat.id),
-        onRename: () => renameChat(chat),
-        kids: own.map(file =>
+  // a chat: the files it touched, then what its tools did
+  const chatNode = ({ chat, own, state }) => {
+    const labels = fileLabels(own.map(file => file.path), chat.cwd)
+    const mine = feed.filter(entry => entry.sessionId === chat.id)
+    const listed = wholeActivity.has(chat.id) ? mine : mine.slice(0, ACTIVITY_SHOWN)
+    return node({
+      key: `c:${chat.id}`,
+      iconName: 'chat',
+      label: labelOf(chat),
+      title: `${baseName(chat.cwd)} · ${chat.id.slice(0, 6)}\n${chat.cwd}\nDouble-click to rename`,
+      right: phasePill(chat),
+      meta: chatMeta(chat, own),
+      isSelected: selected === chat.id,
+      activity: state,
+      onPress: () => pickChat(chat.id),
+      onRename: () => renameChat(chat),
+      kids: [
+        ...(own.length ? [section('Files')] : []),
+        ...own.map(file =>
           node({
             key: `f:${file.sessionId}|${file.path}`,
             iconName: 'file',
@@ -659,8 +660,20 @@ const chatTree = () => {
             },
           }),
         ),
-      })
-    }),
+        ...(mine.length ? [section('Activity'), ...listed.map(activityRow), ...(mine.length > ACTIVITY_SHOWN ? [earlierRow(chat.id, mine.length)] : [])] : []),
+      ],
+    })
+  }
+
+  return node({
+    key: 'c:all',
+    iconName: 'layers',
+    label: 'All chats',
+    right: plainCount(list.reduce((sum, chat) => sum + chat.count, 0)),
+    isSelected: selected === '',
+    activity: rootState,
+    onPress: () => pickChat(''),
+    kids: [...(feed.length ? [section('Latest'), ...feed.slice(0, ACTIVITY_ALL).map(activityRow)] : []), ...kidsOf.map(chatNode)],
   })
 }
 
@@ -676,17 +689,6 @@ const renderLists = () => {
       : 'Start a Claude chat, or set your repos folder in Settings, to see a repo here.'
   $('chat-list').replaceChildren(chatTree())
   $('repo-list').replaceChildren(...(repos.length ? repoList() : [item('li', 'empty', 'Set your repos folder in Settings (Map) to list them here.')]))
-
-  // the Activity drawer: what each tool did, and in which chat
-  $('feed-list').replaceChildren(
-    ...feed
-      .filter(entry => isShown(entry.sessionId))
-      .map(entry => {
-        const text = span('', entry.summary)
-        text.title = `${nameOfChat(entry.sessionId)}: ${entry.summary}`
-        return item('li', entry.status, span('tool', STATUS_MARK[entry.status]), item('span', 'what', text, span('who', nameOfChat(entry.sessionId))))
-      }),
-  )
 
   // a notice when a chat is waiting on a permission
   const asking = [...chats.keys()].filter(id => office.chatInfo(id).asking)
@@ -778,7 +780,6 @@ const apply = () => {
   document.documentElement.style.setProperty('--code-size', `${prefs.size}px`)
   document.body.classList.toggle('wrap', prefs.wrap)
   document.body.classList.toggle('nav-open', prefs.nav)
-  document.body.classList.toggle('feed-open', prefs.drawer)
   document.body.classList.toggle('office', prefs.office)
   const isMap = prefs.office && prefs.map
   document.body.classList.toggle('map', isMap)
@@ -795,7 +796,7 @@ const apply = () => {
 
   // every button and switch shows its choice
   for (const el of document.querySelectorAll('[data-pref]')) press(el, prefs[el.dataset.pref])
-  for (const [id, on] of [['v-code', !prefs.office], ['v-office', prefs.office && !isMap], ['v-map', isMap], ['o-flat', !prefs.angled], ['b-angled', prefs.angled], ['b-nav', prefs.nav], ['b-feed', prefs.drawer]]) press($(id), on)
+  for (const [id, on] of [['v-code', !prefs.office], ['v-office', prefs.office && !isMap], ['v-map', isMap], ['o-flat', !prefs.angled], ['b-angled', prefs.angled], ['b-nav', prefs.nav]]) press($(id), on)
   for (const mode of MAP_MODES) press($(`m-${mode}`), prefs.mapMode === mode)
   for (const button of document.querySelectorAll('[data-show] button')) press(button, prefs.mapShow[button.parentElement.dataset.show] === button.dataset.value)
   for (const button of $('speed').querySelectorAll('button')) press(button, prefs[speedKey()] === Number(button.dataset.speed))
@@ -855,10 +856,8 @@ $('b-angled').onclick = () => save('angled', true)
 for (const mode of MAP_MODES) $(`m-${mode}`).onclick = () => save('mapMode', mode)
 for (const button of document.querySelectorAll('[data-show] button')) button.onclick = () => save('mapShow', { ...prefs.mapShow, [button.parentElement.dataset.show]: button.dataset.value })
 
-// the panels that open and close: the chats, the Activity drawer, the City's layers, the new-window menu
+// the panels that open and close: the chats, the City's layers, the new-window menu
 $('b-nav').onclick = () => save('nav', !prefs.nav)
-$('b-feed').onclick = () => save('drawer', !prefs.drawer)
-$('b-feed-close').onclick = () => save('drawer', false)
 const setOpen = (button, box, on) => {
   box.hidden = !on
   button.setAttribute(button.hasAttribute('aria-expanded') ? 'aria-expanded' : 'aria-pressed', String(on))

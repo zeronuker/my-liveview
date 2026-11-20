@@ -34,8 +34,7 @@
 }
 .seg button,
 .nlabel,
-.menu a,
-#feed-list li { position: relative; overflow: hidden; }
+.menu a { position: relative; overflow: hidden; }
 @media (prefers-reduced-motion: no-preference) {
   .btn:active:not(:disabled),
   .icon-btn:active:not(:disabled),
@@ -82,8 +81,7 @@
 @keyframes oxy-breathe { 50% { box-shadow: 0 0 0 4px color-mix(in srgb, var(--nfg) 16%, transparent); } }
 @media (prefers-reduced-motion: no-preference) {
   @media (max-width: 1000px) {
-    body.nav-open nav,
-    body.feed-open #feed { transition: translate calc(var(--oxy-d) * 2.4) var(--oxy-spring), opacity var(--motion-fast, 150ms) ease; }
+    body.nav-open nav { transition: translate calc(var(--oxy-d) * 2.4) var(--oxy-spring), opacity var(--motion-fast, 150ms) ease; }
   }
   body.oxy-nav-in nav .node { animation: oxy-row-in calc(var(--oxy-d) * 2.2) var(--oxy-spring) backwards; }
   body.oxy-nav-in nav .node:nth-child(2) { animation-delay: 60ms; }
@@ -139,12 +137,6 @@
 @media (prefers-reduced-motion: no-preference) {
   .dot[data-state='writing']::after { animation: oxy-ring 1.4s ease-out infinite; }
   #status.oxy-pop { animation: oxy-pop calc(var(--oxy-d) * 2.4) var(--oxy-spring); }
-}
-
-/* ── 8. Activity feed: a new event drops in with a spring ── */
-@keyframes oxy-ev-in { from { opacity: 0; transform: translateY(-18px) scale(0.96); } }
-@media (prefers-reduced-motion: no-preference) {
-  #feed-list li.oxy-new { animation: oxy-ev-in calc(var(--oxy-d) * 2.4) var(--oxy-spring) backwards; }
 }
 
 /* ── 9. Settings window: grows in on a spring over a blurrier scrim; switches and the like spring ── */

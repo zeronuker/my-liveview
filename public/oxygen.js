@@ -27,7 +27,7 @@ function glide(seg) {
 document.querySelectorAll('.seg').forEach(seg => { if (!seg.closest('#settings')) glide(seg) })
 
 // 12. a soft ripple from the tap point
-const RIPPLE = '.btn, .icon-btn, .round-btn, .seg button, .nlabel, .menu a, #feed-list li'
+const RIPPLE = '.btn, .icon-btn, .round-btn, .seg button, .nlabel, .menu a'
 document.addEventListener('pointerdown', e => {
   if (e.button !== 0 || !motionOn()) return
   const el = e.target.closest(RIPPLE)
@@ -73,22 +73,6 @@ new MutationObserver(() => {
   wasNavOpen = open
 }).observe(document.body, { attributes: true, attributeFilter: ['class'] })
 let wasNavOpen = document.body.classList.contains('nav-open')
-
-// 8. a new event in the Activity feed drops in (the list is redrawn whole each time, so events are told apart by their words)
-const feedList = $('feed-list')
-const seenFeed = new Set()
-let feedReady = false
-if (feedList) {
-  new MutationObserver(() => {
-    for (const li of feedList.children) {
-      const key = li.querySelector('.what')?.textContent ?? li.textContent
-      if (seenFeed.has(key)) continue
-      seenFeed.add(key)
-      if (feedReady && motionOn()) li.classList.add('oxy-new')
-    }
-    feedReady = feedList.children.length > 0 || feedReady
-  }).observe(feedList, { childList: true })
-}
 
 // 4. a chat's or file's +N / −N: when it changes after a redraw, the number counts to the new value and glows
 const chatList = $('chat-list')

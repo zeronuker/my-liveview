@@ -17,15 +17,14 @@ npm run stop       # stops the server and closes its windows
 
 ## The screen
 
-A slim bar at the top: the chats button at the left, the three views in the middle (**Code**, **Office**, **Map**) with a menu beside them that opens any view in a window of its own, and at the right how things stand, **Activity** and the Settings gear.
+A slim bar at the top: the chats button at the left, the three views in the middle (**Code**, **Office**, **Map**) with a menu beside them that opens any view in a window of its own, and at the right how things stand and the Settings gear.
 
-- **Chats** (left, opened and closed by the button at the top left): every chat with what it is doing (Working 2/7, Planning, Waiting for you, Quiet) and, under its name, how many files it changed, the lines added and removed, and how long ago it started. Its files are under it. Double-click a chat to rename it. In the Map, **Repos** are listed under the chats.
-- **Activity** (right, a drawer opened and closed by its button): what each tool did and in which chat, the same in every view.
+- **Chats** (left, opened and closed by the button at the top left): every chat with what it is doing (Working 2/7, Planning, Waiting for you, Quiet) and, under its name, how many files it changed, the lines added and removed, and how long ago it started. Its files are under it, then its **Activity**: what each tool did, newest first (the latest five, with Show earlier for the rest). Under All chats, **Latest** lists the newest three from every chat. Double-click a chat to rename it. In the Map, **Repos** are listed under the chats.
 - **The view's own controls** float at the bottom of it, only those that apply: in Code, Pause, Skip, speed, Wrap, Whole file, Side by side, Follow and text size; in the Office, Pause, Skip, speed, Flat or Angled (and the turn buttons), zoom, Fit, Sound and Record; in the Map, Nebula or City, Time-lapse, Layers (City) and Fit.
 - **Pause, Skip and speed** are each view's own: pausing Code leaves the Office playing, Skip skips only in the view shown, and Code and the Office each keep their speed (½×, 1×, 2×, Max).
 - **Full screen,** the button at the right end of the view's controls, in steps: the first press closes everything but the view and its controls, inside the app window; the second makes it fill the whole screen (where the browser can); the third, which says **Windowed**, goes back to the window as it was. Escape goes straight back from either step.
 - **Settings** (the gear): the ClaudeBorne Settings window shared by every app, with its tabs down the left: General (theme, window size, keep the screen on) and Views (Code, Office and Map, each a group of its own), with switches. Changes save as you go. In a narrow window it fills the screen with a slim column of icons. Three themes: Dark (the default), Light, and Contrast (blue and orange for colourblind eyes).
-- **Small windows and touch:** the buttons are big enough for a finger; in a narrow window (a tablet held upright) the chats and the drawer start closed and open over the view.
+- **Small windows and touch:** the buttons are big enough for a finger; in a narrow window (a tablet held upright) the chats start closed and open over the view.
 
 ## The file view
 

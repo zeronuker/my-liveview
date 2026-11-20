@@ -385,8 +385,7 @@ body.paused .dot {
   overflow: hidden; /* a panel slid out of sight waits just outside it, and must not make the page scroll sideways */
 }
 
-nav,
-#feed {
+nav {
   flex: 0 0 var(--nav-w, 290px);
   display: flex;
   flex-direction: column;
@@ -401,15 +400,8 @@ nav {
   padding: 6px 0;
 }
 
-#feed {
-  flex-basis: var(--aside-w, 330px);
-  border-left: 1px solid var(--line);
-}
-
 body:not(.nav-open) nav,
-body:not(.nav-open) #rz-nav,
-body:not(.feed-open) #feed,
-body:not(.feed-open) #rz-aside {
+body:not(.nav-open) #rz-nav {
   display: none;
 }
 
@@ -916,67 +908,77 @@ body:not(.map) #replay {
   color: var(--fg);
 }
 
-/* the activity drawer */
-.drawer-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 6px 0 2px;
-}
-
-#feed-list {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
-  padding: 0 8px 12px;
-}
-
-#feed-list li {
-  display: flex;
-  gap: 12px;
-  padding: 8px;
-  border-radius: 10px;
-  font-size: 13px;
-  overflow-wrap: anywhere;
-}
-
-#feed-list li:hover {
-  background: var(--well);
-}
-
-#feed-list .tool {
-  flex: none;
-  min-width: 34px;
-  height: 24px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 6px;
-  border-radius: 7px;
-  background: var(--well);
+/* what each tool did, under All chats and under each chat */
+.ksec {
+  padding: 8px 8px 2px 14px;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--dim);
-  font: 11px ui-monospace, Consolas, monospace;
 }
 
-#feed-list .done .tool {
-  background: var(--abg);
-  color: var(--afg);
+.act {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 8px 3px 14px;
+  font-size: 12px;
+  border-radius: 6px;
 }
 
-#feed-list .failed .tool {
-  background: var(--dbg);
+.act:hover {
+  background: var(--well);
+}
+
+.act .kind {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--dim);
+}
+
+.act .kind.read {
+  background: #378add;
+}
+
+.act .kind.edit {
+  background: #ef9f27;
+}
+
+.act .kind.new {
+  background: #639922;
+}
+
+.act .atext {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.act .atime {
+  flex: none;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.act.failed .atime {
   color: var(--dfg);
 }
 
-#feed-list .what {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
+.act-more {
+  padding: 2px 8px 2px 14px;
 }
 
-#feed-list .who {
+.amore {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--afg);
   font-size: 12px;
-  color: var(--dim);
+  cursor: pointer;
 }
 
 small {
@@ -1455,40 +1457,28 @@ small {
 /* full screen: only the view and its own controls */
 body.full #top,
 body.full nav,
-body.full #rz-nav,
-body.full #feed,
-body.full #rz-aside {
+body.full #rz-nav {
   display: none;
 }
 
-/* a narrow window (a tablet held upright, a window at half the screen): the chats and the drawer float over the view */
+/* a narrow window (a tablet held upright, a window at half the screen): the chats float over the view */
 @media (max-width: 1000px) {
   .brand span,
   #status {
     display: none;
   }
 
-  nav,
-  #feed {
+  nav {
     position: absolute;
     z-index: 20;
     top: 0;
     bottom: 0;
+    left: 0;
+    width: min(320px, 85%);
     box-shadow: var(--shadow);
   }
 
-  nav {
-    left: 0;
-    width: min(320px, 85%);
-  }
-
-  #feed {
-    right: 0;
-    width: min(340px, 85%);
-  }
-
-  #rz-nav,
-  #rz-aside {
+  #rz-nav {
     display: none;
   }
 }
@@ -1499,8 +1489,7 @@ body.full #rz-aside {
     transform: none;
   }
 
-  .brand,
-  #b-feed span {
+  .brand {
     display: none;
   }
 
@@ -2248,17 +2237,14 @@ body.resizing:has(#panes.stacked #rz-split.dragging) {
     }
   }
 
-  /* the chats and the activity drawer slide shut instead of vanishing, and so does the top bar in full screen; once shut they
+  /* the chats slide shut instead of vanishing, and so does the top bar in full screen; once shut they
      are hidden, so nothing in them takes a keypress */
-  nav,
-  #feed {
+  nav {
     transition: flex-basis var(--motion) var(--ease), opacity var(--motion-fast) ease, border-width var(--motion) var(--ease), background-color 0.25s;
   }
 
   body:not(.nav-open) nav,
-  body:not(.feed-open) #feed,
-  body.full nav,
-  body.full #feed {
+  body.full nav {
     display: flex;
     flex-basis: 0;
     opacity: 0;
@@ -2286,28 +2272,17 @@ body.resizing:has(#panes.stacked #rz-split.dragging) {
     nav > * {
       min-width: var(--nav-w, 290px);
     }
-
-    #feed > * {
-      min-width: var(--aside-w, 330px);
-    }
   }
 
-  /* in a narrow window they float over the view, so they slide from their edge */
+  /* in a narrow window it floats over the view, so it slides from its edge */
   @media (max-width: 1000px) {
-    nav,
-    #feed {
+    nav {
       transition: translate var(--motion) var(--ease), opacity var(--motion-fast) ease;
     }
 
     body:not(.nav-open) nav,
     body.full nav {
       translate: -100% 0;
-      transition: translate var(--motion) var(--ease), opacity var(--motion-fast) ease, visibility 0s linear var(--motion);
-    }
-
-    body:not(.feed-open) #feed,
-    body.full #feed {
-      translate: 100% 0;
       transition: translate var(--motion) var(--ease), opacity var(--motion-fast) ease, visibility 0s linear var(--motion);
     }
   }
