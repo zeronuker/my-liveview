@@ -76,8 +76,6 @@
           <canvas id="office-canvas"></canvas>
           <canvas id="map-canvas"></canvas>
           <div id="map-tip" hidden></div>
-          <div id="map-legend" class="glass" aria-label="Folder colours" hidden></div>
-          <div id="map-caption" class="glass" aria-live="polite" hidden><i></i><span></span></div>
           <p id="map-empty" hidden></p>
           <div id="inspector" class="glass" hidden></div>
         </section>
@@ -102,6 +100,7 @@
         </div>
 
         <div id="dock" class="glass" role="toolbar" aria-label="View controls">
+          <div id="map-caption" aria-live="polite" hidden><i></i><span></span></div>
           <span class="grp only-play">
             <button id="b-pause" class="icon-btn" type="button" aria-pressed="false" aria-label="Pause" title="Pause">
               <svg class="ic-pause" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"></rect><rect x="14" y="5" width="4" height="14" rx="1"></rect></svg>

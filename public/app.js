@@ -152,15 +152,19 @@ const office = createOffice({ canvas: $('office-canvas'), getMult: () => SPEEDS[
 const map = createMap({
   canvas: $('map-canvas'),
   tip: $('map-tip'),
-  legend: $('map-legend'),
   caption: $('map-caption'),
   bar: { box: $('replay'), open: $('m-replay'), play: $('r-play'), time: $('r-time'), date: $('r-date'), speed: $('r-speed'), close: $('r-close') },
   onTree: count => {
     mapFiles = count
     scheduleLists()
   },
+  onFolders: list => {
+    mapFolders = list
+    scheduleLists()
+  },
 })
 let mapFiles = -1 // how many files the Map's repo has (0: nothing to draw), -1 before it is read
+let mapFolders = [] // the nebula's folders: [{ cloud, name, color }], listed under the repo shown
 // the Map shows the repo of the chat picked, else of the chat that was active last
 // the Map shows a repo picked under Repos, else the chosen chat's folder, else the latest chat's
 let pickedRepo = ''
@@ -185,21 +189,43 @@ const loadRepos = () => {
       scheduleLists()
     })
 }
+// a folder of the repo shown, with its colour on the Map; pointing at it lights that folder there
+const folderRow = folder => {
+  const dot = span('fdot')
+  dot.style.background = folder.color
+  const row = item('button', 'frow', dot, span('ntext', folder.name))
+  row.type = 'button'
+  const on = () => map.lightFolder(folder.cloud)
+  const off = () => map.lightFolder(-1)
+  row.addEventListener('pointerenter', on)
+  row.addEventListener('focus', on)
+  row.addEventListener('pointerleave', off)
+  row.addEventListener('blur', off)
+  return item('li', 'folder', row)
+}
+const foldersSeen = new Set() // repos whose Folders list has been drawn since the page opened: it starts shut
 const repoList = () => {
   const shown = mapCwd()
-  return repos.map(repo =>
-    node({
-      key: `r:${repo.path}`,
+  return repos.map(repo => {
+    const key = `r:${repo.path}`
+    const isShown = repo.path === shown
+    if (isShown && mapFolders.length && !foldersSeen.has(key)) {
+      foldersSeen.add(key)
+      collapsed.add(key)
+    }
+    return node({
+      key,
       iconName: 'folder',
       label: repo.name,
       title: repo.path,
-      isSelected: repo.path === shown,
+      isSelected: isShown,
+      kids: isShown ? mapFolders.map(folderRow) : [],
       onPress: () => {
         pickedRepo = repo.path
         scheduleLists()
       },
-    }),
-  )
+    })
+  })
 }
 
 // the recording is a download, named after the day and time

@@ -46,6 +46,8 @@ const GLIDE_MS = 900
 const DRONE_QUIET_MS = 10000 // the drone takes over again this long after the person last touched the view
 const DRONE_DWELL_MS = [3000, 6000] // it hovers this long (from, to) at each stop
 const DRONE_SPEED = 0.12 // the nebula's radius it crosses each second
+const DRONE_LIT = 0.25 // a star lit this much (0 to 1) draws the drone to it
+const DRONE_REVISIT_MS = 15000 // though not one it has just been to
 
 const depthOf = path => (path ? path.split('/').length : 0)
 const slabTop = depth => 0.2 + Math.min(depth, 6) * 0.03
@@ -67,10 +69,11 @@ export const putOn = (position, slot, points, t) => {
   position[slot * 3 + 2] = a.z + (b.z - a.z) * u
 }
 
-// canvas and tip are the Map's canvas and its pointer tip; legend is the nebula's key of folder colours; caption is the nebula's
-// note on what is picked (a colour dot and a line of text); bar is the time-lapse bar's parts:
-// { box, open, play, time, date, speed, close }; onTree(count) is told how many files the repo shown has
-export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
+// canvas and tip are the Map's canvas and its pointer tip; caption is the nebula's note on what is picked (a colour dot and a line
+// of text); bar is the time-lapse bar's parts: { box, open, play, time, date, speed, close }; onTree(count) is told how many
+// files the repo shown has; onFolders(list) is told the nebula's folders, [{ cloud, name, color }], biggest first (none in the
+// city, or while a repo loads)
+export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
   let T = null // { THREE, OrbitControls }, once loaded
   let scene, camera, renderer, controls, raycaster
   let group = null // everything drawn for the current repo
@@ -89,10 +92,10 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
   let tour = null // the drone's present leg: { from, bend, to, fromTarget, toTarget, at, ms, dwell, star, arrived }
   let touched = -Infinity // when the person last moved the view; the drone waits DRONE_QUIET_MS after it
   let stopBag = [] // the clouds the drone has yet to visit, in random order
+  const visited = new Map() // star -> when the drone last went to it because it was lit
   let captionKey = '' // what the caption shows now, so it is written only when it changes
-  let keyOpen = false // the nebula's key of folders: shut each time the page opens
   let hovered = -1 // the file under the pointer
-  let legendLit = -1 // the nebula folder whose name in the key is under the pointer
+  let legendLit = -1 // the nebula folder whose name in the repo's Folders list is under the pointer
   let loadGen = 0
   let frame = 0
   let refetch = 0
@@ -192,15 +195,27 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
 
   const glideTo = (cam, target) => (glide = { at: performance.now(), from: camera.position.clone(), fromTarget: controls.target.clone(), to: cam, toTarget: target })
 
-  // The drone: a curved flight through the nebula to the next stop, then a slow turn round it. The stops go in turns: a
-  // folder's cloud (the camera ends up inside it), then one of that cloud's stars (its blast radius shown, as when it is
-  // clicked), then the next cloud, each cloud once before any comes round again.
+  // A star Claude has touched lately that the drone has not just been to, at random and the more lit the likelier; or null
+  const litStar = () => {
+    const now = performance.now()
+    const lit = [...busyFiles(Date.now())].filter(([i, b]) => b.level > DRONE_LIT && now - (visited.get(i) ?? -Infinity) > DRONE_REVISIT_MS)
+    let pick = Math.random() * lit.reduce((sum, [, b]) => sum + b.level, 0)
+    for (const [i, b] of lit) if ((pick -= b.level) <= 0) return i
+    return lit[0]?.[0] ?? null
+  }
+
+  // The drone: a curved flight through the nebula to the next stop, then a slow turn round it. A star that is lit (Claude
+  // has touched it) comes first, so the drone goes where the work is. With none lit, the stops go in turns: a folder's cloud
+  // (the camera ends up inside it), then one of that cloud's stars (its blast radius shown, as when it is clicked), then the
+  // next cloud, each cloud once before any comes round again.
   const nextLeg = prev => {
     const { Vector3 } = T.THREE
-    const toStar = prev?.star === null
-    if (!toStar && !stopBag.length) stopBag = sky.stops.filter(s => s.stars.length).sort(() => Math.random() - 0.5)
-    const stop = toStar ? prev.stop : stopBag.pop()
-    const star = toStar ? stop.stars[Math.floor(Math.random() * stop.stars.length)] : null
+    const lit = litStar()
+    const toStar = lit === null && prev?.star === null
+    if (lit === null && !toStar && !stopBag.length) stopBag = sky.stops.filter(s => s.stars.length).sort(() => Math.random() - 0.5)
+    const stop = lit !== null ? sky.stops.find(s => s.cloud === items[lit].cloud) : toStar ? prev.stop : stopBag.pop()
+    const star = lit !== null ? lit : toStar ? stop.stars[Math.floor(Math.random() * stop.stars.length)] : null
+    if (lit !== null) visited.set(lit, performance.now())
     const spot = star === null ? stop.c : web.spots[star]
     const toTarget = new Vector3(spot.x, spot.y, spot.z)
     const from = camera.position.clone()
@@ -213,7 +228,7 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
     const bend = from.clone().add(to).multiplyScalar(0.5).add(sideways) // the flight bows out to one side
     const ms = Math.min(Math.max((dist / (sky.R * DRONE_SPEED)) * 1000, 3500), 12000)
     const dwell = DRONE_DWELL_MS[0] + Math.random() * (DRONE_DWELL_MS[1] - DRONE_DWELL_MS[0])
-    return { stop, star, from, bend, to, fromTarget: controls.target.clone(), toTarget, at: performance.now(), ms, dwell, arrived: false }
+    return { stop, star, lit: lit !== null, from, bend, to, fromTarget: controls.target.clone(), toTarget, at: performance.now(), ms, dwell, arrived: false }
   }
 
   // moves the camera along the drone's leg; true while it hovers at a stop (the controls then turn it round)
@@ -234,17 +249,22 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
       camera.position.copy(tour.to)
       controls.target.copy(tour.toTarget)
       tour.arrived = true
-      if (tour.star !== null) focus = { i: tour.star, at: Date.now(), steps: blastRadius(web.links, tour.star) }
+      // a star chosen at random shows its blast radius; a lit one does not, since that would dim the very activity it came for
+      if (tour.star !== null && !tour.lit) focus = { i: tour.star, at: Date.now(), steps: blastRadius(web.links, tour.star) }
+      if (tour.lit) tour.users = blastRadius(web.links, tour.star).size - 1 // for the caption
     }
     if (now < tour.at + tour.ms + tour.dwell) return true
-    if (tour.star !== null) focus = null
+    if (tour.star !== null && !tour.lit) focus = null
     tour = nextLeg(tour)
     return false
   }
 
+  // the folder pointed at in the repo's Folders list (-1: none) is lit, and the rest dimmed
+  const lightFolder = cloud => (legendLit = cloud)
+
   const setDrone = on => {
     if (on === drone) return
-    if (!on && tour?.star != null) focus = null
+    if (!on && tour?.star != null && !tour.lit) focus = null
     drone = on
     touched = -Infinity // it starts at once
     tour = null
@@ -345,8 +365,7 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
     dotSets.length = 0
     hovered = -1
     legendLit = -1
-    legend.replaceChildren()
-    legend.hidden = true
+    onFolders([])
     caption.hidden = true
     captionKey = ''
     focus = null
@@ -564,35 +583,8 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
     // the Fit view (fitCamera): from slightly above and in front, holding all the stars
     group.userData.fitOf = { center: group.userData.center, dir: new THREE.Vector3(0, 0.55, 2.6).normalize(), points: nodes }
 
-    // the key: each folder's colour and name; pointing at one lights that folder and dims the rest. Its header opens and shuts it.
-    legend.hidden = !named.length
-    const head = document.createElement('button')
-    head.type = 'button'
-    head.className = 'key-head'
-    head.textContent = 'Folders'
-    head.setAttribute('aria-expanded', String(keyOpen))
-    head.addEventListener('click', () => {
-      keyOpen = !keyOpen
-      legendLit = -1 // a shut key has nothing under the pointer
-      legend.classList.toggle('open', keyOpen)
-      head.setAttribute('aria-expanded', String(keyOpen))
-    })
-    legend.classList.toggle('open', keyOpen)
-    legend.append(head)
-    for (const c of named.slice(0, LEGEND)) {
-      const chip = document.createElement('button')
-      chip.type = 'button'
-      const dot = document.createElement('span')
-      dot.style.background = c.color
-      chip.append(dot, name(c.dir))
-      const on = () => (legendLit = layout.clouds.indexOf(c))
-      const off = () => (legendLit = -1)
-      chip.addEventListener('pointerenter', on)
-      chip.addEventListener('focus', on)
-      chip.addEventListener('pointerleave', off)
-      chip.addEventListener('blur', off)
-      legend.append(chip)
-    }
+    // the key, in the repo's place in the left panel: each folder's number (for lightFolder), colour and name
+    onFolders(named.slice(0, LEGEND).map(c => ({ cloud: layout.clouds.indexOf(c), name: name(c.dir), color: c.color })))
   }
 
   // a soft round smudge, the stuff the clouds are made of
@@ -1146,10 +1138,11 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
   // the key points at.
   const showCaption = () => {
     let note = null
-    if (focus) {
-      const n = items[focus.i]
+    const picked = focus ? { i: focus.i, users: focus.steps.size - 1 } : tour?.arrived && tour.lit ? { i: tour.star, users: tour.users } : null
+    if (picked) {
+      const n = items[picked.i]
       const folder = sky.folders.get(n.cloud)
-      const users = focus.steps.size - 1
+      const { users } = picked
       const detail = n.folded ? `${n.folded} files` : `${n.lines} lines · ${users} depend${users === 1 ? 's' : ''} on it`
       note = { color: folder.color, text: `${folder.name} › ${n.path.split('/').pop()} · ${detail}` }
     } else {
@@ -1561,5 +1554,5 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
     if (visible && lastTree) build(lastTree)
   }
 
-  return { feed, setRepo, setMode, setDrone, setMapping, setVisible, resetView: fit }
+  return { feed, setRepo, setMode, setDrone, lightFolder, setMapping, setVisible, resetView: fit }
 }
