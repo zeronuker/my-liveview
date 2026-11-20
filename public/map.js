@@ -29,8 +29,14 @@ const TRAILS = 3 // comets drawn at once
 const STEPS = 20 // segments in a link's curve
 const LINK_EASE_S = 0.12 // a link takes about three times this to fade in or out
 const SPARKS = 2 // lights running along each lit link
-const MAX_SPARKS = 600
-const RINGS = 48 // pulse rings drawn at once (nebula)
+const MAX_SPARKS = 1500
+const RIPPLES = 3 // rings a busy star has spreading at once (nebula)
+const RINGS = 72 // pulse rings drawn at once (nebula): RIPPLES each for the busiest stars
+const BREATH_S = 3.2 // a busy star in the nebula breathes, and sends out a ripple, in this long
+const PULSE_TAIL = 10 // points in the comet a nebula link sends along itself
+const PULSE_GAP_S = [1.3, 5.1] // a lit nebula link waits this long (from, to) between pulses, chosen at random
+const PULSE_TRAVEL_S = [2.6, 4.2] // and a pulse takes this long to cross it
+const LANDING_S = 1.4 // the star a pulse reaches flares for this long
 const CRANES = 40 // cranes on buildings Claude has edited (city)
 const LIGHTS = 12 // searchlights on buildings Claude is reading (city)
 const PULSE_S = 1.3 // a busy file beats once in this long
@@ -44,6 +50,9 @@ const DRONE_SPEED = 0.12 // the nebula's radius it crosses each second
 const depthOf = path => (path ? path.split('/').length : 0)
 const slabTop = depth => 0.2 + Math.min(depth, 6) * 0.03
 const ease = t => 1 - (1 - Math.min(Math.max(t, 0), 1)) ** 3
+const soft = t => (t = Math.min(Math.max(t, 0), 1)) * t * (3 - 2 * t) // eased at both ends
+const between = ([from, to]) => from + Math.random() * (to - from)
+const scatter = n => Math.sin(n) * 43758.5453 - Math.floor(Math.sin(n) * 43758.5453) // the same 0-1 number for the same n, different for each
 
 // puts slot `slot` of a position array a share t (0 to 1) of the way along a curve's points, between two of them, so a
 // light glides along the curve and does not hop from point to point
@@ -381,7 +390,7 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
       fragmentShader: ring
         ? `varying vec3 vC; varying vec3 vH; varying float vG;
           void main() { float d = length(gl_PointCoord - 0.5) * 2.0; if (d > 1.0) discard;
-            float band = exp(-pow((d - 0.82) * 9.0, 2.0)); gl_FragColor = vec4(vH * band * vG, 1.0); }`
+            float band = exp(-pow((d - 0.82) * 7.5, 2.0)); gl_FragColor = vec4(vH * band * vG, 1.0); }`
         : `varying vec3 vC; varying vec3 vH; varying float vG;
           void main() { float d = length(gl_PointCoord - 0.5) * 2.0; if (d > 1.0) discard;
             float core = exp(-d * d * ${star ? '14.0' : '40.0'}); float halo = (exp(-d * d * 6.0) * 0.7 + pow(1.0 - d, 3.0) * 0.3) * vG;
@@ -427,7 +436,7 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
   const addWeb = (spots, links, colorOf, arc, light) => {
     const { THREE } = T
     const count = links.length * STEPS * 2
-    const attrs = { position: new Float32Array(count * 3), aColor: new Float32Array(count * 3), aT: new Float32Array(count), aStart: new Float32Array(count), aGlow: new Float32Array(count), aFlow: new Float32Array(count), aHot: new Float32Array(count * 3), aShow: new Float32Array(count).fill(1) }
+    const attrs = { position: new Float32Array(count * 3), aColor: new Float32Array(count * 3), aT: new Float32Array(count), aStart: new Float32Array(count), aGlow: new Float32Array(count), aFlow: new Float32Array(count), aHot: new Float32Array(count * 3), aShow: new Float32Array(count).fill(1), aSeed: new Float32Array(count) }
     const curves = []
     const linksOf = spots.map(() => [])
     links.forEach(([a, b], l) => {
@@ -439,6 +448,7 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
       const cb = colorOf(b).clone().multiplyScalar(light)
       const start = (Math.max(born.get(items[a].path), born.get(items[b].path)) - origin) / 1000
       let v = l * STEPS * 2
+      attrs.aSeed.fill(Math.random(), v, v + STEPS * 2) // this link's own pace and phase for the shimmer
       for (let i = 1; i <= STEPS; i++) {
         for (const j of [i - 1, i]) {
           const p = points[j]
@@ -455,15 +465,22 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
     const geometry = new THREE.BufferGeometry()
     for (const [name, array] of Object.entries(attrs)) geometry.setAttribute(name, new THREE.BufferAttribute(array, array.length === count ? 1 : 3))
     const material = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uMove: { value: calm ? 0 : 1 }, uDim: { value: 1 } },
-      vertexShader: `attribute vec3 aColor; attribute float aT; attribute float aStart; attribute float aGlow; attribute float aFlow; attribute vec3 aHot; attribute float aShow;
-        uniform float uTime; varying vec3 vC; varying vec3 vH; varying float vT; varying float vG; varying float vF; varying float vIn;
-        void main() { vC = aColor; vH = aHot; vT = aT; vG = aGlow; vF = aFlow; vIn = smoothstep(aStart, aStart + 0.4, uTime) * aShow;
+      uniforms: { uTime: { value: 0 }, uMove: { value: calm ? 0 : 1 }, uDim: { value: 1 }, uShimmer: { value: mode === 'nebula' ? 1 : 0 } },
+      vertexShader: `attribute vec3 aColor; attribute float aT; attribute float aStart; attribute float aGlow; attribute float aFlow; attribute vec3 aHot; attribute float aShow; attribute float aSeed;
+        uniform float uTime; varying vec3 vC; varying vec3 vH; varying float vT; varying float vG; varying float vF; varying float vIn; varying float vS;
+        void main() { vC = aColor; vH = aHot; vT = aT; vG = aGlow; vF = aFlow; vS = aSeed; vIn = smoothstep(aStart, aStart + 0.4, uTime) * aShow;
           gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-      fragmentShader: `uniform float uTime; uniform float uMove; uniform float uDim; varying vec3 vC; varying vec3 vH; varying float vT; varying float vG; varying float vF; varying float vIn;
+      // the city's links: three bright bands, all in step. The nebula's: two slow bands drifting in opposite ways, each link at
+      // its own pace and phase, so the links shimmer out of step with one another.
+      fragmentShader: `uniform float uTime; uniform float uMove; uniform float uDim; uniform float uShimmer; varying vec3 vC; varying vec3 vH; varying float vT; varying float vG; varying float vF; varying float vIn; varying float vS;
         void main() { float along = vF < 0.0 ? 1.0 - vT : vT;
-          float wave = pow(0.5 + 0.5 * sin((along * 3.0 - uTime * 1.6 * uMove) * 6.2832), 6.0);
-          gl_FragColor = vec4((vC * uDim + vH * vG * (0.7 + 2.4 * wave)) * vIn, 1.0); }`,
+          float pace = 0.7 + vS * 0.7;
+          float s1 = 0.5 + 0.5 * sin(along * 5.5 - uTime * 0.9 * pace * uMove + vS * 6.2832);
+          float s2 = 0.5 + 0.5 * sin(along * 12.0 + uTime * 0.55 * pace * uMove + fract(vS * 7.31) * 6.2832);
+          float soft = pow(s1, 3.0) * 0.6 + pow(s2, 4.0) * 0.4;
+          float bands = pow(0.5 + 0.5 * sin((along * 3.0 - uTime * 1.6 * uMove) * 6.2832), 6.0);
+          float lift = uShimmer > 0.5 ? 0.6 + 1.8 * soft : 0.7 + 2.4 * bands;
+          gl_FragColor = vec4((vC * uDim + vH * vG * lift) * vIn, 1.0); }`,
       transparent: true,
       blending: THREE.AdditiveBlending,
       depthWrite: false,
@@ -473,7 +490,7 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
     const sparks = dotSet(MAX_SPARKS)
     const trail = dotSet(TRAILS * TAIL)
     group.add(lines, sparks.points, trail.points)
-    web = { spots, links, linksOf, curves, attrs, geometry, material, sparks, trail, arc, shown: new Map(), at: 0 } // shown: link -> { glow, flow, color } as drawn now
+    web = { spots, links, linksOf, curves, attrs, geometry, material, sparks, trail, arc, shown: new Map(), at: 0, pulses: new Map(), landings: new Map() } // shown: link -> { glow, flow, color } as drawn now; pulses: link -> its next pulse and the one crossing it (nebula); landings: star -> when a pulse reached it
   }
 
   const addNebula = (tree, fresh) => {
@@ -968,6 +985,55 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
     return out
   }
 
+  // The nebula's pulses. On each lit link a comet leaves the busy star at a random time, crosses slowly and dissolves; now and
+  // then a fainter one follows close behind. The link then waits a random while, so no two links pulse in step. Where a comet
+  // lands, the star flares (paintNebula). Two small lights also twinkle at fixed places on each lit link. Returns the slots used.
+  const nebulaPulses = (time, s) => {
+    const { shown, pulses, landings, curves, links } = web
+    let slot = 0
+    const put = (l, link, along, fade) => {
+      if (slot >= MAX_SPARKS || fade <= 0.01) return
+      putOn(s.position, slot, curves[l], link.flow < 0 ? 1 - along : along)
+      s.aSize[slot] = (0.08 + 0.5 * fade) * Math.min(1, link.glow * 4)
+      s.aGlow[slot] = link.glow * fade * 1.6
+      s.aColor.set([link.color.r * fade, link.color.g * fade, link.color.b * fade], slot * 3)
+      s.aHalo.set([link.color.r * fade, link.color.g * fade, link.color.b * fade], slot * 3)
+      slot++
+    }
+    const comet = (l, link, p, strength) => {
+      if (p <= 0 || p >= 1) return
+      const envelope = Math.sin(Math.PI * p) ** 0.7 * strength
+      for (let i = 0; i < PULSE_TAIL; i++) put(l, link, Math.max(0, soft(p) - i * 0.018), (1 - i / PULSE_TAIL) ** 1.8 * envelope)
+    }
+    for (const [l, link] of shown) {
+      let state = pulses.get(l)
+      if (!state) pulses.set(l, (state = { next: time + Math.random() * PULSE_GAP_S[1], now: null }))
+      if (!state.now && time >= state.next && link.glow > 0.2) state.now = { at: time, travel: between(PULSE_TRAVEL_S), echo: Math.random() < 0.3, landed: false }
+      const pulse = state.now
+      if (pulse) {
+        const p = (time - pulse.at) / pulse.travel
+        comet(l, link, p, 1)
+        if (pulse.echo) comet(l, link, p - 0.45 / pulse.travel, 0.4)
+        if (!pulse.landed && p >= 0.97) {
+          pulse.landed = true
+          landings.set(link.flow > 0 ? links[l][1] : links[l][0], time)
+        }
+        if (p > 1.15 + (pulse.echo ? 0.2 : 0)) {
+          state.now = null
+          state.next = time + between(PULSE_GAP_S)
+        }
+      }
+      for (let n = 0; n < 2; n++) {
+        const every = 2 + scatter(l * 1.7 + n * 9.1) * 3
+        const phase = ((time + scatter(l * 3.3 + n * 5.7) * every) % every) / every
+        put(l, link, 0.15 + 0.7 * scatter(l * 2.31 + n * 7.7), Math.sin(Math.PI * phase) ** 3 * 0.6)
+      }
+    }
+    for (const l of pulses.keys()) if (!shown.has(l)) pulses.delete(l)
+    for (const [i, at] of landings) if (time - at > LANDING_S) landings.delete(i)
+    return slot
+  }
+
   const paintWeb = (now, busy, colorOf) => {
     const { THREE } = T
     const { attrs, geometry, material, linksOf, links, curves, sparks, trail, shown } = web
@@ -1034,11 +1100,12 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
       for (const name of ['aGlow', 'aFlow', 'aHot']) geometry.attributes[name].needsUpdate = true
     }
 
-    // sparks: little lights running along each lit link, away from the busy file
+    // sparks: little lights running along each lit link, away from the busy file (the nebula sends pulses instead)
     const s = sparks.attrs
     s.aSize.fill(0)
     let slot = 0
-    if (!calm) {
+    if (!calm && sky) slot = nebulaPulses(time, s)
+    else if (!calm) {
       for (const [l, link] of shown) {
         for (let n = 0; n < SPARKS && slot < MAX_SPARKS; n++, slot++) {
           let along = (time * 0.45 + n / SPARKS + l * 0.137) % 1
@@ -1129,8 +1196,17 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
       }
       const b = busy.get(i)
       if (b?.level > 0) {
-        size *= 1 + b.level * (0.8 + 0.9 * b.beat)
-        glow = Math.max(glow, 0.7 + b.level * (0.9 + 0.9 * b.beat))
+        // a busy star breathes slowly, each out of step with the others, with a faint flicker in its core
+        const breath = calm ? 0.5 : 0.5 + 0.5 * Math.sin((time / BREATH_S) * Math.PI * 2 - 1.2 + phases[i])
+        const flicker = calm ? 1 : 1 + 0.06 * Math.sin(time * 7.3 + phases[i]) * Math.sin(time * 4.1 + phases[i] * 2)
+        size *= (1 + b.level * (1 + 0.5 * breath)) * flicker
+        glow = Math.max(glow, 0.7 + b.level * (0.7 + 0.8 * breath)) * flicker
+      }
+      const landed = web.landings.get(i) // a pulse has just arrived: it flares and settles
+      if (landed !== undefined) {
+        const left = 1 - (time - landed) / LANDING_S
+        glow = Math.max(glow, 0.9 * left)
+        size *= 1 + 0.35 * left * left
       }
       if (i === hovered) {
         glow = Math.max(glow, 1)
@@ -1163,16 +1239,20 @@ export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
     })
     stars.changed('aSize', 'aGlow', 'aColor', 'aHalo')
 
-    // rings: each beat of a busy star sends a ring out that widens and fades
+    // rings: a busy star has RIPPLES of them spreading at once, a third of a breath apart. Each fades in, slows as it spreads
+    // and dissolves, so there is never a ring that starts with a pop.
     const r = rings.attrs
     r.aSize.fill(0)
-    ;[...busy].filter(([, b]) => b.level > 0).sort((a, b) => b[1].level - a[1].level).slice(0, RINGS).forEach(([i, b], k) => {
+    ;[...busy].filter(([, b]) => b.level > 0).sort((a, b) => b[1].level - a[1].level).slice(0, RINGS / RIPPLES).forEach(([i, b], k) => {
       const n = items[i]
-      const phase = calm ? 0.5 : (((now - b.touch.at) / 1000) % PULSE_S) / PULSE_S
-      r.position.set([n.x, n.y, n.z], k * 3)
-      r.aSize[k] = sizes[i] * (1.5 + phase * 6)
-      r.aGlow[k] = b.level * (1 - phase) * 1.8
-      r.aHalo.set([b.color.r, b.color.g, b.color.b], k * 3)
+      for (let ripple = 0; ripple < RIPPLES; ripple++) {
+        const slot = k * RIPPLES + ripple
+        const phase = calm ? 0.5 : (time / BREATH_S + phases[i] / (Math.PI * 2) + ripple / RIPPLES) % 1
+        r.position.set([n.x, n.y, n.z], slot * 3)
+        r.aSize[slot] = sizes[i] * (1.5 + (1 - (1 - phase) ** 2.4) * 5.5)
+        r.aGlow[slot] = b.level * soft(phase / 0.14) * (1 - phase) ** 1.6 * 0.6
+        r.aHalo.set([b.color.r, b.color.g, b.color.b], slot * 3)
+      }
     })
     rings.changed('position', 'aSize', 'aGlow', 'aHalo')
   }
