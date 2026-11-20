@@ -174,10 +174,42 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
 
   const glideTo = (cam, target) => (glide = { at: performance.now(), from: camera.position.clone(), fromTarget: controls.target.clone(), to: cam, toTarget: target })
 
+  // Where the camera stands to show a picture whole, looking at `center` from the direction `dir`: the nearest place where
+  // `FIT_FILL` of the window's height or width holds all of `points` but the farthest `FIT_TRIM` of them (a few strays do not
+  // push the view back), and every one of `keep`. The view turns slowly by itself, so this holds from every side (the
+  // direction turned round the middle in steps), not just the one it starts from. It is worked out when asked, so it suits the
+  // window as it is now.
+  const FIT_FILL = 0.9
+  const FIT_TRIM = 0.1
+  const FIT_SIDES = 12
+  const fitCamera = ({ center, dir: start, points, keep }) => {
+    const { Vector3 } = T.THREE
+    const tanV = Math.tan((camera.fov * Math.PI) / 360)
+    const tanH = tanV * camera.aspect
+    let back = 1
+    for (let side = 0; side < FIT_SIDES; side++) {
+      const turn = (side / FIT_SIDES) * Math.PI * 2
+      const dir = new Vector3(start.x * Math.cos(turn) + start.z * Math.sin(turn), start.y, -start.x * Math.sin(turn) + start.z * Math.cos(turn))
+      const right = new Vector3(0, 1, 0).cross(dir).normalize()
+      const up = new Vector3().crossVectors(dir, right)
+      // how far back along dir the camera must be for this point to fit
+      const need = p => {
+        const [x, y, z] = [p.x - center.x, p.y - center.y, p.z - center.z]
+        const across = Math.abs(x * right.x + y * right.y + z * right.z)
+        const high = Math.abs(x * up.x + y * up.y + z * up.z)
+        return x * dir.x + y * dir.y + z * dir.z + Math.max(across / (FIT_FILL * tanH), high / (FIT_FILL * tanV))
+      }
+      const far = points.map(need).sort((a, b) => a - b)
+      back = Math.max(back, far[Math.floor((1 - FIT_TRIM) * (far.length - 1))] ?? 0, ...keep.map(need))
+    }
+    return center.clone().addScaledVector(start, back)
+  }
+
   // back to the whole picture: at once the first time, after that the camera glides
   const fit = instant => {
     if (!group || !controls) return
-    const { center, cam } = group.userData
+    const { center } = group.userData
+    const cam = group.userData.fitOf ? fitCamera(group.userData.fitOf) : group.userData.cam
     if (instant === true || calm) {
       glide = null
       controls.target.copy(center)
@@ -381,7 +413,6 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
     const nodes = layout.nodes
     const R = layout.radius
     group.userData.center = new THREE.Vector3()
-    group.userData.cam = new THREE.Vector3(0, R * 0.55, R * 2.6)
     controls.maxDistance = R * 6
     const cloudColor = c => new THREE.Color(c.color)
     const starColor = c => new THREE.Color(c.color).lerp(new THREE.Color('#ffffff'), 0.2) // lit, but still its folder's colour
@@ -447,6 +478,8 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
       group.add(sprite)
       return { sprite, rank, cloud: layout.clouds.indexOf(c), at: new THREE.Vector3(c.x, c.y, c.z), reach: c.spread + 4 }
     })
+    // the Fit view (fitCamera): from slightly above and in front, holding the stars and the names seen from far off
+    group.userData.fitOf = { center: group.userData.center, dir: new THREE.Vector3(0, 0.55, 2.6).normalize(), points: nodes, keep: sky.names.filter(l => l.rank < TOP_NAMES).map(l => l.sprite.position) }
 
     // the key: each folder's colour and name; pointing at one lights that folder and dims the rest
     legend.hidden = !named.length
