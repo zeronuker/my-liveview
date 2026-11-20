@@ -32,7 +32,7 @@ const SPARKS = 2 // lights running along each lit link
 const MAX_SPARKS = 1500
 const RIPPLES = 3 // rings a busy star has spreading at once (nebula)
 const RINGS = 72 // pulse rings drawn at once (nebula): RIPPLES each for the busiest stars
-const BREATH_S = 3.2 // a busy star in the nebula breathes, and sends out a ripple, in this long
+const BREATH_S = 3.2 // a busy star in the nebula breathes, and sends out a ripple, in about this long (each star has its own pace)
 const PULSE_TAIL = 10 // points in the comet a nebula link sends along itself
 const PULSE_GAP_S = [1.3, 5.1] // a lit nebula link waits this long (from, to) between pulses, chosen at random
 const PULSE_TRAVEL_S = [2.6, 4.2] // and a pulse takes this long to cross it
@@ -570,11 +570,12 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     // a file with many links is clearly bigger than one with none; a longer file a little bigger
     const sizes = nodes.map(n => 0.4 + Math.sqrt(n.degree) * 0.2 + Math.log2(1 + n.lines) * 0.03)
     const phases = nodes.map((n, i) => (i * 2.399) % (Math.PI * 2))
+    const tempos = nodes.map((n, i) => BREATH_S * (0.75 + 0.56 * scatter(i * 5.31 + 1))) // seconds per breath: 2.4 to 4.2, a star's own
     const rings = dotSet(RINGS, true)
     group.add(stars.points, rings.points)
     // stops: the clouds the drone visits, each with its stars' numbers
     const stops = big.map(c => ({ c, cloud: layout.clouds.indexOf(c), stars: nodes.flatMap((n, i) => (layout.clouds[n.cloud] === c ? [i] : [])) }))
-    sky = { stars, rings, colors, sizes, phases, clouds, R, stops }
+    sky = { stars, rings, colors, sizes, phases, tempos, clouds, R, stops }
 
     // the folders' names, for the caption and the key
     const name = folderNames(big.map(c => c.dir))
@@ -1162,7 +1163,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
 
   // the nebula each frame: stars fade in and twinkle; a busy star beats and sends rings out
   const paintNebula = (now, busy) => {
-    const { stars, rings, colors, sizes, phases, clouds } = sky
+    const { stars, rings, colors, sizes, phases, tempos, clouds } = sky
     const time = (now - origin) / 1000
     // one folder lit and the rest dimmed: the one named in the key, else the one the pointer is on (not while a blast radius shows)
     const lit = focus ? -1 : legendLit >= 0 ? legendLit : hovered >= 0 ? items[hovered].cloud : -1
@@ -1190,7 +1191,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
       const b = busy.get(i)
       if (b?.level > 0) {
         // a busy star breathes slowly, each out of step with the others, with a faint flicker in its core
-        const breath = calm ? 0.5 : 0.5 + 0.5 * Math.sin((time / BREATH_S) * Math.PI * 2 - 1.2 + phases[i])
+        const breath = calm ? 0.5 : 0.5 + 0.5 * Math.sin((time / tempos[i]) * Math.PI * 2 - 1.2 + phases[i])
         const flicker = calm ? 1 : 1 + 0.06 * Math.sin(time * 7.3 + phases[i]) * Math.sin(time * 4.1 + phases[i] * 2)
         size *= (1 + b.level * (1 + 0.5 * breath)) * flicker
         glow = Math.max(glow, 0.7 + b.level * (0.7 + 0.8 * breath)) * flicker
@@ -1232,18 +1233,21 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     })
     stars.changed('aSize', 'aGlow', 'aColor', 'aHalo')
 
-    // rings: a busy star has RIPPLES of them spreading at once, a third of a breath apart. Each fades in, slows as it spreads
-    // and dissolves, so there is never a ring that starts with a pop.
+    // rings: a busy star has RIPPLES of them spreading at once, about a third of a breath apart (a little unevenly, each star in
+    // its own way) and each as strong as it happens to be. Each fades in, slows as it spreads and dissolves, so there is never
+    // a ring that starts with a pop.
     const r = rings.attrs
     r.aSize.fill(0)
     ;[...busy].filter(([, b]) => b.level > 0).sort((a, b) => b[1].level - a[1].level).slice(0, RINGS / RIPPLES).forEach(([i, b], k) => {
       const n = items[i]
       for (let ripple = 0; ripple < RIPPLES; ripple++) {
         const slot = k * RIPPLES + ripple
-        const phase = calm ? 0.5 : (time / BREATH_S + phases[i] / (Math.PI * 2) + ripple / RIPPLES) % 1
+        const turns = 1 + time / tempos[i] + phases[i] / (Math.PI * 2) + ripple / RIPPLES + (scatter(i * 7.7 + ripple * 3.1) - 0.5) * 0.18
+        const phase = calm ? 0.5 : turns % 1
+        const strength = 0.7 + 0.6 * scatter(Math.floor(turns) * 12.9 + i * 4.1 + ripple * 7.3) // new each time a ripple leaves
         r.position.set([n.x, n.y, n.z], slot * 3)
         r.aSize[slot] = sizes[i] * (1.5 + (1 - (1 - phase) ** 2.4) * 5.5)
-        r.aGlow[slot] = b.level * soft(phase / 0.14) * (1 - phase) ** 1.6 * 0.6
+        r.aGlow[slot] = b.level * soft(phase / 0.14) * (1 - phase) ** 1.6 * 0.6 * strength
         r.aHalo.set([b.color.r, b.color.g, b.color.b], slot * 3)
       }
     })
