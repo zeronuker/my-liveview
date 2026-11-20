@@ -654,6 +654,32 @@ body.map #map-legend:not([hidden]) {
   cursor: default;
 }
 
+/* the key's header opens and shuts it; shut, only the header shows */
+#map-legend:not(.open) button:not(.key-head) {
+  display: none;
+}
+
+#map-legend .key-head {
+  font-weight: 600;
+  cursor: pointer;
+}
+
+#map-legend .key-head::after {
+  content: '';
+  width: 6px;
+  height: 6px;
+  margin: 0 2px 2px auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s;
+}
+
+#map-legend.open .key-head::after {
+  margin-bottom: 4px;
+  transform: rotate(45deg);
+}
+
 #map-legend button:hover,
 #map-legend button:focus-visible {
   background: rgba(255, 255, 255, 0.1);
@@ -664,6 +690,42 @@ body.map #map-legend:not([hidden]) {
   width: 10px;
   height: 10px;
   border-radius: 50%;
+}
+
+/* the nebula's caption: the file picked, or the folder the drone is in */
+#map-caption {
+  display: none;
+  position: absolute;
+  top: 60px;
+  left: 0;
+  right: 0;
+  margin: 0 auto;
+  width: fit-content;
+  max-width: 90%;
+  padding: 6px 16px;
+  border-radius: 999px;
+  color: #dfe6ff;
+  font: 13px ui-monospace, Consolas, monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+body.map:not(.city) #map-caption:not([hidden]) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+#map-caption i {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+#map-caption span {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 #map-empty {
@@ -2165,7 +2227,7 @@ body.resizing:has(#panes.stacked #rz-split.dragging) {
   }
 
   /* menus and floating panels: they rise in and fade, and fade out when closed */
-  :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend) {
+  :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend, #map-caption) {
     --rise: 8px;
     transition: opacity var(--motion-fast) ease, translate var(--motion) var(--ease), display var(--motion-fast) allow-discrete;
   }
@@ -2174,13 +2236,13 @@ body.resizing:has(#panes.stacked #rz-split.dragging) {
     --rise: -6px;
   }
 
-  :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend)[hidden] {
+  :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend, #map-caption)[hidden] {
     opacity: 0;
     translate: 0 var(--rise);
   }
 
   @starting-style {
-    :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend) {
+    :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend, #map-caption) {
       opacity: 0;
       translate: 0 var(--rise);
     }

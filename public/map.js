@@ -17,13 +17,8 @@ const COLORS = {
 }
 const RANK = { read: 1, edit: 2, new: 3 }
 const LABELS = 12 // the biggest folders are named (city)
-const CLOUD_LABELS = 30 // and in the nebula the biggest 30, each in its colour
+const CLOUD_LABELS = 30 // and in the nebula the biggest 30 are named in the key, each in its colour
 const LEGEND = 14 // the key lists this many of them
-const TOP_NAMES = 5 // seen from far off, only this many folders are named
-const NAME_DIST = 60 // within this of the camera a star's file name shows (the nearest MAX_NAMES of them)
-const MAX_NAMES = 16
-const NAME_SIZE = 0.045 // how tall a folder's name is, as a share of its distance from the camera
-const FILE_SIZE = 0.04 // and a file's name
 const DUST_PER_FILE = 3 // faint specks in each cloud, so a bigger folder is a denser cloud
 const REFETCH_MS = 1500 // a file that is not in the map yet: the repo is read again after this
 const GROW_MS = 900 // a star fades in, or a building rises, over this long
@@ -63,9 +58,10 @@ export const putOn = (position, slot, points, t) => {
   position[slot * 3 + 2] = a.z + (b.z - a.z) * u
 }
 
-// canvas and tip are the Map's canvas and its pointer tip; legend is the nebula's key of folder colours; bar is the time-lapse bar's parts:
+// canvas and tip are the Map's canvas and its pointer tip; legend is the nebula's key of folder colours; caption is the nebula's
+// note on what is picked (a colour dot and a line of text); bar is the time-lapse bar's parts:
 // { box, open, play, time, date, speed, close }; onTree(count) is told how many files the repo shown has
-export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
+export const createMap = ({ canvas, tip, legend, caption, bar, onTree }) => {
   let T = null // { THREE, OrbitControls }, once loaded
   let scene, camera, renderer, controls, raycaster
   let group = null // everything drawn for the current repo
@@ -84,6 +80,8 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
   let tour = null // the drone's present leg: { from, bend, to, fromTarget, toTarget, at, ms, dwell, star, arrived }
   let touched = -Infinity // when the person last moved the view; the drone waits DRONE_QUIET_MS after it
   let stopBag = [] // the clouds the drone has yet to visit, in random order
+  let captionKey = '' // what the caption shows now, so it is written only when it changes
+  let keyOpen = false // the nebula's key of folders: shut each time the page opens
   let hovered = -1 // the file under the pointer
   let legendLit = -1 // the nebula folder whose name in the key is under the pointer
   let loadGen = 0
@@ -245,13 +243,13 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
 
   // Where the camera stands to show a picture whole, looking at `center` from the direction `dir`: the nearest place where
   // `FIT_FILL` of the window's height or width holds all of `points` but the farthest `FIT_TRIM` of them (a few strays do not
-  // push the view back), and every one of `keep`. The view turns slowly by itself, so this holds from every side (the
+  // push the view back). The view turns slowly by itself, so this holds from every side (the
   // direction turned round the middle in steps), not just the one it starts from. It is worked out when asked, so it suits the
   // window as it is now.
   const FIT_FILL = 0.9
   const FIT_TRIM = 0.1
   const FIT_SIDES = 12
-  const fitCamera = ({ center, dir: start, points, keep }) => {
+  const fitCamera = ({ center, dir: start, points }) => {
     const { Vector3 } = T.THREE
     const tanV = Math.tan((camera.fov * Math.PI) / 360)
     const tanH = tanV * camera.aspect
@@ -269,7 +267,7 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
         return x * dir.x + y * dir.y + z * dir.z + Math.max(across / (FIT_FILL * tanH), high / (FIT_FILL * tanV))
       }
       const far = points.map(need).sort((a, b) => a - b)
-      back = Math.max(back, far[Math.floor((1 - FIT_TRIM) * (far.length - 1))] ?? 0, ...keep.map(need))
+      back = Math.max(back, far[Math.floor((1 - FIT_TRIM) * (far.length - 1))] ?? 0)
     }
     return center.clone().addScaledVector(start, back)
   }
@@ -340,6 +338,8 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
     legendLit = -1
     legend.replaceChildren()
     legend.hidden = true
+    caption.hidden = true
+    captionKey = ''
     focus = null
     index.clear()
     if (fresh) born.clear()
@@ -537,23 +537,31 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
     const rings = dotSet(RINGS, true)
     group.add(stars.points, rings.points)
     // stops: the clouds the drone visits, each with its stars' numbers
-    const stops = big.map(c => ({ c, stars: nodes.flatMap((n, i) => (layout.clouds[n.cloud] === c ? [i] : [])) }))
-    sky = { stars, rings, colors, sizes, phases, clouds, R, stops, names: [], files: new Map() } // files: path -> its name's sprite, made when first near
+    const stops = big.map(c => ({ c, cloud: layout.clouds.indexOf(c), stars: nodes.flatMap((n, i) => (layout.clouds[n.cloud] === c ? [i] : [])) }))
+    sky = { stars, rings, colors, sizes, phases, clouds, R, stops }
 
+    // the folders' names, for the caption and the key
     const name = folderNames(big.map(c => c.dir))
-    // folder names, in their colour; paintNebula shows them by how near the camera is (see names there)
+    sky.folders = new Map(big.map(c => [layout.clouds.indexOf(c), { name: name(c.dir), color: c.color, count: c.count }]))
     const named = big.filter(c => c.count > 1).sort((a, b) => b.count - a.count).slice(0, CLOUD_LABELS)
-    sky.names = named.map((c, rank) => {
-      const sprite = label(name(c.dir), true, c.color)
-      sprite.position.set(c.x, c.y + c.spread * 0.8 + 4, c.z)
-      group.add(sprite)
-      return { sprite, rank, cloud: layout.clouds.indexOf(c), at: new THREE.Vector3(c.x, c.y, c.z), reach: c.spread + 4 }
-    })
-    // the Fit view (fitCamera): from slightly above and in front, holding the stars and the names seen from far off
-    group.userData.fitOf = { center: group.userData.center, dir: new THREE.Vector3(0, 0.55, 2.6).normalize(), points: nodes, keep: sky.names.filter(l => l.rank < TOP_NAMES).map(l => l.sprite.position) }
+    // the Fit view (fitCamera): from slightly above and in front, holding all the stars
+    group.userData.fitOf = { center: group.userData.center, dir: new THREE.Vector3(0, 0.55, 2.6).normalize(), points: nodes }
 
-    // the key: each folder's colour and name; pointing at one lights that folder and dims the rest
+    // the key: each folder's colour and name; pointing at one lights that folder and dims the rest. Its header opens and shuts it.
     legend.hidden = !named.length
+    const head = document.createElement('button')
+    head.type = 'button'
+    head.className = 'key-head'
+    head.textContent = 'Folders'
+    head.setAttribute('aria-expanded', String(keyOpen))
+    head.addEventListener('click', () => {
+      keyOpen = !keyOpen
+      legendLit = -1 // a shut key has nothing under the pointer
+      legend.classList.toggle('open', keyOpen)
+      head.setAttribute('aria-expanded', String(keyOpen))
+    })
+    legend.classList.toggle('open', keyOpen)
+    legend.append(head)
     for (const c of named.slice(0, LEGEND)) {
       const chip = document.createElement('button')
       chip.type = 'button'
@@ -1067,40 +1075,29 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
     trail.changed('position', 'aSize', 'aGlow', 'aColor', 'aHalo')
   }
 
-  // The names, by how near the camera is. Far off: only the biggest folders'. Coming up to a cloud: its name fades in. Right
-  // beside the stars: the nearest files' names. All stay one size on the screen, however near or far.
-  const showNames = lit => {
-    const cam = camera.position
-    const clamp = v => Math.min(Math.max(v, 0), 1)
-    for (const l of sky.names) {
-      const near = 1 - clamp((l.at.distanceTo(cam) - 2 * l.reach) / (2.5 * l.reach))
-      const show = l.cloud === lit ? 1 : Math.max(near, l.rank < TOP_NAMES ? 0.8 : 0)
-      l.sprite.material.opacity = show * 0.9
-      l.sprite.visible = show > 0.02
-      const h = l.sprite.position.distanceTo(cam) * NAME_SIZE
-      l.sprite.scale.set(h * 4, h, 1)
+  // The caption, one line at the top: the file picked (clicked, or where the drone hovers), else the folder the drone is in or
+  // the key points at.
+  const showCaption = () => {
+    let note = null
+    if (focus) {
+      const n = items[focus.i]
+      const folder = sky.folders.get(n.cloud)
+      const users = focus.steps.size - 1
+      const detail = n.folded ? `${n.folded} files` : `${n.lines} lines · ${users} depend${users === 1 ? 's' : ''} on it`
+      note = { color: folder.color, text: `${folder.name} › ${n.path.split('/').pop()} · ${detail}` }
+    } else {
+      const folder = sky.folders.get(tour?.arrived && tour.star === null ? tour.stop.cloud : legendLit)
+      if (folder) note = { color: folder.color, text: `${folder.name} · ${folder.count} file${folder.count === 1 ? '' : 's'}` }
     }
-    const close = []
-    items.forEach((n, i) => {
-      if (replay && !(replay.scale[i] > 0)) return
-      const d = Math.hypot(n.x - cam.x, n.y - cam.y, n.z - cam.z)
-      if (d < NAME_DIST) close.push([d, i])
-    })
-    close.sort((a, b) => a[0] - b[0]).length = Math.min(close.length, MAX_NAMES)
-    for (const sprite of sky.files.values()) sprite.visible = false
-    for (const [d, i] of close) {
-      const n = items[i]
-      let sprite = sky.files.get(n.path)
-      if (!sprite) {
-        sprite = label(n.path.split('/').pop(), false)
-        sky.files.set(n.path, sprite)
-        group.add(sprite)
-      }
-      sprite.position.set(n.x, n.y + 1.2, n.z)
-      sprite.material.opacity = 1 - clamp((d - NAME_DIST * 0.55) / (NAME_DIST * 0.45))
-      sprite.visible = true
-      sprite.scale.set(d * FILE_SIZE * 4, d * FILE_SIZE, 1)
+    const key = note ? `${note.color} ${note.text}` : ''
+    if (key === captionKey) return
+    captionKey = key
+    if (note) {
+      const [dot, text] = caption.children
+      dot.style.background = note.color
+      text.textContent = note.text
     }
+    caption.hidden = !note // the last words stay while it fades out
   }
 
   // the nebula each frame: stars fade in and twinkle; a busy star beats and sends rings out
@@ -1114,7 +1111,7 @@ export const createMap = ({ canvas, tip, legend, bar, onTree }) => {
       if (!calm) c.sprite.material.rotation += c.spin * 16
       c.sprite.material.opacity = lit < 0 ? c.opacity : c.cloud === lit ? c.opacity * 2 : c.opacity * dim
     }
-    showNames(lit)
+    showCaption()
     const touches = touchesNow()
     const tint = (scratch ??= new T.THREE.Color())
     const blast = kindColors.blast ?? (kindColors.blast = new T.THREE.Color(BLAST))

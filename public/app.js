@@ -155,6 +155,7 @@ const map = createMap({
   canvas: $('map-canvas'),
   tip: $('map-tip'),
   legend: $('map-legend'),
+  caption: $('map-caption'),
   bar: { box: $('replay'), open: $('m-replay'), play: $('r-play'), time: $('r-time'), date: $('r-date'), speed: $('r-speed'), close: $('r-close') },
   onTree: count => {
     mapFiles = count

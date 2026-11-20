@@ -113,13 +113,13 @@
 /* ── 6. Menus and floating panels: grow from their corner on a spring; menu items follow ── */
 @keyframes oxy-item-in { from { opacity: 0; transform: translateY(6px); } }
 @media (prefers-reduced-motion: no-preference) {
-  :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend) {
+  :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend, #map-caption) {
     transition: opacity var(--motion-fast, 150ms) ease, translate calc(var(--oxy-d) * 2.2) var(--oxy-spring), scale calc(var(--oxy-d) * 2) var(--oxy-spring), display var(--motion-fast, 150ms) allow-discrete;
   }
   .menu { transform-origin: top left; }
-  :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend)[hidden] { scale: 0.9; }
+  :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend, #map-caption)[hidden] { scale: 0.9; }
   @starting-style {
-    :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend) { scale: 0.9; }
+    :is(.menu, #map-show, #replay, #inspector, #banner, #map-legend, #map-caption) { scale: 0.9; }
   }
   .menu:not([hidden]) > a,
   .menu:not([hidden]) > .menu-row { animation: oxy-item-in calc(var(--oxy-d) * 1.8) var(--oxy-spring) backwards; }
