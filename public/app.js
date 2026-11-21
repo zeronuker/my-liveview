@@ -887,7 +887,31 @@ for (const button of document.querySelectorAll('[data-show] button')) button.onc
 
 // the panels that open and close: the chats, the City's layers, the new-window menu
 $('b-nav').onclick = () => save('nav', !prefs.nav)
-$('b-dock').onclick = () => save('dock', !prefs.dock)
+// The controls fold into a pill at the left and grow out of it. Opening widens the bar with a springy overshoot while its
+// buttons slide in one after another; folding sends them away first, then draws the bar in.
+const DOCK_SPRING = 'cubic-bezier(0.34, 1.3, 0.64, 1)'
+let dockAt = -Infinity // when the last fold or opening began; a click during it is ignored
+$('b-dock').onclick = async () => {
+  if (performance.now() - dockAt < 700) return
+  const dock = $('dock')
+  const parts = () => [...dock.querySelectorAll('button:not(#b-dock), .seg, .sep')].filter(el => el.offsetParent)
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return save('dock', !prefs.dock)
+  dockAt = performance.now()
+  dock.style.overflow = 'hidden'
+  try {
+    const gone = prefs.dock ? parts().reverse().map((el, i) => el.animate({ opacity: [1, 0], transform: ['none', 'translateX(-14px)'] }, { duration: 160, delay: i * 15, easing: 'ease-in', fill: 'forwards' })) : []
+    await Promise.all(gone.map(a => a.finished))
+    const from = dock.getBoundingClientRect()
+    save('dock', !prefs.dock)
+    gone.forEach(a => a.cancel()) // they are hidden now; the next opening must find them as they were
+    const to = dock.getBoundingClientRect()
+    const size = dock.animate({ width: [`${from.width}px`, `${to.width}px`], height: [`${from.height}px`, `${to.height}px`] }, { duration: 460, easing: DOCK_SPRING })
+    if (prefs.dock) parts().forEach((el, i) => el.animate({ opacity: [0, 1], transform: ['translateX(-14px)', 'none'] }, { duration: 320, delay: 80 + i * 30, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'backwards' }))
+    await size.finished
+  } finally {
+    dock.style.overflow = ''
+  }
+}
 const setOpen = (button, box, on) => {
   box.hidden = !on
   button.setAttribute(button.hasAttribute('aria-expanded') ? 'aria-expanded' : 'aria-pressed', String(on))

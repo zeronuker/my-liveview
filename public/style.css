@@ -487,16 +487,15 @@ body.map #repos {
 #dock {
   position: absolute;
   z-index: 10;
-  left: 50%;
+  left: 18px;
   bottom: 18px;
-  transform: translateX(-50%);
   display: flex;
   align-items: center;
   gap: 4px;
   flex-wrap: wrap;
-  justify-content: center;
+  justify-content: flex-start;
   width: max-content;
-  max-width: calc(100% - 24px);
+  max-width: calc(100% - 36px);
   padding: 6px;
   border-radius: 18px;
 }
@@ -684,7 +683,7 @@ body:not(.dock-open) #dock > :not(#b-dock) {
 }
 
 body.dock-open #b-dock .ic-chev {
-  transform: rotate(180deg);
+  transform: rotate(180deg); /* points back at the left edge it folds into */
 }
 
 body.dock-open #dock:has(#map-caption:not([hidden])) {
