@@ -44,7 +44,6 @@ const BLAST_MS = 260 // the blast radius spreads one step out in this long
 const REPLAY_MS = 30000 // the time-lapse plays the whole history in this long at speed 1
 const GLIDE_MS = 900
 const DRONE_QUIET_MS = 10000 // the drone takes over again this long after the person last touched the view
-const DRONE_DWELL_MS = [3000, 6000] // it hovers this long (from, to) at each stop
 const DRONE_SPEED = 0.12 // the nebula's radius it crosses each second
 const DRONE_LIT = 0.25 // a star lit this much (0 to 1) draws the drone to it
 const DRONE_REVISIT_MS = 15000 // though not one it has just been to
@@ -90,7 +89,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
   let graph = null // the repo's Graphify graph as last read (/graph), or null: the nebula then shows the files alone
   let glide = null // the camera easing to a new place
   let drone = false // nebula: the camera roams from cloud to cloud and star to star by itself
-  let tour = null // the drone's present leg: { from, bend, to, fromTarget, toTarget, at, ms, dwell, star, arrived }
+  let tour = null // the drone's present leg: { from, bend, to, fromTarget, toTarget, at, ms, star, arrived }
   let touched = -Infinity // when the person last moved the view; the drone waits DRONE_QUIET_MS after it
   let stopBag = [] // the clouds the drone has yet to visit, in random order
   const visited = new Map() // star -> when the drone last went to it because it was lit
@@ -205,7 +204,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     return lit[0]?.[0] ?? null
   }
 
-  // The drone: a curved flight through the nebula to the next stop, then a slow turn round it. A star that is lit (Claude
+  // The drone: a curved flight through the nebula to the next stop, and on to the next at once, never pausing. A star that is lit (Claude
   // has touched it) comes first, so the drone goes where the work is. With none lit, the stops go in turns: a folder's cloud
   // (the camera ends up inside it), then one of that cloud's stars (its blast radius shown, as when it is clicked), then the
   // next cloud, each cloud once before any comes round again.
@@ -228,8 +227,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     const sideways = new Vector3(Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5).cross(dir).setLength(dist * 0.25)
     const bend = from.clone().add(to).multiplyScalar(0.5).add(sideways) // the flight bows out to one side
     const ms = Math.min(Math.max((dist / (sky.R * DRONE_SPEED)) * 1000, 3500), 12000)
-    const dwell = DRONE_DWELL_MS[0] + Math.random() * (DRONE_DWELL_MS[1] - DRONE_DWELL_MS[0])
-    return { stop, star, lit: lit !== null, from, bend, to, fromTarget: controls.target.clone(), toTarget, at: performance.now(), ms, dwell, arrived: false }
+    return { stop, star, lit: lit !== null, from, bend, to, fromTarget: controls.target.clone(), toTarget, at: performance.now(), ms, arrived: false }
   }
 
   // While Claude is at work the drone stops touring and shows all of it: the camera eases to where every lit star fits in the
@@ -239,7 +237,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
   const WATCH_MIN = 0.08 // the closest it stands, as a share of the nebula's radius, so one lit star is not filled with
   let watch = null // { points, center, lit: when a star was last lit, at: the last frame }
 
-  // moves the camera along the drone's leg; true while it hovers at a stop (the controls then turn it round)
+  // moves the camera along the drone's leg; true while it holds on the lit stars (the controls then turn it round)
   const flyDrone = now => {
     if (!drone || !sky || mode !== 'nebula' || calm || glide || now - touched < DRONE_QUIET_MS) {
       tour = null
@@ -269,22 +267,21 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     }
     watch = null
     tour ??= nextLeg(null)
-    const t = (now - tour.at) / tour.ms
-    if (t < 1) {
-      const k = t * t * (3 - 2 * t)
-      camera.position.copy(tour.from).multiplyScalar((1 - k) ** 2).addScaledVector(tour.bend, 2 * (1 - k) * k).addScaledVector(tour.to, k * k)
-      controls.target.lerpVectors(tour.fromTarget, tour.toTarget, k)
-      return false
-    }
+    // a star chosen at random shows its blast radius as the drone flies to it; a lit one does not, since that would dim the very activity it came for
     if (!tour.arrived) {
-      camera.position.copy(tour.to)
-      controls.target.copy(tour.toTarget)
       tour.arrived = true
-      // a star chosen at random shows its blast radius; a lit one does not, since that would dim the very activity it came for
       if (tour.star !== null && !tour.lit) focus = { i: tour.star, at: Date.now(), steps: blastRadius(web.links, tour.star) }
       if (tour.lit) tour.users = blastRadius(web.links, tour.star).size - 1 // for the caption
     }
-    if (now < tour.at + tour.ms + tour.dwell) return true
+    const t = (now - tour.at) / tour.ms
+    if (t < 1) {
+      camera.position.copy(tour.from).multiplyScalar((1 - t) ** 2).addScaledVector(tour.bend, 2 * (1 - t) * t).addScaledVector(tour.to, t * t)
+      controls.target.lerpVectors(tour.fromTarget, tour.toTarget, t)
+      return false
+    }
+    // at the stop it flies on at once, never pausing
+    camera.position.copy(tour.to)
+    controls.target.copy(tour.toTarget)
     if (tour.star !== null && !tour.lit) focus = null
     tour = nextLeg(tour)
     return false
@@ -1195,7 +1192,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     trail.changed('position', 'aSize', 'aGlow', 'aColor', 'aHalo')
   }
 
-  // The caption, one line at the top: the file picked (clicked, or where the drone hovers), else the folder the drone is in or
+  // The caption, one line at the top: the file picked (clicked, or where the drone is flying to), else the folder the drone is in or
   // the key points at.
   const showCaption = () => {
     let note = null
