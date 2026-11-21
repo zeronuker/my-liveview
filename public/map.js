@@ -231,12 +231,42 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     return { stop, star, lit: lit !== null, from, bend, to, fromTarget: controls.target.clone(), toTarget, at: performance.now(), ms, dwell, arrived: false }
   }
 
+  // While Claude is at work the drone stops touring and shows all of it: the camera eases to where every lit star fits in the
+  // window, and the view keeps turning round them. Once no star has been lit for WATCH_QUIET_MS the tour carries on.
+  const WATCH_QUIET_MS = 3000
+  const WATCH_EASE = 1.5 // how fast the camera settles on the framing, per second
+  const WATCH_MIN = 0.08 // the closest it stands, as a share of the nebula's radius, so one lit star is not filled with
+  let watch = null // { points, center, lit: when a star was last lit, at: the last frame }
+
   // moves the camera along the drone's leg; true while it hovers at a stop (the controls then turn it round)
   const flyDrone = now => {
     if (!drone || !sky || mode !== 'nebula' || calm || glide || now - touched < DRONE_QUIET_MS) {
       tour = null
+      watch = null
       return false
     }
+    const lit = [...busyFiles(Date.now())].filter(([, b]) => b.level > DRONE_LIT).map(([i]) => web.spots[i])
+    if (lit.length) {
+      watch ??= { at: now }
+      watch.lit = now
+      watch.points = lit
+      const mean = axis => lit.reduce((sum, p) => sum + p[axis], 0) / lit.length
+      watch.center = new T.THREE.Vector3(mean('x'), mean('y'), mean('z'))
+    }
+    if (watch && now - watch.lit < WATCH_QUIET_MS) {
+      const { center, points } = watch
+      const dir = camera.position.clone().sub(center)
+      if (dir.lengthSq() < 1e-6) dir.set(0, 0, 1)
+      dir.normalize()
+      const back = Math.max(fitCamera({ center, dir, points }).distanceTo(center), sky.R * WATCH_MIN)
+      const k = 1 - Math.exp(-((now - watch.at) / 1000) * WATCH_EASE)
+      watch.at = now
+      camera.position.lerp(center.clone().addScaledVector(dir, back), k)
+      controls.target.lerp(center, k)
+      tour = null
+      return true
+    }
+    watch = null
     tour ??= nextLeg(null)
     const t = (now - tour.at) / tour.ms
     if (t < 1) {
@@ -268,6 +298,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     drone = on
     touched = -Infinity // it starts at once
     tour = null
+    watch = null
   }
 
   // Where the camera stands to show a picture whole, looking at `center` from the direction `dir`: the nearest place where
