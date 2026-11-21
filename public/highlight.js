@@ -1,49 +1,60 @@
-// Colors one line of code for the live view. It works a line at a time, so a
-// comment or string that runs over several lines is not followed (the view
-// shows a window of a file, not all of it). Plain code, no library.
-const RULES = {
-  js: {
-    re: /(\/\/.*$)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|\b(const|let|var|function|return|if|else|for|while|do|import|export|from|default|async|await|new|class|extends|try|catch|finally|throw|switch|case|break|continue|typeof|instanceof|of|in|this)\b|\b(true|false|null|undefined)\b|\b(\d+(?:\.\d+)?)\b|\b([A-Za-z_$][\w$]*)(?=\()/g,
-    classes: ['com', 'str', 'kw', 'num', 'num', 'fn'], // true, false and null are colored like numbers: fixed values
-  },
-  json: {
-    re: /("(?:[^"\\]|\\.)*"(?=\s*:))|("(?:[^"\\]|\\.)*")|\b(true|false|null)\b|(-?\b\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b)/g,
-    classes: ['key', 'str', 'num', 'num'],
-  },
-  css: {
-    re: /(\/\*.*?\*\/)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')|(@[\w-]+)|([\w-]+(?=\s*:))|(#[0-9a-fA-F]{3,8}\b|-?\b\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw|ms|s|deg)?)/g,
-    classes: ['com', 'str', 'kw', 'key', 'num'],
-  },
-  html: {
-    re: /(<!--.*?-->)|("[^"]*"|'[^']*')|(<\/?[A-Za-z][\w-]*|\/?>)|([\w:-]+(?==))/g,
-    classes: ['com', 'str', 'kw', 'key'],
-  },
-}
+// Colors one line of code for the live view with highlight.js (vendored, any of
+// its common languages). It works a line at a time, so a comment or string that
+// runs over several lines is not followed (the view shows a window of a file,
+// not all of it).
+import hljs from './vendor/highlight.min.js'
 
-const LANGS = {
-  js: 'js', mjs: 'js', cjs: 'js', jsx: 'js', ts: 'js', tsx: 'js',
-  json: 'json', css: 'css', html: 'html', htm: 'html',
+// highlight.js's token names, grouped into the few colors the view has
+const CLASSES = {
+  kw: ['keyword', 'built_in', 'type', 'name', 'selector-tag', 'meta', 'doctag', 'section'],
+  str: ['string', 'regexp', 'char'],
+  num: ['number', 'literal', 'symbol', 'bullet'], // true, false and null are colored like numbers: fixed values
+  com: ['comment', 'quote'],
+  key: ['attr', 'attribute', 'property'],
+  fn: ['title'],
 }
+const CLS_OF = Object.fromEntries(Object.entries(CLASSES).flatMap(([cls, names]) => names.map(name => [`hljs-${name}`, cls])))
 
-// The language a file is colored as, or null for plain text.
-export const langOf = path => LANGS[path.split('.').pop().toLowerCase()] ?? null
+const ENTITIES = { '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#x27;': "'" }
+const decode = text => text.replace(/&(?:amp|lt|gt|quot|#x27);/g, e => ENTITIES[e])
+
+// The language a file is colored as, or null for plain text (also for a file
+// with no extension).
+export const langOf = path => {
+  const name = path.split(/[\/]/).pop()
+  const dot = name.lastIndexOf('.')
+  if (dot < 0) return null
+  const ext = name.slice(dot + 1).toLowerCase()
+  const lang = ext === 'htm' ? 'html' : ext
+  const found = hljs.getLanguage(lang)
+  return found && found.name !== 'Plain text' ? lang : null
+}
 
 // Splits a line into [{ text, cls? }]; the texts joined are the line itself.
 export const highlight = (text, lang) => {
-  const rule = RULES[lang]
-  if (!rule) return [{ text }]
-
-  const parts = []
-  let last = 0
-  for (const match of text.matchAll(rule.re)) {
-    if (match.index > last) parts.push({ text: text.slice(last, match.index) })
-    const group = match.findIndex((value, i) => i > 0 && value !== undefined)
-    parts.push({ text: match[0], cls: rule.classes[group - 1] })
-    last = match.index + match[0].length
+  if (!text) return []
+  if (!lang) return [{ text }]
+  let html
+  try {
+    html = hljs.highlight(text, { language: lang, ignoreIllegals: true }).value
+  } catch {
+    return [{ text }]
   }
-  if (last < text.length) parts.push({ text: text.slice(last) })
+  // the library's output is only <span class="hljs-x"> ... </span> and escaped
+  // text; a span with no color of its own keeps the one around it
+  const parts = []
+  const stack = []
+  for (const [, open, chunk] of html.matchAll(/<span class="([^"]*)">|<\/span>|([^<]+)/g)) {
+    if (open !== undefined) stack.push(open.split(' ').map(c => CLS_OF[c]).find(Boolean) ?? stack.at(-1))
+    else if (chunk === undefined) stack.pop()
+    else {
+      const cls = stack.at(-1)
+      parts.push(cls ? { text: decode(chunk), cls } : { text: decode(chunk) })
+    }
+  }
   return parts
 }
+
 
 // The pieces of a line to draw: its highlight pieces, cut where a marked range
 // starts or ends. `chg` and `sel` are lists of [from, to) character ranges (the

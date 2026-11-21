@@ -211,6 +211,7 @@ const files = {
   '/replay.js': ['replay.js', 'text/javascript; charset=utf-8'],
   '/map.js': ['map.js', 'text/javascript; charset=utf-8'],
   '/vendor/three.module.min.js': ['vendor/three.module.min.js', 'text/javascript; charset=utf-8'],
+  '/vendor/highlight.min.js': ['vendor/highlight.min.js', 'text/javascript; charset=utf-8'],
   '/vendor/OrbitControls.js': ['vendor/OrbitControls.js', 'text/javascript; charset=utf-8'],
   '/art-preview.html': ['art-preview.html', 'text/html; charset=utf-8'],
   '/angled-concept.html': ['angled-concept.html', 'text/html; charset=utf-8'],
