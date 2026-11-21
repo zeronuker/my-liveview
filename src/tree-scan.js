@@ -108,3 +108,26 @@ export const listRepos = async dir => {
   }
   return out.sort((a, b) => a.name.localeCompare(b.name))
 }
+
+// the repo's Graphify graph (graphify-out/graph.json, made by running /graphify there), cut down for the Nebula, or null
+// when there is none: { nodes: [{ id, label, file, star, community }], links: [[from, to, relation], ...], names: { community: name } }.
+// `star` marks the node that is a file itself, not something in it. Read-only.
+export const readGraph = async root => {
+  try {
+    const dir = path.join(root, 'graphify-out')
+    const graph = JSON.parse(await fs.readFile(path.join(dir, 'graph.json'), 'utf8'))
+    const names = await fs.readFile(path.join(dir, '.graphify_labels.json'), 'utf8').then(JSON.parse, () => ({}))
+    if (!Array.isArray(graph.nodes) || !Array.isArray(graph.links)) return null
+    const nodes = graph.nodes.map(n => ({
+      id: n.id,
+      label: n.label,
+      file: n.source_file,
+      star: n.source_location === 'L1' || n.file_type === 'document',
+      community: n.community,
+    }))
+    const links = graph.links.map(l => [l.source, l.target, l.relation])
+    return { nodes, links, names }
+  } catch {
+    return null
+  }
+}

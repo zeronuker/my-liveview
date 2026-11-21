@@ -408,3 +408,37 @@ test('/repos lists the git repos in a folder, and /tree then answers for them wi
       fs.rmSync(dir, { recursive: true, force: true })
     }
   }))
+
+test('/graph gives the repo\'s Graphify graph cut down, and 404 when it has none', () =>
+  withServer(async ({ token }) => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lv-graph-'))
+    try {
+      await hook(token, { cwd: dir, hook_event_name: 'UserPromptSubmit' })
+      const ask = () => fetch(`${base}/graph?cwd=${encodeURIComponent(dir)}`)
+      assert.equal((await ask()).status, 404)
+      fs.mkdirSync(path.join(dir, 'graphify-out'))
+      fs.writeFileSync(
+        path.join(dir, 'graphify-out', 'graph.json'),
+        JSON.stringify({
+          nodes: [
+            { id: 'a', label: 'a.js', source_file: 'a.js', source_location: 'L1', file_type: 'code', community: 0, norm_label: 'a.js' },
+            { id: 'a_f', label: 'f()', source_file: 'a.js', source_location: 'L5', file_type: 'code', community: 0 },
+          ],
+          links: [{ source: 'a', target: 'a_f', relation: 'contains', weight: 1 }],
+        }),
+      )
+      fs.writeFileSync(path.join(dir, 'graphify-out', '.graphify_labels.json'), '{"0":"Alpha"}')
+      const res = await ask()
+      assert.equal(res.status, 200)
+      assert.deepEqual(await res.json(), {
+        nodes: [
+          { id: 'a', label: 'a.js', file: 'a.js', star: true, community: 0 },
+          { id: 'a_f', label: 'f()', file: 'a.js', star: false, community: 0 },
+        ],
+        links: [['a', 'a_f', 'contains']],
+        names: { 0: 'Alpha' },
+      })
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true })
+    }
+  }))

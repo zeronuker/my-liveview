@@ -10,7 +10,7 @@ import { applyEdit, makeRows } from './diff.js'
 import { gitKind, summarize, titleOf } from './summary.js'
 import { readStatuses } from './sessions.js'
 import { readAppTitle } from './titles.js'
-import { gitHistory, isRepo, listRepos, scanTree } from './tree-scan.js'
+import { gitHistory, isRepo, listRepos, readGraph, scanTree } from './tree-scan.js'
 
 const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..')
 const PORT = Number(process.env.PORT) || 4747
@@ -250,13 +250,14 @@ const server = http.createServer((req, res) => {
     return
   }
 
-  if (req.method === 'GET' && (pathname === '/tree' || pathname === '/history')) {
+  if (req.method === 'GET' && (pathname === '/tree' || pathname === '/history' || pathname === '/graph')) {
     // for the Map: the files, their lengths and imports in a folder (/tree), or its latest commits (/history, for the
     // time-lapse); only a folder a hook has named, or a git repo
     const cwd = url.searchParams.get('cwd')
     const json = data => res.writeHead(200, { 'content-type': 'application/json' }).end(JSON.stringify(data))
-    const read = pathname === '/tree' ? scanTree : gitHistory
-    Promise.resolve(Boolean(cwd) && (seenCwds.has(cwd) || isRepo(cwd))).then(ok => (ok ? read(cwd).then(json) : res.writeHead(404).end()))
+    const read = pathname === '/tree' ? scanTree : pathname === '/graph' ? readGraph : gitHistory
+    // /graph: the Graphify graph the folder's repo has made, for the Nebula (404 when it has none)
+    Promise.resolve(Boolean(cwd) && (seenCwds.has(cwd) || isRepo(cwd))).then(ok => (ok ? read(cwd).then(data => (data === null ? res.writeHead(404).end() : json(data))) : res.writeHead(404).end()))
     return
   }
 

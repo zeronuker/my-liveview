@@ -84,3 +84,48 @@ test('blastRadius: every file that depends on one, directly or through others, w
   assert.deepEqual([...blastRadius(links, 0)].sort(), [[0, 0], [1, 1], [2, 2], [3, 1], [4, 2]])
   assert.deepEqual([...blastRadius(links, 4)], [[4, 0]])
 })
+
+// a Graphify graph, as /graph gives it: two files in two communities, each with a function
+const GRAPH = {
+  nodes: [
+    { id: 'a', label: 'a.js', file: 'src/a.js', star: true, community: 0 },
+    { id: 'a_f', label: 'f()', file: 'src/a.js', community: 0 },
+    { id: 'b', label: 'b.js', file: 'lib/b.js', star: true, community: 1 },
+    { id: 'b_g', label: 'g()', file: 'lib/b.js', community: 1 },
+    { id: 'b_h', label: 'h()', file: 'lib/b.js', community: 1 },
+  ],
+  links: [['a', 'a_f', 'contains'], ['b', 'b_g', 'contains'], ['b', 'b_h', 'contains'], ['a_f', 'b_g', 'calls'], ['b_g', 'a_f', 'calls'], ['a', 'b', 'imports'], ['a', 'nowhere', 'calls']],
+  names: { 0: 'Alpha', 1: 'Beta' },
+}
+
+test('layoutNebula with a graph: a star for each node, a file star keeps its path and lines, a function star is named by its id', () => {
+  const map = layoutNebula([{ path: 'src/a.js', lines: 300 }], undefined, GRAPH)
+  assert.deepEqual(map.nodes.map(n => n.path).sort(), ['a_f', 'b_g', 'b_h', 'lib/b.js', 'src/a.js'])
+  const a = map.nodes.find(n => n.path === 'src/a.js')
+  assert.equal(a.lines, 300)
+  const f = map.nodes.find(n => n.path === 'a_f')
+  assert.deepEqual([f.file, f.label, f.symbol], ['src/a.js', 'f()', true])
+  for (const n of map.nodes) assert.ok([n.x, n.y, n.z].every(Number.isFinite))
+})
+
+test('layoutNebula with a graph: a cloud for each community, named, and a star sits in its own', () => {
+  const map = layoutNebula([], undefined, GRAPH)
+  assert.deepEqual(map.clouds.map(c => [c.dir, c.count]).sort(), [['Alpha', 2], ['Beta', 3]])
+  const alpha = map.clouds.findIndex(c => c.dir === 'Alpha')
+  assert.deepEqual(map.nodes.filter(n => n.cloud === alpha).map(n => n.path).sort(), ['a_f', 'src/a.js'])
+})
+
+test('layoutNebula with a graph: contains links pull but are not drawn; a pair is linked once; unknown ends are dropped', () => {
+  const map = layoutNebula([], undefined, GRAPH)
+  const named = map.links.map(([a, b]) => [map.nodes[a].path, map.nodes[b].path].sort().join(' '))
+  assert.deepEqual(named.sort(), ['a_f b_g', 'lib/b.js src/a.js'])
+  assert.deepEqual(map.nodes.map(n => [n.path, n.degree]).sort(), [['a_f', 1], ['b_g', 1], ['b_h', 0], ['lib/b.js', 1], ['src/a.js', 1]])
+})
+
+test('layoutNebula with a graph: the same graph always lays out the same', () => {
+  assert.deepEqual(layoutNebula([], undefined, GRAPH), layoutNebula([], undefined, GRAPH))
+})
+
+test('layoutNebula with an empty graph is the file layout', () => {
+  assert.deepEqual(layoutNebula(FILES, undefined, { nodes: [], links: [], names: {} }), layoutNebula(FILES))
+})

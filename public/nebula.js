@@ -99,45 +99,84 @@ const keepApart = (clouds, sizes) => {
   }
 }
 
-export const layoutNebula = (files, iterations) => {
-  const out = { radius: 0, nodes: [], links: [], clouds: [] }
-  if (!files.length) return out
+// what the layout works on, from the repo's files: a star each, grouped by folder, linked by import
+const fromFiles = files => {
   const sorted = [...files].sort((a, b) => (a.path < b.path ? -1 : 1))
   const at = new Map(sorted.map((f, i) => [f.path, i]))
+  return { items: sorted.map(f => ({ path: f.path, lines: f.lines, group: dirOf(f.path) })), links: importLinks(sorted, at), pulls: [], name: group => group }
+}
 
-  // clouds: one per folder, their middles spread over a sphere, then pushed apart so there is empty space between them
-  const dirs = [...new Set(sorted.map(f => dirOf(f.path)))]
-  const cloudOf = new Map(dirs.map((dir, i) => [dir, i]))
-  const radius = Math.max(20, Math.cbrt(files.length) * SPACE * 1.4)
+// ...or from a Graphify graph: a star for each file and each function, grouped by community, linked by what calls or imports
+// what. `contains` links (a file and its functions) are not drawn: they only pull a file's functions in close to it.
+const fromGraph = (files, graph) => {
+  const lines = new Map(files.map(f => [f.path, f.lines]))
+  const nodes = [...graph.nodes].sort((a, b) => (a.id < b.id ? -1 : 1))
+  const claimed = new Set()
+  const items = nodes.map(n => {
+    const isFile = n.star && !claimed.has(n.file)
+    if (isFile) claimed.add(n.file)
+    const item = { path: isFile ? n.file : n.id, lines: isFile ? lines.get(n.file) ?? 0 : 0, group: n.community, file: n.file, label: n.label }
+    if (!isFile) item.symbol = true
+    return item
+  })
+  const at = new Map(nodes.map((n, i) => [n.id, i]))
+  const seen = new Set()
+  const links = []
+  const pulls = []
+  for (const [from, to, relation] of graph.links) {
+    const a = at.get(from)
+    const b = at.get(to)
+    const key = a < b ? `${a} ${b}` : `${b} ${a}`
+    if (a === undefined || b === undefined || a === b || seen.has(key)) continue
+    seen.add(key)
+    ;(relation === 'contains' ? pulls : links).push([a, b])
+  }
+  return { items, links, pulls, name: group => graph.names?.[group] ?? `Group ${group}` }
+}
+
+// layoutNebula(files) lays out the files; layoutNebula(files, iterations, graph) the Graphify graph, `files` then giving
+// each file star its length
+export const layoutNebula = (files, iterations, graph) => {
+  const out = { radius: 0, nodes: [], links: [], clouds: [] }
+  const model = graph?.nodes?.length ? fromGraph(files, graph) : fromFiles(files)
+  const { items } = model
+  if (!items.length) return out
+
+  // clouds: one per group (folder or community, the biggest first), their middles spread over a sphere, then pushed apart so there is empty space between them
   const counts = new Map()
-  for (const f of sorted) counts.set(dirOf(f.path), (counts.get(dirOf(f.path)) ?? 0) + 1)
+  for (const f of items) counts.set(f.group, (counts.get(f.group) ?? 0) + 1)
+  const dirs = [...counts.keys()]
+  if (graph?.nodes?.length) dirs.sort((a, b) => counts.get(b) - counts.get(a) || (a < b ? -1 : 1))
+  const cloudOf = new Map(dirs.map((dir, i) => [dir, i]))
+  const radius = Math.max(20, Math.cbrt(items.length) * SPACE * 1.4)
   const sizes = dirs.map(dir => cloudRadius(counts.get(dir)))
   const shell = dirs.length === 1 ? 0 : Math.max(radius * 0.7, 1.4 * Math.cbrt(sizes.reduce((sum, r) => sum + r ** 3, 0)))
   out.clouds = dirs.map((dir, i) => {
     const y = dirs.length === 1 ? 0 : 1 - (2 * (i + 0.5)) / dirs.length
     const r = Math.sqrt(1 - y * y)
-    return { dir, color: cloudColor(i), x: Math.cos(i * GOLDEN) * r * shell, y: y * shell, z: Math.sin(i * GOLDEN) * r * shell, spread: 0, count: 0 }
+    return { dir: model.name(dir), color: cloudColor(i), x: Math.cos(i * GOLDEN) * r * shell, y: y * shell, z: Math.sin(i * GOLDEN) * r * shell, spread: 0, count: 0 }
   })
   // shortcut: the push is every pair of folders, so a repo with over 300 folders keeps the even spread, when it needs a grid
   if (dirs.length > 1 && dirs.length <= 300) keepApart(out.clouds, sizes)
 
   // stars start in a small ball round their cloud's middle
-  out.nodes = sorted.map(f => {
-    const cloud = cloudOf.get(dirOf(f.path))
+  out.nodes = items.map(f => {
+    const { group, ...rest } = f
+    const cloud = cloudOf.get(group)
     const c = out.clouds[cloud]
     const u = hash(f.path) * 2 - 1
     const t = hash(`${f.path}#`) * Math.PI * 2
     const s = SPACE * (1 + hash(`${f.path}*`) * 2)
     const r = Math.sqrt(1 - u * u)
-    return { path: f.path, lines: f.lines, cloud, degree: 0, x: c.x + Math.cos(t) * r * s, y: c.y + u * s, z: c.z + Math.sin(t) * r * s }
+    return { ...rest, cloud, degree: 0, x: c.x + Math.cos(t) * r * s, y: c.y + u * s, z: c.z + Math.sin(t) * r * s }
   })
-  out.links = importLinks(sorted, at)
+  out.links = model.links
   for (const [a, b] of out.links) {
     out.nodes[a].degree++
     out.nodes[b].degree++
   }
 
-  settle(out, iterations ?? Math.round(Math.max(40, Math.min(220, 400000 / files.length))))
+  settle(out, iterations ?? Math.round(Math.max(40, Math.min(220, 400000 / items.length))), model.pulls)
 
   for (const c of out.clouds) Object.assign(c, { x: 0, y: 0, z: 0 })
   for (const n of out.nodes) {
@@ -161,7 +200,8 @@ const cellKey = (x, y, z) => ((x + 1024) * 2048 + y + 1024) * 2048 + z + 1024
 
 // the force layout: links are springs, stars push apart when close (a grid finds the close ones),
 // each star is pulled softly to its cloud's middle and everything to the centre
-const settle = ({ nodes, links, clouds }, iterations) => {
+const settle = ({ nodes, links: drawn, clouds }, iterations, pulls = []) => {
+  const links = pulls.length ? [...drawn, ...pulls] : drawn
   const n = nodes.length
   const vx = new Float64Array(n)
   const vy = new Float64Array(n)

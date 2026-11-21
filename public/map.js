@@ -87,6 +87,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
   let mode = 'nebula'
   let shownMode = ''
   let lastTree = null // the repo's files as last read, so a change of style needs no new read
+  let graph = null // the repo's Graphify graph as last read (/graph), or null: the nebula then shows the files alone
   let glide = null // the camera easing to a new place
   let drone = false // nebula: the camera roams from cloud to cloud and star to star by itself
   let tour = null // the drone's present leg: { from, bend, to, fromTarget, toTarget, at, ms, dwell, star, arrived }
@@ -545,7 +546,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
 
   const addNebula = (tree, fresh) => {
     const { THREE } = T
-    const layout = layoutNebula(tree)
+    const layout = layoutNebula(tree, undefined, graph)
     const nodes = layout.nodes
     const R = layout.radius
     group.userData.center = new THREE.Vector3()
@@ -593,13 +594,13 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     group.add(far.points, dust.points)
 
     const colors = nodes.map(n => starColor(layout.clouds[n.cloud]))
-    const linkLight = 0.11 * Math.min(1, Math.sqrt(150 / Math.max(layout.links.length, 1))) // fainter when there are many, so a big repo does not wash out
+    const linkLight = 0.11 * Math.max(graph ? 0.7 : 0, Math.min(1, Math.sqrt(150 / Math.max(layout.links.length, 1)))) // fainter when there are many, so a big repo does not wash out
     addWeb(nodes, layout.links, i => colors[i], curvePoints, linkLight)
 
     const stars = dotSet(nodes.length, false, true)
     nodes.forEach((n, i) => stars.attrs.position.set([n.x, n.y, n.z], i * 3))
     // a file with many links is clearly bigger than one with none; a longer file a little bigger
-    const sizes = nodes.map(n => 0.4 + Math.sqrt(n.degree) * 0.2 + Math.log2(1 + n.lines) * 0.03)
+    const sizes = nodes.map(n => (0.4 + Math.sqrt(n.degree) * 0.2 + Math.log2(1 + n.lines) * 0.03) * (n.symbol ? 0.6 : 1)) // a function is smaller than a file
     const phases = nodes.map((n, i) => (i * 2.399) % (Math.PI * 2))
     const tempos = nodes.map((n, i) => BREATH_S * (0.75 + 0.56 * scatter(i * 5.31 + 1))) // seconds per breath: 2.4 to 4.2, a star's own
     const rings = dotSet(RINGS, true)
@@ -609,7 +610,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     sky = { stars, rings, colors, sizes, phases, tempos, clouds, R, stops }
 
     // the folders' names, for the caption and the key
-    const name = folderNames(big.map(c => c.dir))
+    const name = graph ? dir => dir : folderNames(big.map(c => c.dir)) // a community's name is not a path
     sky.folders = new Map(big.map(c => [layout.clouds.indexOf(c), { name: name(c.dir), color: c.color, count: c.count }]))
     const named = big.filter(c => c.count > 1).sort((a, b) => b.count - a.count).slice(0, CLOUD_LABELS)
     // the Fit view (fitCamera): from slightly above and in front, holding all the stars
@@ -1176,7 +1177,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
       const folder = sky.folders.get(n.cloud)
       const { users } = picked
       const detail = n.folded ? `${n.folded} files` : `${n.lines} lines · ${users} depend${users === 1 ? 's' : ''} on it`
-      note = { color: folder.color, text: `${folder.name} › ${n.path.split('/').pop()} · ${detail}` }
+      note = { color: folder.color, text: n.symbol ? `${folder.name} › ${n.label} · in ${n.file} · ${users} depend${users === 1 ? 's' : ''} on it` : `${folder.name} › ${n.path.split('/').pop()} · ${detail}` }
     } else {
       const folder = sky.folders.get(tour?.arrived && tour.star === null ? tour.stop.cloud : legendLit)
       if (folder) note = { color: folder.color, text: `${folder.name} · ${folder.count} file${folder.count === 1 ? '' : 's'}` }
@@ -1214,12 +1215,12 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
       let glow = (0.35 + (calm ? 0 : 0.12 * Math.sin(time * 1.3 + phases[i]))) * grow
       tint.copy(colors[i])
       let halo = colors[i]
-      const touch = touches.get(n.path)
+      const touch = touches.get(n.file ?? n.path) // a function lights with its file
       if (touch && now >= touch.at) {
         halo = kindColor(touch.kind)
         tint.lerp(halo, glowLevel(now - touch.at))
       }
-      const b = busy.get(i)
+      const b = busy.get(i) ?? (n.symbol ? busy.get(index.get(n.file)) : undefined) // a function breathes with its file
       if (b?.level > 0) {
         // a busy star breathes slowly, each out of step with the others, with a faint flicker in its core
         const breath = calm ? 0.5 : 0.5 + 0.5 * Math.sin((time / tempos[i]) * Math.PI * 2 - 1.2 + phases[i])
@@ -1363,10 +1364,12 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
   const load = async () => {
     if (!cwd || !T) return
     const gen = ++loadGen
-    const res = await fetch(`/tree?cwd=${encodeURIComponent(cwd)}`).catch(() => null)
+    const [res, graphRes] = await Promise.all([fetch(`/tree?cwd=${encodeURIComponent(cwd)}`).catch(() => null), fetch(`/graph?cwd=${encodeURIComponent(cwd)}`).catch(() => null)])
     if (!res?.ok || gen !== loadGen) return
     const tree = await res.json()
+    const read = graphRes?.ok ? await graphRes.json().catch(() => null) : null
     if (gen !== loadGen) return
+    graph = read
     build(tree)
     onTree?.(tree.length)
   }
@@ -1376,7 +1379,7 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
     if (!file) return
     const users = web ? blastRadius(web.links, index.get(file.path)).size - 1 : 0
     const linked = ` · ${users} depend${users === 1 ? 's' : ''} on it`
-    tip.textContent = file.folded ? `${file.path} (${file.folded} files)` : `${file.path} · ${file.lines} lines${linked}`
+    tip.textContent = file.symbol ? `${file.label} · ${file.file}${linked}` : file.folded ? `${file.path} (${file.folded} files)` : `${file.path} · ${file.lines} lines${linked}`
     tip.style.left = `${event.clientX - rect.left + 12}px`
     tip.style.top = `${event.clientY - rect.top + 12}px`
   }
