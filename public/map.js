@@ -336,8 +336,36 @@ export const createMap = ({ canvas, tip, caption, bar, onTree, onFolders }) => {
   // back to the whole picture: at once the first time, after that the camera glides
   const fit = instant => {
     if (!group || !controls) return
-    const { center } = group.userData
-    const cam = group.userData.fitOf ? fitCamera(group.userData.fitOf) : group.userData.cam
+    const { fitOf } = group.userData
+    let center = group.userData.center
+    let cam = group.userData.cam
+    if (fitOf) {
+      cam = fitCamera(fitOf)
+      // perspective and the downward look push the picture off-centre, so slide the view until the stars' trimmed
+      // outline, as seen on screen, has the same gap on every side
+      const { Vector3, PerspectiveCamera } = T.THREE
+      const view = new PerspectiveCamera(camera.fov, camera.aspect)
+      const tan = [Math.tan((camera.fov * Math.PI) / 360) * camera.aspect, Math.tan((camera.fov * Math.PI) / 360)]
+      center = center.clone()
+      cam = cam.clone()
+      const at = (v, f) => v[Math.floor(f * (v.length - 1))]
+      for (let pass = 0; pass < 4; pass++) {
+        view.position.copy(cam)
+        view.lookAt(center)
+        view.updateMatrixWorld()
+        view.updateProjectionMatrix()
+        const ndc = fitOf.points.map(p => new Vector3(p.x, p.y, p.z).project(view))
+        const mid = axis => {
+          const v = ndc.map(p => p[axis]).sort((a, b) => a - b)
+          return (at(v, 0.01) + at(v, 0.99)) / 2
+        }
+        const depth = cam.distanceTo(center)
+        const shift = new Vector3(1, 0, 0).transformDirection(view.matrixWorld).multiplyScalar(mid('x') * tan[0] * depth)
+        shift.addScaledVector(new Vector3(0, 1, 0).transformDirection(view.matrixWorld), mid('y') * tan[1] * depth)
+        center.add(shift)
+        cam.add(shift)
+      }
+    }
     if (instant === true || calm) {
       glide = null
       controls.target.copy(center)
