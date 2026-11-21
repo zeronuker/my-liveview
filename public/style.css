@@ -840,13 +840,12 @@ body:not(.city) #map-show {
 #replay {
   position: absolute;
   z-index: 11;
-  left: 50%;
-  bottom: 92px;
-  transform: translateX(-50%);
+  left: 18px;
+  bottom: calc(28px + var(--dock-h, 56px)); /* just above the controls, whatever their height */
   display: flex;
   align-items: center;
   gap: 12px;
-  width: min(620px, calc(100% - 24px));
+  width: min(max(var(--dock-w, 620px), 360px), calc(100% - 36px)); /* as wide as the controls; a folded pill is too narrow for it */
   padding: 8px 10px;
 }
 

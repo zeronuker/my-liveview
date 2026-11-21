@@ -889,6 +889,12 @@ for (const button of document.querySelectorAll('[data-show] button')) button.onc
 $('b-nav').onclick = () => save('nav', !prefs.nav)
 // The controls fold into a pill at the left and grow out of it. Opening widens the bar with a springy overshoot while its
 // buttons slide in one after another; folding sends them away first, then draws the bar in.
+// the Time-lapse bar above the controls takes their width and height (see #replay), including while they open and fold
+new ResizeObserver(() => {
+  const { width, height } = $('dock').getBoundingClientRect()
+  $('dock').parentElement.style.setProperty('--dock-w', `${width}px`)
+  $('dock').parentElement.style.setProperty('--dock-h', `${height}px`)
+}).observe($('dock'))
 const DOCK_SPRING = 'cubic-bezier(0.34, 1.3, 0.64, 1)'
 let dockAt = -Infinity // when the last fold or opening began; a click during it is ignored
 $('b-dock').onclick = async () => {
