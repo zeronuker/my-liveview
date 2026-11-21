@@ -850,7 +850,8 @@ body:not(.city) #map-show {
 }
 
 #replay[hidden],
-body:not(.map) #replay {
+body:not(.map) #replay,
+body:not(.dock-open) #replay {
   display: none;
 }
 
@@ -2206,7 +2207,8 @@ body.resizing:has(#panes.stacked #rz-split.dragging) {
     --rise: -6px;
   }
 
-  :is(.menu, #map-show, #replay, #inspector, #banner, #map-caption)[hidden] {
+  :is(.menu, #map-show, #replay, #inspector, #banner, #map-caption)[hidden],
+  body:not(.dock-open) #replay {
     opacity: 0;
     translate: 0 var(--rise);
   }
