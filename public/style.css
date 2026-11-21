@@ -840,6 +840,7 @@ body:not(.city) #map-show {
 #replay {
   position: absolute;
   z-index: 11;
+  transform-origin: left bottom; /* it slides and scales toward the controls' corner */
   left: 18px;
   bottom: calc(28px + var(--dock-h, 56px)); /* just above the controls, whatever their height */
   display: flex;
@@ -2207,8 +2208,7 @@ body.resizing:has(#panes.stacked #rz-split.dragging) {
     --rise: -6px;
   }
 
-  :is(.menu, #map-show, #replay, #inspector, #banner, #map-caption)[hidden],
-  body:not(.dock-open) #replay {
+  :is(.menu, #map-show, #replay, #inspector, #banner, #map-caption)[hidden] {
     opacity: 0;
     translate: 0 var(--rise);
   }

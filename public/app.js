@@ -905,7 +905,9 @@ $('b-dock').onclick = async () => {
   dockAt = performance.now()
   dock.style.overflow = 'hidden'
   try {
-    const gone = prefs.dock ? parts().reverse().map((el, i) => el.animate({ opacity: [1, 0], transform: ['none', 'translateX(-14px)'] }, { duration: 160, delay: i * 15, easing: 'ease-in', fill: 'forwards' })) : []
+    const replay = $('replay') // the Time-lapse bar goes and comes with the controls
+    const slide = [{ opacity: 1, transform: 'none' }, { opacity: 0, transform: 'translateX(-14px) scale(0.96)' }]
+    const gone = prefs.dock ? [...parts().reverse().map((el, i) => el.animate({ opacity: [1, 0], transform: ['none', 'translateX(-14px)'] }, { duration: 160, delay: i * 15, easing: 'ease-in', fill: 'forwards' })), ...(replay.offsetParent ? [replay.animate(slide, { duration: 220, easing: 'ease-in', fill: 'forwards' })] : [])] : []
     await Promise.all(gone.map(a => a.finished))
     const from = dock.getBoundingClientRect()
     save('dock', !prefs.dock)
@@ -913,6 +915,7 @@ $('b-dock').onclick = async () => {
     const to = dock.getBoundingClientRect()
     const size = dock.animate({ width: [`${from.width}px`, `${to.width}px`], height: [`${from.height}px`, `${to.height}px`] }, { duration: 460, easing: DOCK_SPRING })
     if (prefs.dock) parts().forEach((el, i) => el.animate({ opacity: [0, 1], transform: ['translateX(-14px)', 'none'] }, { duration: 320, delay: 80 + i * 30, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'backwards' }))
+    if (prefs.dock && replay.offsetParent) replay.animate(slide.toReversed(), { duration: 460, delay: 120, easing: DOCK_SPRING, fill: 'backwards' })
     await size.finished
   } finally {
     dock.style.overflow = ''
