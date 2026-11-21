@@ -59,6 +59,7 @@ const prefs = {
   side: store.get('side', false) === true,
   follow: store.get('follow', true) !== false,
   nav: store.get('nav', true) !== false, // the chats at the left are open
+  dock: store.get('dock', false) === true, // the floating controls are open (they start folded to a pill)
   awake: store.get('awake', false) === true,
   office: store.get('office', false) === true,
   map: store.get('map', false) === true, // with office on: the Map in place of the Office
@@ -806,6 +807,8 @@ const apply = () => {
   document.documentElement.style.setProperty('--code-size', `${prefs.size}px`)
   document.body.classList.toggle('wrap', prefs.wrap)
   document.body.classList.toggle('nav-open', prefs.nav)
+  document.body.classList.toggle('dock-open', prefs.dock)
+  $('b-dock').setAttribute('aria-expanded', String(prefs.dock))
   document.body.classList.toggle('office', prefs.office)
   const isMap = prefs.office && prefs.map
   document.body.classList.toggle('map', isMap)
@@ -884,6 +887,7 @@ for (const button of document.querySelectorAll('[data-show] button')) button.onc
 
 // the panels that open and close: the chats, the City's layers, the new-window menu
 $('b-nav').onclick = () => save('nav', !prefs.nav)
+$('b-dock').onclick = () => save('dock', !prefs.dock)
 const setOpen = (button, box, on) => {
   box.hidden = !on
   button.setAttribute(button.hasAttribute('aria-expanded') ? 'aria-expanded' : 'aria-pressed', String(on))

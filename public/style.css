@@ -666,7 +666,28 @@ body.map:not(.city) #map-caption:not([hidden]) {
   gap: 10px;
 }
 
-#dock:has(#map-caption:not([hidden])) {
+/* folded: only the button that opens it, as a pill */
+body:not(.dock-open) #dock > :not(#b-dock) {
+  display: none;
+}
+
+#b-dock {
+  width: auto;
+  padding: 0 8px;
+  gap: 2px;
+}
+
+#b-dock .ic-chev {
+  width: 14px;
+  height: 14px;
+  transition: transform 0.2s;
+}
+
+body.dock-open #b-dock .ic-chev {
+  transform: rotate(180deg);
+}
+
+body.dock-open #dock:has(#map-caption:not([hidden])) {
   min-width: min(560px, calc(100% - 24px));
 }
 
